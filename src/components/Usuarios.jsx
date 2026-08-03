@@ -101,7 +101,13 @@ export default function Usuarios({ sessao }) {
   return (
     <>
       <form className="cartao" onSubmit={cadastrar} noValidate>
-        <h2>Liberar acesso a um analista</h2>
+        <h2>Liberar acesso</h2>
+        <p className="ajuda">
+          <strong>Há um único nível de acesso.</strong> Todo mundo desta lista —
+          gestor, analista, quem for — usa as três telas por igual: vê as artes
+          recebidas, cadastra e importa projetos, e libera outras pessoas. Não
+          existe permissão reduzida.
+        </p>
 
         <div className="escolha-modo">
           <label className={modo === 'conta' ? 'ativo' : ''}>
@@ -201,6 +207,13 @@ export default function Usuarios({ sessao }) {
           Remover daqui tira o acesso ao painel, mas não apaga a conta do
           Firebase. Para apagar a conta de vez, use o console do Firebase em
           Authentication → Usuários.
+        </p>
+        <p className="nota">
+          Como o acesso é único, quem está aqui também pode liberar mais gente —
+          inclusive a si mesmo em outro endereço. A coluna <em>liberado por</em>{' '}
+          registra quem incluiu quem. Se um dia fizer sentido ter alguém que só
+          baixa arte, sem poder mexer em projeto nem em acesso, dá para separar
+          em dois níveis — é uma mudança pequena.
         </p>
       </div>
     </>
