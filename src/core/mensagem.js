@@ -88,6 +88,44 @@ export function laudoJson(resultado) {
       temICC: medidas.temICC ?? null,
       paginas: medidas.paginas ?? null,
     },
-    achados: achados.map(({ id, nivel, titulo, detalhe, acao }) => ({ id, nivel, titulo, detalhe, acao })),
+    // `?? null` em cada campo, e não só na desestruturação: nem todo achado
+    // tem detalhe ou ação — o de arquivo vetorial, por exemplo, não tem ação.
+    // A chave viria com `undefined`, e o Firestore recusa o documento inteiro
+    // quando encontra um só campo assim.
+    achados: achados.map(({ id, nivel, titulo, detalhe, acao }) => ({
+      id: id ?? null,
+      nivel: nivel ?? null,
+      titulo: titulo ?? null,
+      detalhe: detalhe ?? null,
+      acao: acao ?? null,
+    })),
   }
+}
+
+/**
+ * Remove qualquer `undefined` de uma estrutura, trocando por null.
+ *
+ * O Firestore recusa o documento inteiro se encontrar um único campo
+ * `undefined`, e a mensagem só diz em qual documento — não em qual campo.
+ * Como o laudo cresce junto com as regras de análise, uma rede de segurança
+ * aqui evita que um campo novo derrube o envio de um cliente lá na frente.
+ */
+export function semIndefinidos(valor) {
+  if (valor === undefined) return null
+  if (Array.isArray(valor)) return valor.map(semIndefinidos)
+  // Só descemos em objeto simples. Reconstruir qualquer outra coisa seria
+  // destrutivo: `serverTimestamp()` devolve um objeto sentinela do Firestore,
+  // e copiar campo a campo o transformaria num objeto comum — o carimbo de
+  // data do servidor viraria lixo sem ninguém perceber. Vale para Date,
+  // Blob, referências e o que mais o SDK trouxer.
+  if (!ehObjetoSimples(valor)) return valor
+  const saida = {}
+  for (const [chave, v] of Object.entries(valor)) saida[chave] = semIndefinidos(v)
+  return saida
+}
+
+function ehObjetoSimples(v) {
+  if (v === null || typeof v !== 'object') return false
+  const proto = Object.getPrototypeOf(v)
+  return proto === Object.prototype || proto === null
 }

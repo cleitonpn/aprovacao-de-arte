@@ -13,6 +13,7 @@
 import { sessaoAnonima } from './firebase.js'
 import { ENVIO, envioConfigurado } from '../config.js'
 import { paraNomeArquivo } from '../data/cadastro.js'
+import { semIndefinidos } from '../core/mensagem.js'
 
 // O tipo é derivado do formato que a ANÁLISE detectou pela assinatura
 // binária, não do que o navegador informa. Num .ai — ou num PDF escolhido
@@ -126,7 +127,7 @@ export async function enviarArte(arquivo, dados, aoProgredir) {
     const bd = firestore.getFirestore(app)
     // setDoc com merge:false num documento novo — as regras só permitem criar,
     // nunca sobrescrever, então um protocolo já usado é recusado pelo servidor.
-    await firestore.setDoc(firestore.doc(bd, 'envios', protocolo), {
+    await firestore.setDoc(firestore.doc(bd, 'envios', protocolo), semIndefinidos({
       protocolo,
       status: 'concluido',
       feiraId,
@@ -146,7 +147,7 @@ export async function enviarArte(arquivo, dados, aoProgredir) {
       caminho,
       link,
       criadoEm: firestore.serverTimestamp(),
-    })
+    }))
 
     // Alimenta o seletor de feiras do painel. Merge para não sobrescrever o
     // que já existe quando o segundo expositor da mesma feira enviar.
