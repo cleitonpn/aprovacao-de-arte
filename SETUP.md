@@ -72,11 +72,25 @@ Ainda na **Google Auth Platform**, menu **Clientes**:
 👉 https://console.cloud.google.com/auth/clients?project=aprovacao-de-arte-49bc3
 
 1. **+ Criar cliente**.
-2. Tipo de aplicativo: **App para computador** (*Desktop app*).
-3. Nome: `aprovacao-de-arte` → **Criar**.
-4. Abre uma janela com **ID do cliente** e **Chave secreta do cliente**.
+2. Tipo de aplicativo: **Aplicativo da Web** (*Web application*).
+3. Nome: `aprovacao-de-arte`.
+4. Em **URIs de redirecionamento autorizados**, clique em *+ Adicionar URI* e
+   cole **exatamente**:
+   ```
+   https://developers.google.com/oauthplayground
+   ```
+5. **Criar**.
+6. Abre uma janela com **ID do cliente** e **Chave secreta do cliente**.
    **Copie os dois agora** — usamos no passo seguinte. Dá para reabrir depois
    clicando no nome do cliente na lista.
+
+> ⚠️ Tem que ser **Aplicativo da Web**, não "App para computador". O tipo
+> desktop não oferece o campo de URI de redirecionamento, e sem ele o OAuth
+> Playground do passo 5 recusa com `redirect_uri_mismatch` — sem opção de
+> conserto a não ser refazer o cliente.
+>
+> Esse cliente é usado **uma vez só**, para gerar o refresh token. Depois
+> disso quem fala com o Google é a função, com o token já emitido.
 
 ---
 
@@ -84,13 +98,20 @@ Ainda na **Google Auth Platform**, menu **Clientes**:
 
 👉 https://developers.google.com/oauthplayground
 
-1. Clique na **engrenagem** (canto superior direito).
+**A ordem importa.** Configurar suas credenciais tem que vir ANTES de
+autorizar — senão o Playground emite um token vinculado ao app dele próprio, e
+esse token não funciona com o seu `OAUTH_CLIENT_ID` na função.
+
+1. Clique na **engrenagem** (⚙️, canto superior direito).
 2. Marque **Use your own OAuth credentials**.
-3. Cole o **OAuth Client ID** e o **OAuth Client secret** do passo anterior.
-4. No painel da esquerda, no campo *Input your own scopes*, cole:
+3. Aparecem dois campos: cole o **OAuth Client ID** e o **OAuth Client
+   secret** do passo 4. Feche o painel da engrenagem.
+4. Agora sim, no campo **Input your own scopes** (embaixo da lista de APIs, à
+   esquerda), cole:
    ```
    https://www.googleapis.com/auth/drive.file
    ```
+   Ignore a lista enorme de APIs acima — não precisa marcar nada nela.
 5. **Authorize APIs** → escolha `cleitonpnascimento@gmail.com`.
    - Vai aparecer **"O Google não verificou este app"**. Clique em
      **Avançado** → **Acessar Aprovacao de Arte (não seguro)**.
@@ -99,10 +120,14 @@ Ainda na **Google Auth Platform**, menu **Clientes**:
 6. Clique em **Exchange authorization code for tokens**.
 7. **Copie o `Refresh token`** (a linha que começa com `1//`).
 
-> Se aparecer `Error 400: redirect_uri_mismatch`: volte em **Clientes**,
-> clique no cliente que você criou e, em *URIs de redirecionamento
-> autorizados*, adicione `https://developers.google.com/oauthplayground`.
-> Salve e tente de novo.
+> `Error 400: redirect_uri_mismatch` → o URI de redirecionamento não foi
+> cadastrado. Volte em **Clientes**, abra o cliente e confira se
+> `https://developers.google.com/oauthplayground` está lá, sem barra no final.
+> Se o cliente for do tipo "App para computador", esse campo não existe:
+> crie outro como **Aplicativo da Web**.
+>
+> `Error 401: deleted_client` ou o token não funciona depois → provavelmente
+> a engrenagem não estava marcada quando você autorizou. Refaça do item 1.
 
 ---
 
