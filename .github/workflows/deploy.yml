@@ -26,11 +26,6 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
-        env:
-          # O token do evento nunca fica no repositório: entra no build a
-          # partir do segredo. Sem ele, o site publica normalmente e apenas o
-          # botão de envio fica indisponível.
-          VITE_EVENTO_TOKEN: ${{ secrets.TOKEN_EVENTO }}
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

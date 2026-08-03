@@ -1,0 +1,37 @@
+rules_version = '2';
+
+// Regras do Storage.
+//
+// O expositor grava com uma sessão anônima do Firebase, criada sem nenhuma
+// tela de login. Estas regras são o que impede esse acesso aberto de virar um
+// depósito de qualquer coisa: limitam a pasta, o tipo e o tamanho.
+//
+// Leitura é negada de propósito. O painel do time não lê pelo caminho: ele usa
+// o link de download gerado no envio, que carrega um token próprio e continua
+// funcionando. Assim ninguém consegue varrer o bucket procurando artes de
+// outros clientes.
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    match /envios/{feiraId}/{arquivo} {
+      allow read: if false;
+
+      allow create: if request.auth != null
+        && resource == null                                   // nunca sobrescreve
+        && request.resource.size > 0
+        && request.resource.size < 1024 * 1024 * 1024          // 1 GB
+        && (
+          request.resource.contentType.matches('image/jpeg')
+          || request.resource.contentType.matches('image/png')
+          || request.resource.contentType.matches('application/pdf')
+        );
+
+      allow update, delete: if false;
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

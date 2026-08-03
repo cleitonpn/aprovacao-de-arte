@@ -1,282 +1,179 @@
-# Configuração do envio para o Drive
+# Configuração — 5 minutos, só telas do Firebase
 
-Roteiro para ligar o envio automático da arte aprovada e o painel do time.
-A ferramenta **já funciona sem nada disto** — a análise inteira roda no
-navegador. Isto liga o botão *Enviar arte para produção*.
+Roteiro para ligar o envio de arte e o painel do time. A ferramenta **já
+funciona sem nada disto** — a análise inteira roda no navegador. Isto liga o
+botão *Enviar arte para produção* e a tela `#/admin`.
 
 | | |
 |---|---|
 | Projeto Firebase | `aprovacao-de-arte-49bc3` |
-| Pasta do Drive | `1O48_s3haaKpPX98BdBr8s_PggYUcC53H` |
 | Admin do painel | `cleitonpnascimento@gmail.com` |
-| Tipo de conta | Google comum, plano de 5 TB (sem Workspace) |
 
 **Já feito:** ✅ plano Blaze · ✅ Authentication com Google · ✅ Firestore +
-coleção `admins` · ✅ Google Drive API ativada
+coleção `admins`
 
-**Falta:** consentimento OAuth → cliente OAuth → refresh token → segredos no
-GitHub → clicar em *Run workflow*.
-
-> Nenhum passo daqui em diante precisa de terminal. Tudo é feito por telas do
-> Google Cloud e do GitHub.
+**Falta:** 4 passos, todos no Firebase Console. Nenhum terminal, nenhuma
+credencial para gerar, nada no Google Cloud Console.
 
 ---
 
-## Passo 3 — Consentimento OAuth (Google Auth Platform)
+## Passo 1 — Ligar o login anônimo
 
-👉 https://console.cloud.google.com/auth/overview?project=aprovacao-de-arte-49bc3
+👉 https://console.firebase.google.com/project/aprovacao-de-arte-49bc3/authentication/providers
 
-O Google reorganizou essa área e ela agora se chama **Google Auth Platform**.
-Não existe mais um assistente único: as configurações estão espalhadas em três
-itens do menu lateral. Faça nesta ordem.
+1. Na lista de provedores, clique em **Anônimo**.
+2. Ative a chave e **Salvar**.
 
-### 3.1 — Menu "Acesso a dados" → o escopo
-
-1. Clique em **Acesso a dados** no menu da esquerda.
-2. **Adicionar ou remover escopos**.
-3. No campo de filtro, cole:
-   ```
-   https://www.googleapis.com/auth/drive.file
-   ```
-4. Marque a caixa da linha que aparecer → **Atualizar** → **Salvar**.
-
-Deixe **apenas** esse escopo. Ele não é "sensível", e é isso que permite
-publicar o app sem passar pela verificação do Google.
-
-### 3.2 — Menu "Público-alvo" → tipo, testador e publicação
-
-1. Clique em **Público-alvo**.
-2. Confirme que o tipo de usuário é **Externo**.
-3. Em *Usuários de teste*, adicione `cleitonpnascimento@gmail.com`.
-4. **Clique em "Publicar app"** e confirme.
-
-> 🚨 **Este é o passo que quase todo mundo pula.** Enquanto o app estiver em
-> **"Teste"**, o Google expira o refresh token em **7 dias**. Vai funcionar
-> hoje e, na semana que vem, os envios param sem nenhum erro visível para o
-> cliente — o tipo de problema que consome dias até alguém achar a causa.
->
-> Depois de publicar, o status em *Público-alvo* deve mostrar **"Em produção"**.
-> Se pedir verificação do Google, sobrou escopo a mais no passo 3.1.
-
-### 3.3 — Menu "Branding" (só se estiver vazio)
-
-Nome do app (`Aprovacao de Arte`), e-mail de suporte e e-mail do desenvolvedor:
-todos `cleitonpnascimento@gmail.com`.
+**Para que serve:** é isto que permite o expositor enviar a arte **sem fazer
+login**. O navegador dele recebe uma credencial descartável, sem tela e sem
+senha — ele nem percebe que existe. As regras de segurança exigem essa
+credencial para aceitar qualquer gravação; sem ela, o projeto ficaria aberto
+ao mundo.
 
 ---
 
-## Passo 4 — Criar o cliente OAuth
+## Passo 2 — Criar o Storage
 
-Ainda na **Google Auth Platform**, menu **Clientes**:
+👉 https://console.firebase.google.com/project/aprovacao-de-arte-49bc3/storage
 
-👉 https://console.cloud.google.com/auth/clients?project=aprovacao-de-arte-49bc3
+1. **Começar** (*Get started*).
+2. Escolha **Iniciar no modo de produção** → **Avançar**.
+3. Região: **`southamerica-east1`** (São Paulo) → **Concluído**.
 
-1. **+ Criar cliente**.
-2. Tipo de aplicativo: **Aplicativo da Web** (*Web application*).
-3. Nome: `aprovacao-de-arte`.
-4. Em **URIs de redirecionamento autorizados**, clique em *+ Adicionar URI* e
-   cole **exatamente**:
-   ```
-   https://developers.google.com/oauthplayground
-   ```
-5. **Criar**.
-6. Abre uma janela com **ID do cliente** e **Chave secreta do cliente**.
-   **Copie os dois agora** — usamos no passo seguinte. Dá para reabrir depois
-   clicando no nome do cliente na lista.
-
-> ⚠️ Tem que ser **Aplicativo da Web**, não "App para computador". O tipo
-> desktop não oferece o campo de URI de redirecionamento, e sem ele o OAuth
-> Playground do passo 5 recusa com `redirect_uri_mismatch` — sem opção de
-> conserto a não ser refazer o cliente.
->
-> Esse cliente é usado **uma vez só**, para gerar o refresh token. Depois
-> disso quem fala com o Google é a função, com o token já emitido.
+Não se preocupe com as regras que ele cria — vamos substituí-las no passo 4.
 
 ---
 
-## Passo 5 — Refresh token
+## Passo 3 — Colar as regras do Firestore
 
-👉 https://developers.google.com/oauthplayground
+👉 https://console.firebase.google.com/project/aprovacao-de-arte-49bc3/firestore/rules
 
-**A ordem importa.** Configurar suas credenciais tem que vir ANTES de
-autorizar — senão o Playground emite um token vinculado ao app dele próprio, e
-esse token não funciona com o seu `OAUTH_CLIENT_ID` na função.
+1. Apague tudo o que estiver na caixa de texto.
+2. Cole o conteúdo do arquivo **[`firestore.rules`](firestore.rules)** deste
+   repositório.
+3. **Publicar**.
 
-1. Clique na **engrenagem** (⚙️, canto superior direito).
-2. Marque **Use your own OAuth credentials**.
-3. Aparecem dois campos: cole o **OAuth Client ID** e o **OAuth Client
-   secret** do passo 4. Feche o painel da engrenagem.
-4. Agora sim, no campo **Input your own scopes** (embaixo da lista de APIs, à
-   esquerda), cole:
-   ```
-   https://www.googleapis.com/auth/drive.file
-   ```
-   Ignore a lista enorme de APIs acima — não precisa marcar nada nela.
-5. **Authorize APIs** → escolha `cleitonpnascimento@gmail.com`.
-   - Vai aparecer **"O Google não verificou este app"**. Clique em
-     **Avançado** → **Acessar Aprovacao de Arte (não seguro)**.
-     É a sua conta autorizando o seu próprio app — é esperado.
-   - Permita o acesso.
-6. Clique em **Exchange authorization code for tokens**.
-7. **Copie o `Refresh token`** (a linha que começa com `1//`).
+**O que essas regras fazem** — e por que valem a colagem:
 
-> `Error 400: redirect_uri_mismatch` → o URI de redirecionamento não foi
-> cadastrado. Volte em **Clientes**, abra o cliente e confira se
-> `https://developers.google.com/oauthplayground` está lá, sem barra no final.
-> Se o cliente for do tipo "App para computador", esse campo não existe:
-> crie outro como **Aplicativo da Web**.
->
-> `Error 401: deleted_client` ou o token não funciona depois → provavelmente
-> a engrenagem não estava marcada quando você autorizou. Refaça do item 1.
+- **Repetem a trava do veredicto no servidor.** A interface já impede o clique
+  em "enviar" quando a arte foi reprovada, mas interface se contorna. Estas
+  regras rodam no Google: arte reprovada não entra, e arte com ressalva só
+  entra se o aceite de risco estiver registrado junto.
+- **Envio é só criação, nunca alteração.** Ninguém sobrescreve o envio de
+  outro expositor, nem adultera o próprio depois de feito.
+- **Só admin lê.** O expositor consegue gravar o envio dele e nada mais — não
+  consegue listar, ler nem apagar envios de ninguém.
 
 ---
 
-## Passo 6 — Conta de serviço para o GitHub publicar
+## Passo 4 — Colar as regras do Storage
 
-O GitHub precisa de uma credencial para publicar a função no seu projeto.
-Tudo por telas, sem terminal.
+👉 https://console.firebase.google.com/project/aprovacao-de-arte-49bc3/storage/rules
 
-👉 https://console.cloud.google.com/iam-admin/serviceaccounts?project=aprovacao-de-arte-49bc3
+1. Apague tudo.
+2. Cole o conteúdo de **[`storage.rules`](storage.rules)**.
+3. **Publicar**.
 
-1. **+ Criar conta de serviço**.
-2. Nome: `github-deploy` → **Criar e continuar**.
-3. Em *Conceder acesso*, adicione **dois** papéis:
-   - **Editor**
-   - **Administrador do Firebase** (*Firebase Admin*)
-
-   > Editor é um papel amplo. Escolhi ele de propósito: montar a lista exata de
-   > seis papéis que o deploy de uma função v2 exige é a receita mais comum de
-   > erro `PERMISSION_DENIED` no meio do processo, e você não teria como
-   > diagnosticar. Como é o seu próprio projeto e a credencial fica só no
-   > GitHub, o risco é aceitável. Se um dia quiser restringir, dá para trocar
-   > depois com o deploy já funcionando.
-
-4. **Concluir**.
-5. Na lista, clique na conta `github-deploy` → aba **Chaves** →
-   **Adicionar chave** → **Criar nova chave** → tipo **JSON** → **Criar**.
-   Um arquivo `.json` é baixado. Abra-o num editor de texto e **copie todo o
-   conteúdo**, das chaves `{` `}` inclusive.
+Limitam a pasta, o tipo (JPG, PNG, PDF) e o tamanho (até 1 GB), e proíbem
+sobrescrever arquivo existente. Leitura é negada de propósito: o painel usa o
+link gerado no momento do envio, que tem token próprio, então ninguém
+consegue varrer o armazenamento procurando arte de outros clientes.
 
 ---
 
-## Passo 7 — Colar os segredos no GitHub
-
-👉 https://github.com/cleitonpn/aprovacao-de-arte/settings/secrets/actions
-
-Clique em **New repository secret** e crie **cinco** segredos:
-
-| Nome | Valor |
-|---|---|
-| `GCP_SA_KEY` | o conteúdo inteiro do arquivo JSON do passo 6 |
-| `TOKEN_EVENTO` | uma frase difícil que você inventa (ex.: `forum-2026-kJ8x!vRm`) |
-| `OAUTH_CLIENT_ID` | do passo 4, termina em `.apps.googleusercontent.com` |
-| `OAUTH_CLIENT_SECRET` | do passo 4, começa com `GOCSPX-` |
-| `OAUTH_REFRESH_TOKEN` | do passo 5, começa com `1//` |
-
-O nome tem que ser **exatamente** esse, em maiúsculas. Depois de salvos, o
-GitHub nunca mais mostra o valor — se errar, é só criar de novo por cima.
-
-> O `TOKEN_EVENTO` é usado nos dois lados: a função exige ele para aceitar um
-> envio, e o site o embute no build. Por isso vale um segredo só.
-
----
-
-## Passo 8 — Publicar, sem terminal
-
-### 8.1 — A função
-
-👉 https://github.com/cleitonpn/aprovacao-de-arte/actions/workflows/deploy-funcao.yml
-
-1. Clique em **Run workflow** → **Run workflow** (o botão verde).
-2. Acompanhe. O primeiro deploy demora uns 3 a 5 minutos, porque o Google
-   precisa ligar várias APIs e montar o ambiente.
-3. Terminando, a página mostra um resumo com o endereço da função.
-
-Se algum segredo faltar, o workflow para logo no começo e diz **qual** —
-justamente para você não descobrir isso só depois de cinco minutos.
-
-### 8.2 — O site
+## Passo 5 — Publicar o site
 
 👉 https://github.com/cleitonpn/aprovacao-de-arte/actions/workflows/deploy.yml
 
-**Run workflow** também, para o site ser reconstruído já com o
-`TOKEN_EVENTO` embutido.
+**Run workflow** → **Run workflow**. Em uns 2 minutos o site está no ar com o
+envio ligado.
 
-O endereço da função **já está configurado** no projeto — é previsível a
-partir do nome do projeto e da região, então não há nada para copiar e colar.
-
-### 8.3 — O link do expositor
+Link para o expositor:
 
 ```
-https://cleitonpn.github.io/aprovacao-de-arte/?e=SEU_TOKEN_EVENTO
+https://cleitonpn.github.io/aprovacao-de-arte/
 ```
 
-Trocar o token por evento é só mudar a URL do convite — não precisa
-republicar nada.
+Link do painel do time:
+
+```
+https://cleitonpn.github.io/aprovacao-de-arte/#/admin
+```
 
 ---
 
-## Passo 9 — Conferir
+## Conferir
 
 1. Abra a ferramenta, preencha o cadastro, suba uma arte **aprovada** e clique
    em *Enviar arte para produção*. Deve aparecer um protocolo `AP-…`.
-2. Confira o Drive: o arquivo chega como `stand__peca__protocolo.jpg`, dentro
-   de uma subpasta com o nome da feira.
-3. Abra `…/aprovacao-de-arte/#/admin`, entre com o Google e escolha a feira.
-
-### Sobre a pasta de destino
-
-O escopo `drive.file` só dá acesso aos arquivos que **a própria aplicação
-criou** — uma pasta criada à mão costuma responder 404, mesmo sendo a mesma
-conta. É a pegadinha clássica deste caminho.
-
-A função trata isso sozinha: testa a pasta configurada e, se não conseguir
-alcançá-la, **cria uma pasta própria** chamada *"Artes aprovadas — Aprovação
-de Arte"* no seu Drive e passa a usá-la. O ID escolhido aparece nos logs e em
-`config/drive` no Firestore. Pode mover ou compartilhar essa pasta à vontade:
-mover não muda o ID.
+2. Abra o painel, entre com o Google, escolha a feira e confira se a arte está
+   lá com o botão **Baixar**.
 
 ### Se der errado
 
 | Sintoma | Causa provável |
 |---|---|
-| `permission-denied` no painel | falta o documento com seu e-mail em `admins` |
-| `failed-precondition` no painel | falta o índice do Firestore — o link para criá-lo sai no console do navegador (F12) |
-| `Link do evento inválido` | `VITE_EVENTO_TOKEN` diferente do `TOKEN_EVENTO` |
-| Funcionava e parou depois de ~7 dias | app OAuth ficou em status "Teste" — publique |
-| `invalid_grant` nos logs | refresh token expirado ou revogado; gere outro no passo 5 e atualize o segredo |
-| `PERMISSION_DENIED` no workflow | falta o papel Editor ou Firebase Admin na conta `github-deploy` |
-| Workflow para dizendo que falta segredo | crie o segredo com o nome exato indicado |
-| Arte foi para uma pasta inesperada | veja `config/drive` no Firestore |
+| `permission-denied` no painel | falta o documento com seu e-mail na coleção `admins` — o **ID do documento** tem que ser o e-mail inteiro |
+| `failed-precondition` no painel | falta o índice do Firestore; abra o console do navegador (F12) e clique no link que aparece no erro |
+| Envio recusado pelas regras | regras não publicadas, ou publicadas só num dos dois lugares (Firestore **e** Storage) |
+| `auth/operation-not-allowed` no envio | o login **Anônimo** não foi ativado no passo 1 |
+| Botão de envio não aparece | o site foi publicado antes de o Storage existir — rode o workflow de novo |
 
-Ver os logs da função (pelo navegador):
-https://console.cloud.google.com/functions/details/southamerica-east1/envio?project=aprovacao-de-arte-49bc3&tab=logs
+---
+
+## O painel do time
+
+`#/admin` → escolhe a feira e mostra tudo o que chegou:
+
+- quem enviou, com e-mail clicável, stand e localização;
+- peça, medidas e veredicto (com marcação de "risco aceito" quando houver);
+- **Baixar** individual, ou **Baixar as N artes** em lote — o navegador pede
+  permissão para baixar vários arquivos uma vez e depois libera o resto;
+- **Exportar planilha (CSV)** para abrir no Excel;
+- **Baixar lista de links** em texto;
+- filtro por expositor, stand ou peça.
+
+Para liberar mais alguém do time, crie um documento na coleção `admins` com o
+e-mail da pessoa como **ID do documento**. Isso é feito só pelo console, de
+propósito: assim ninguém se autopromove pela aplicação.
 
 ---
 
 ## O que fica registrado
 
-Cada envio grava um documento em `envios/{protocolo}`:
-
-- cadastro completo do expositor (nome, e-mail, feira, stand, localização);
-- peça, perfil aplicado e veredicto;
-- **aceite de risco**, quando houver, com data e hora;
-- laudo técnico inteiro, incluindo o **SHA-256** do arquivo;
-- link do arquivo no Drive.
+Cada envio grava um documento em `envios/{protocolo}` com o cadastro completo
+do expositor, a peça, o veredicto, o **aceite de risco com data e hora**, o
+laudo técnico inteiro e o **SHA-256 do arquivo**.
 
 O hash é o que dá valor ao registro: quando alguém reclamar do resultado
 impresso, existe a prova de qual arquivo exato foi aprovado, por quem e
 quando.
 
+---
+
 ## Custos
 
-| Item | Consumo esperado | Custo |
+| Item | Consumo esperado | Custo estimado |
 |---|---|---|
-| Armazenamento das artes | dezenas de GB por evento | **R$ 0** — cabe no plano de 5 TB que vocês já têm |
-| Cloud Function | ~2 chamadas por arte, alguns KB | **R$ 0** — cota de 2 M invocações/mês |
-| Firestore | ~2 KB por arte | **R$ 0** — cota de 50 mil leituras/dia |
-| Hospedagem | estática | **R$ 0** — GitHub Pages |
+| Armazenamento | ~20 GB por evento | ~R$ 3/mês por evento acumulado |
+| Download pelo time | ~20 GB por evento | ~R$ 13 por evento |
+| Firestore | ~2 KB por arte | R$ 0 — cota gratuita |
+| Hospedagem | estática | R$ 0 — GitHub Pages |
 
-O que faz essa conta fechar é a arquitetura: os bytes do arquivo vão direto do
-navegador para o Google, sem passar por infraestrutura paga no meio. Com 5 TB
-de espaço, o armazenamento deixa de ser preocupação por bastante tempo.
+Ou seja, algo entre **R$ 15 e R$ 25 por evento**. Vale um lembrete honesto: a
+opção de guardar no Google Drive sairia de graça, já que vocês têm o plano de
+5 TB — mas exigiria consentimento OAuth, cliente OAuth, refresh token e conta
+de serviço. Ficou como possibilidade futura; o código dessa versão está no
+histórico do repositório, no commit anterior a este.
+
+## Uma limitação que vale conhecer
+
+O envio é aberto: qualquer pessoa com o link pode enviar arte, porque é
+justamente isso que evita a barreira de login para o expositor. As regras
+limitam bastante o estrago (só JPG/PNG/PDF, até 1 GB, só criação, sem
+leitura), mas não impedem alguém mal-intencionado de encher o armazenamento.
+
+Se um dia isso incomodar, o remédio é o **Firebase App Check** com reCAPTCHA:
+ele garante que as chamadas vêm mesmo da página de vocês, e continua invisível
+para o expositor. São mais uns 10 minutos de configuração — dá para ligar
+depois, sem mexer no resto.

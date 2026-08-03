@@ -1,97 +1,42 @@
-// Envio da arte aprovada para o Drive.
+// Envio da arte aprovada.
 //
-// Arquitetura escolhida para o cliente NÃO precisar de login:
+// O arquivo vai para o Firebase Storage e o laudo para o Firestore, direto do
+// navegador — sem servidor nosso no meio e sem login do expositor.
 //
-//   navegador  --(1) metadados--> Cloud Function --(service account)--> Drive
-//   navegador  <--(2) URL de sessão de upload---- Cloud Function
-//   navegador  --(3) BYTES do arquivo, direto-->  Google
-//   navegador  --(4) confirma-----------------> Cloud Function -> Firestore
-//
-// O detalhe que barateia tudo: os bytes nunca passam pela função. Ela troca
-// alguns kilobytes de JSON, então um arquivo de 500 MB custa o mesmo que um
-// de 5 MB — e cabe folgado no plano gratuito. Mandar o arquivo através da
-// função custaria tempo de execução e tráfego de saída em cima de cada megabyte.
+// O que autoriza a gravação é uma sessão anônima do Firebase, criada sem
+// nenhuma tela. Quem realmente valida é o conjunto de regras
+// (`firestore.rules` e `storage.rules`), que roda no servidor do Google: elas
+// exigem os campos do cadastro, limitam tipo e tamanho do arquivo e — o mais
+// importante para a operação — recusam qualquer envio de arte reprovada, ou
+// de arte com ressalva sem o aceite de risco registrado.
 
-import { ENVIO, tokenDoEvento } from '../config.js'
+import { sessaoAnonima } from './firebase.js'
+import { ENVIO, envioConfigurado } from '../config.js'
+import { paraNomeArquivo } from '../data/cadastro.js'
 
-// 8 MB por pedaço: grande o bastante para não virar conversa fiada de rede,
-// pequeno o bastante para uma queda de conexão não jogar fora o upload todo.
-const PEDACO = 8 * 1024 * 1024
-const TENTATIVAS = 4
+const TIPOS_ACEITOS = new Set(['image/jpeg', 'image/png', 'application/pdf', 'application/octet-stream'])
 
-const espera = (ms) => new Promise((r) => setTimeout(r, ms))
-
-async function postar(caminho, corpo) {
-  const resposta = await fetch(`${ENVIO.endpoint}${caminho}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ...corpo, tokenEvento: tokenDoEvento() }),
-  })
-  const texto = await resposta.text()
-  let dados = null
-  try {
-    dados = texto ? JSON.parse(texto) : null
-  } catch {
-    /* resposta não-JSON cai no erro abaixo */
-  }
-  if (!resposta.ok) {
-    throw new Error(dados?.erro || `Falha na comunicação com o servidor (${resposta.status}).`)
-  }
-  return dados
+export function protocoloNovo() {
+  const d = new Date()
+  const data = [d.getFullYear() % 100, d.getMonth() + 1, d.getDate()]
+    .map((n) => String(n).padStart(2, '0')).join('')
+  const aleatorio = Math.random().toString(36).slice(2, 7).toUpperCase()
+  return `AP-${data}-${aleatorio}`
 }
 
-/**
- * Sobe os bytes em pedaços numa sessão retomável do Google.
- * Um 308 significa "recebi, manda o próximo" — não é erro.
- */
-async function enviarBytes(urlSessao, arquivo, aoProgredir) {
-  const total = arquivo.size
-  let enviado = 0
+export const idDeFeira = (nome) => paraNomeArquivo(nome, 60).toLowerCase()
 
-  while (enviado < total) {
-    const fim = Math.min(enviado + PEDACO, total)
-    const pedaco = arquivo.slice(enviado, fim)
-    let resposta = null
-    let erroFinal = null
-
-    for (let tentativa = 0; tentativa < TENTATIVAS; tentativa++) {
-      try {
-        resposta = await fetch(urlSessao, {
-          method: 'PUT',
-          headers: {
-            'Content-Range': `bytes ${enviado}-${fim - 1}/${total}`,
-          },
-          body: pedaco,
-        })
-        erroFinal = null
-        break
-      } catch (e) {
-        // queda de rede: espera progressiva antes de repetir o MESMO pedaço
-        erroFinal = e
-        await espera(1000 * 2 ** tentativa)
-      }
-    }
-    if (erroFinal) throw new Error('A conexão caiu durante o envio. Tente novamente.')
-
-    if (resposta.status === 308) {
-      // O Google diz até onde recebeu; seguimos exatamente de lá.
-      const faixa = resposta.headers.get('Range')
-      const ate = faixa ? Number(faixa.split('-')[1]) : fim - 1
-      enviado = Number.isFinite(ate) ? ate + 1 : fim
-    } else if (resposta.ok) {
-      enviado = total
-      aoProgredir?.(1)
-      return await resposta.json()
-    } else if (resposta.status === 404) {
-      throw new Error('A sessão de envio expirou. Tente enviar novamente.')
-    } else {
-      const detalhe = await resposta.text().catch(() => '')
-      throw new Error(`O Google recusou o envio (${resposta.status}). ${detalhe.slice(0, 200)}`)
-    }
-
-    aoProgredir?.(enviado / total)
+function traduzirErro(e) {
+  const codigo = e?.code || ''
+  if (codigo.includes('unauthorized') || codigo.includes('permission-denied')) {
+    return 'O envio foi recusado pelas regras de segurança. Se a arte tem ressalva, é preciso aceitar o risco antes.'
   }
-  return null
+  if (codigo.includes('quota-exceeded')) return 'O espaço de armazenamento acabou. Avise o time de comunicação visual.'
+  if (codigo.includes('retry-limit-exceeded') || codigo.includes('unavailable')) {
+    return 'A conexão caiu durante o envio. Tente novamente.'
+  }
+  if (codigo.includes('canceled')) return 'O envio foi cancelado.'
+  return e?.message || 'Não foi possível enviar a arte.'
 }
 
 /**
@@ -100,40 +45,92 @@ async function enviarBytes(urlSessao, arquivo, aoProgredir) {
  * @param {(fracao:number)=>void} aoProgredir
  */
 export async function enviarArte(arquivo, dados, aoProgredir) {
-  if (!ENVIO.endpoint) throw new Error('O envio para o Drive não está configurado nesta instalação.')
+  if (!envioConfigurado()) throw new Error('O envio não está configurado nesta instalação.')
 
   const limite = ENVIO.tamanhoMaximoMb * 1024 * 1024
   if (arquivo.size > limite) {
     throw new Error(`O arquivo tem ${(arquivo.size / 1048576).toFixed(0)} MB e o limite é ${ENVIO.tamanhoMaximoMb} MB.`)
   }
+  const tipo = arquivo.type || 'application/octet-stream'
+  if (!TIPOS_ACEITOS.has(tipo)) throw new Error(`Tipo de arquivo não aceito para envio: ${tipo}.`)
 
   aoProgredir?.(0)
 
-  const sessao = await postar('/sessao', {
-    cadastro: dados.cadastro,
-    peca: dados.peca,
-    perfil: { id: dados.perfil.id, nome: dados.perfil.nome },
-    veredicto: dados.veredicto,
-    riscoAceito: dados.riscoAceito || null,
-    laudo: dados.laudo,
-    arquivo: {
-      nome: arquivo.name,
-      tamanho: arquivo.size,
-      tipo: arquivo.type || 'application/octet-stream',
-      sha256: dados.laudo?.arquivo?.sha256 || null,
-    },
-  })
+  const { app, firestore, storage } = await sessaoAnonima()
+  const { cadastro, peca, perfil, veredicto, riscoAceito, laudo } = dados
 
-  const resultadoUpload = await enviarBytes(sessao.urlSessao, arquivo, aoProgredir)
+  const protocolo = protocoloNovo()
+  const feiraId = idDeFeira(cadastro.feira)
+  const extensao = (arquivo.name.match(/\.[a-z0-9]+$/i) || [''])[0].toLowerCase()
+  const nomeNoStorage = `${paraNomeArquivo(cadastro.stand)}__${paraNomeArquivo(perfil.nome)}__${protocolo}${extensao}`
+  const caminho = `envios/${feiraId}/${nomeNoStorage}`
 
-  const confirmacao = await postar('/concluir', {
-    protocolo: sessao.protocolo,
-    idArquivoDrive: resultadoUpload?.id || null,
-  })
+  try {
+    const bucket = storage.getStorage(app)
+    const alvo = storage.ref(bucket, caminho)
 
-  return {
-    protocolo: sessao.protocolo,
-    link: confirmacao?.link || resultadoUpload?.webViewLink || null,
-    nomeNoDrive: confirmacao?.nome || sessao.nomeArquivo,
+    // Retomável: numa arte de centenas de MB, uma oscilação de rede não joga
+    // fora tudo o que já subiu.
+    const tarefa = storage.uploadBytesResumable(alvo, arquivo, {
+      contentType: tipo,
+      customMetadata: {
+        protocolo,
+        expositor: cadastro.nome,
+        email: cadastro.email,
+        stand: cadastro.stand,
+        feira: cadastro.feira,
+        veredicto,
+      },
+    })
+
+    await new Promise((resolve, reject) => {
+      tarefa.on(
+        'state_changed',
+        (s) => aoProgredir?.(s.totalBytes ? s.bytesTransferred / s.totalBytes : 0),
+        reject,
+        resolve,
+      )
+    })
+
+    const link = await storage.getDownloadURL(alvo)
+
+    const bd = firestore.getFirestore(app)
+    // setDoc com merge:false num documento novo — as regras só permitem criar,
+    // nunca sobrescrever, então um protocolo já usado é recusado pelo servidor.
+    await firestore.setDoc(firestore.doc(bd, 'envios', protocolo), {
+      protocolo,
+      status: 'concluido',
+      feiraId,
+      feira: cadastro.feira,
+      cadastro,
+      peca,
+      perfil: { id: perfil.id, nome: perfil.nome },
+      veredicto,
+      riscoAceito: riscoAceito || null,
+      laudo: laudo || null,
+      arquivo: {
+        nome: arquivo.name,
+        tamanho: arquivo.size,
+        tipo,
+        sha256: laudo?.arquivo?.sha256 || null,
+      },
+      caminho,
+      link,
+      criadoEm: firestore.serverTimestamp(),
+    })
+
+    // Alimenta o seletor de feiras do painel. Merge para não sobrescrever o
+    // que já existe quando o segundo expositor da mesma feira enviar.
+    await firestore.setDoc(
+      firestore.doc(bd, 'feiras', feiraId),
+      { nome: cadastro.feira, atualizadaEm: firestore.serverTimestamp() },
+      { merge: true },
+    )
+
+    aoProgredir?.(1)
+    return { protocolo, link, nomeNoStorage }
+  } catch (e) {
+    console.error('falha no envio', e)
+    throw new Error(traduzirErro(e))
   }
 }

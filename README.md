@@ -8,8 +8,9 @@ A **análise roda 100% no navegador** — o arquivo não sai da máquina do clie
 enquanto ele não decidir enviar. Isso elimina custo por análise e resolve a
 conversa sobre confidencialidade de arte não divulgada antes do evento.
 
-Quando a arte passa, um botão sobe o arquivo direto para uma pasta do Google
-Drive, **sem o expositor precisar de login**. Ver [SETUP.md](SETUP.md).
+Quando a arte passa, um botão envia o arquivo para o Firebase Storage — **sem
+o expositor precisar de login** — e o time baixa tudo por feira num painel
+próprio. Ver [SETUP.md](SETUP.md).
 
 ```bash
 npm install
@@ -29,8 +30,9 @@ npm run build     # build de produção (dist/)
    com ressalva* **e** o cliente aceitou o risco explicitamente. Arte
    reprovada nunca sobe. A trava está na interface e repetida no servidor,
    para quem chamar a API direto não conseguir contorná-la.
-5. **Painel do time** (`#/admin`): seleciona a feira e lista quem já enviou,
-   com veredicto, protocolo e link do arquivo no Drive.
+5. **Painel do time** (`#/admin`): seleciona a feira, lista quem já enviou e
+   baixa as artes — uma a uma ou todas de uma vez, além de exportar a
+   planilha do que chegou.
 
 ## O problema que ela resolve
 
@@ -223,24 +225,26 @@ detalhe em `metricas.js`.
 
 ## Envio e painel
 
-Ver **[SETUP.md](SETUP.md)** para ligar. Em resumo:
+Ver **[SETUP.md](SETUP.md)** — são 4 passos no Firebase Console, sem terminal
+e sem credencial nenhuma para gerar. Em resumo:
 
-- **Arquivo no Drive, registro no Firestore.** Drive porque o armazenamento já
-  está pago junto com o Workspace, e arte de grande formato é pesada — no
-  Firebase Storage um único evento já estouraria a cota gratuita. Firestore
-  porque o laudo é JSON de ~2 KB e cabe folgado na cota.
-- **Cliente sem login.** Uma Cloud Function guarda a credencial do Drive e
-  devolve ao navegador uma URL de sessão de upload. Os bytes vão direto do
-  navegador para o Google — a função troca alguns kilobytes, então um arquivo
-  de 500 MB custa o mesmo que um de 5 MB.
-- **Segurança.** Nada é gravado pelo navegador: quem escreve é a função, com o
-  Admin SDK. O painel exige login Google *e* um documento na coleção `admins`
-  (`firestore.rules`). O endpoint é protegido por um token de evento que viaja
-  na URL do convite (`…/?e=TOKEN`).
-- **Publicação sem terminal.** Dois workflows: `deploy.yml` publica o site no
-  GitHub Pages e `deploy-funcao.yml` publica a Cloud Function e as regras do
-  Firestore. As credenciais ficam em *Settings → Secrets* do repositório e são
-  escritas em `functions/.env` dentro do runner, nunca no Git.
+- **Arquivo no Storage, registro no Firestore**, gravados direto do navegador.
+  Sem servidor próprio no meio.
+- **Cliente sem login.** Uma sessão anônima do Firebase, criada sem nenhuma
+  tela, autoriza a gravação. O expositor não percebe que ela existe.
+- **A regra de negócio é lei no servidor.** A trava do veredicto está na
+  interface *e* repetida em `firestore.rules`: arte reprovada não entra, e
+  arte com ressalva só entra com o aceite de risco junto. Interface se
+  contorna; regra do Firestore não.
+- **Envio é só criação.** Nenhum expositor sobrescreve o envio de outro nem
+  adultera o próprio depois de feito. Leitura, só para quem consta em
+  `admins`.
+- **Storage sem leitura direta.** O painel usa o link tokenizado gerado no
+  envio, então ninguém varre o armazenamento atrás de arte alheia.
+
+Alternativa considerada e descartada por ora: guardar no Google Drive sairia
+de graça, mas exigia consentimento OAuth, cliente OAuth, refresh token e conta
+de serviço. Essa versão está no histórico do repositório.
 
 ## Fase 3 — quando fizer sentido
 

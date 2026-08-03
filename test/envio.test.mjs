@@ -1,10 +1,12 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { validar, normalizar, paraNomeArquivo, CADASTRO_VAZIO } from '../src/data/cadastro.js'
+import { protocoloNovo, idDeFeira } from '../src/services/envio.js'
 
-// A regra de negócio do envio, isolada da interface. Está duplicada de
-// propósito na Cloud Function (functions/index.js): a interface impede o
-// clique, e o servidor impede quem chamar a API direto.
+// A regra de negócio do envio, isolada da interface. Ela está duplicada de
+// propósito em firestore.rules: a interface impede o clique, e a regra do
+// Firestore impede quem chamar a API direto — interface se contorna, regra
+// do servidor não.
 function podeEnviar(veredicto, riscoAceito) {
   if (veredicto === 'aprovado') return true
   if (veredicto === 'ressalva') return Boolean(riscoAceito)
@@ -58,10 +60,34 @@ test('só sobe arte aprovada, ou com ressalva e risco aceito', () => {
   assert.equal(podeEnviar('aprovado', null), true)
   assert.equal(podeEnviar('aprovado', { em: 'agora' }), true)
 
-  // o caso que protege a pasta do Drive de voltar a ser depósito de arte ruim
+  // o caso que impede o armazenamento de virar depósito de arte ruim
   assert.equal(podeEnviar('ressalva', null), false)
   assert.equal(podeEnviar('ressalva', { em: 'agora' }), true)
 
   assert.equal(podeEnviar('reprovado', null), false)
   assert.equal(podeEnviar('reprovado', { em: 'agora' }), false, 'reprovada não sobe nem com aceite')
+})
+
+test('protocolo é único e legível', () => {
+  const p = protocoloNovo()
+  assert.match(p, /^AP-\d{6}-[A-Z0-9]{5}$/)
+  // 500 seguidos sem colisão: o protocolo vira o ID do documento no Firestore
+  // e, como as regras só permitem CRIAR, uma colisão seria um envio recusado
+  // na cara do cliente
+  const vistos = new Set()
+  for (let i = 0; i < 500; i++) vistos.add(protocoloNovo())
+  assert.equal(vistos.size, 500)
+})
+
+test('id da feira agrupa variações de escrita da mesma feira', () => {
+  const esperado = 'forum-e-commerce-brasil-2026'
+  for (const escrito of [
+    'Fórum E-commerce Brasil 2026',
+    'FÓRUM E-COMMERCE BRASIL 2026',
+    '  Forum E-commerce Brasil 2026  ',
+  ]) {
+    assert.equal(idDeFeira(escrito), esperado, escrito)
+  }
+  // feiras diferentes não podem colidir
+  assert.notEqual(idDeFeira('Feira A'), idDeFeira('Feira B'))
 })

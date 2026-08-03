@@ -4,9 +4,8 @@ dist
 *.local
 
 # .env fica versionado de propósito: só tem valores públicos do Firebase.
-# Segredos de verdade (chave da service account, token do evento) ficam nos
-# secrets da Cloud Function, nunca aqui.
+# Não há segredo nenhum neste projeto — a proteção vem das regras de
+# segurança, não de esconder a chave de API.
 .env.local
-functions/node_modules
 .firebase
 functions/.env

@@ -29,9 +29,8 @@ export default function Envio({ resultado, arquivo, cadastro, riscoAceito }) {
     return (
       <div className="envio nao-configurado">
         <p>
-          O envio automático para o Drive ainda não está configurado nesta
-          instalação. Use <strong>Baixar laudo</strong> e mande a arte pelo
-          caminho de sempre.
+          O envio automático ainda não está configurado nesta instalação. Use
+          <strong> Baixar laudo</strong> e mande a arte pelo caminho de sempre.
         </p>
       </div>
     )

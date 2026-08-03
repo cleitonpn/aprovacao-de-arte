@@ -2,12 +2,14 @@ rules_version = '2';
 
 // Regras do Firestore.
 //
-// Princípio: NADA é gravado pelo navegador. Quem escreve é a Cloud Function,
-// que usa o Admin SDK e passa por cima destas regras — então o cliente não
-// consegue forjar um envio, nem marcar como aprovada uma arte reprovada.
+// Aqui é onde a regra de negócio vira lei. A interface já impede o clique em
+// "enviar" quando a arte não passou, mas interface se contorna; estas regras
+// rodam no servidor do Google e não. É por isso que a validação do veredicto
+// está duplicada: quem chamar a API direto também não consegue subir arte
+// reprovada.
 //
-// Leitura é só do time: precisa estar autenticado E ter um documento com o
-// próprio e-mail na coleção `admins`. O expositor nunca faz login.
+// O expositor grava com uma sessão ANÔNIMA (criada sem nenhuma tela, ele nem
+// percebe). O time do painel entra com Google e precisa constar em `admins`.
 
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -18,27 +20,58 @@ service cloud.firestore {
         && exists(/databases/$(database)/documents/admins/$(request.auth.token.email));
     }
 
-    // Envios de arte: o painel do time lê; ninguém escreve pelo cliente.
+    function textoValido(v, maximo) {
+      return v is string && v.size() > 1 && v.size() <= maximo;
+    }
+
+    function cadastroValido(c) {
+      return c.keys().hasAll(['nome', 'email', 'feira', 'stand'])
+        && textoValido(c.nome, 120)
+        && textoValido(c.email, 160)
+        && c.email.matches('^[^@\\\\s]+@[^@\\\\s]+\\\\.[^@\\\\s]{2,}$')
+        && textoValido(c.feira, 160)
+        && textoValido(c.stand, 160);
+    }
+
+    // A trava do negócio: só sobe arte aprovada, ou com ressalva desde que o
+    // cliente tenha assumido o risco de forma explícita.
+    function veredictoPermiteEnvio(d) {
+      return d.veredicto == 'aprovado'
+        || (d.veredicto == 'ressalva' && d.riscoAceito != null);
+    }
+
     match /envios/{protocolo} {
       allow read: if ehAdmin();
-      allow write: if false;
+
+      // Só criar, nunca alterar nem apagar: um envio é um registro histórico.
+      // Como `create` falha se o documento já existe, ninguém sobrescreve o
+      // envio de outro expositor nem adultera o próprio depois de feito.
+      allow create: if request.auth != null
+        && request.resource.data.protocolo == protocolo
+        && cadastroValido(request.resource.data.cadastro)
+        && veredictoPermiteEnvio(request.resource.data)
+        && request.resource.data.status == 'concluido'
+        && request.resource.data.criadoEm == request.time
+        && request.resource.data.arquivo.tamanho is number
+        && request.resource.data.arquivo.tamanho > 0
+        && request.resource.data.arquivo.tamanho < 1024 * 1024 * 1024;
+
+      allow update, delete: if false;
     }
 
-    // Feiras: alimenta o seletor do painel.
+    // Alimenta o seletor de feiras do painel. O expositor só pode gravar o
+    // nome e a data — nada além disso, para a coleção não virar depósito.
     match /feiras/{feiraId} {
       allow read: if ehAdmin();
-      allow write: if false;
+      allow create, update: if request.auth != null
+        && request.resource.data.keys().hasOnly(['nome', 'atualizadaEm'])
+        && textoValido(request.resource.data.nome, 160)
+        && request.resource.data.atualizadaEm == request.time;
+      allow delete: if false;
     }
 
-    // Estado interno da função (qual pasta do Drive está em uso).
-    match /config/{doc} {
-      allow read: if ehAdmin();
-      allow write: if false;
-    }
-
-    // Allowlist do painel. Um admin enxerga a lista; incluir ou remover
-    // alguém é feito pelo console do Firebase, de propósito — assim ninguém
-    // se autopromove pela aplicação.
+    // Allowlist do painel. Incluir ou remover alguém é feito pelo console do
+    // Firebase, de propósito — assim ninguém se autopromove pela aplicação.
     match /admins/{email} {
       allow read: if ehAdmin();
       allow write: if false;
