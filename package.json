@@ -1,0 +1,22 @@
+{
+  "name": "aprovacao-de-arte",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Análise automática de qualidade de arte para impressão em grande formato (stands e eventos).",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview --host",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "pdfjs-dist": "^4.7.76",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.2",
+    "vite": "^5.4.8"
+  }
+}
