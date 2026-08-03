@@ -114,7 +114,6 @@ https://cleitonpn.github.io/aprovacao-de-arte/#/admin
 | Sintoma | Causa provável |
 |---|---|
 | `permission-denied` no painel | falta o documento com seu e-mail na coleção `admins` — o **ID do documento** tem que ser o e-mail inteiro |
-| `failed-precondition` no painel | falta o índice do Firestore; abra o console do navegador (F12) e clique no link que aparece no erro |
 | Envio recusado pelas regras | regras não publicadas, ou publicadas só num dos dois lugares (Firestore **e** Storage) |
 | `auth/operation-not-allowed` no envio | o login **Anônimo** não foi ativado no passo 1 |
 | Botão de envio não aparece | o site foi publicado antes de o Storage existir — rode o workflow de novo |

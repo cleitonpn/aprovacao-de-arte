@@ -108,10 +108,12 @@ export default function Admin() {
 
   useEffect(() => {
     if (!fb || !usuario) return
-    const { getFirestore, collection, getDocs, query, orderBy } = fb.firestore
-    getDocs(query(collection(getFirestore(fb.app), 'feiras'), orderBy('atualizadaEm', 'desc')))
+    const { getFirestore, collection, getDocs } = fb.firestore
+    getDocs(collection(getFirestore(fb.app), 'feiras'))
       .then((snap) => {
-        const lista = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+        const lista = snap.docs
+          .map((d) => ({ id: d.id, ...d.data() }))
+          .sort((a, b) => (b.atualizadaEm?.seconds || 0) - (a.atualizadaEm?.seconds || 0))
         setFeiras(lista)
         setFeiraId((atual) => atual || lista[0]?.id || '')
       })
@@ -123,13 +125,22 @@ export default function Admin() {
     setBuscando(true)
     setErro(null)
     try {
-      const { getFirestore, collection, getDocs, query, where, orderBy } = fb.firestore
+      // Filtra por feira no servidor, mas ORDENA aqui no navegador de
+      // propósito. Combinar `where` com `orderBy` exigiria um índice composto
+      // no Firestore — que só nasce rodando `firebase deploy` ou clicando num
+      // link escondido no console do navegador. Como cada feira tem dezenas ou
+      // poucas centenas de envios, ordenar em memória custa nada e poupa a
+      // operação de um erro incompreensível no primeiro acesso.
+      const { getFirestore, collection, getDocs, query, where } = fb.firestore
       const snap = await getDocs(query(
         collection(getFirestore(fb.app), 'envios'),
         where('feiraId', '==', feiraId),
-        orderBy('criadoEm', 'desc'),
       ))
-      setEnvios(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
+      setEnvios(
+        snap.docs
+          .map((d) => ({ id: d.id, ...d.data() }))
+          .sort((a, b) => (b.criadoEm?.seconds || 0) - (a.criadoEm?.seconds || 0)),
+      )
     } catch (e) {
       setErro(traduzirErro(e))
     } finally {
