@@ -137,13 +137,14 @@ export function salvarPolitica(politica) {
   }
 }
 
-// Detector de nitidez real (análise espectral). Fica desligado até ser
-// calibrado com o acervo real da empresa — ver README, seção "Calibração".
+// Detector de nitidez real (análise espectral). Ligado por decisão da
+// operação. Continua desligável no painel de regras — ver README, seção
+// "Detector de nitidez real", para o que ele pega e o que deixa passar.
 export function carregarDetectorNitidez() {
   try {
-    return localStorage.getItem(CHAVE_NITIDEZ) === 'on'
+    return localStorage.getItem(CHAVE_NITIDEZ) !== 'off'
   } catch {
-    return false
+    return true
   }
 }
 

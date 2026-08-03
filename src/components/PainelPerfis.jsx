@@ -94,11 +94,13 @@ export default function PainelPerfis({ perfis, onSalvar, politica, onPolitica, d
             <span>
               <strong>Detector de nitidez real (experimental)</strong>
               <em>
-                Avisa quando o arquivo não sustenta a resolução que declara — imagem
-                pequena ampliada no editor. Vem desligado: nos testes com conteúdo real
-                ele ainda oscila, e calibrá-lo exige rodar o acervo de artes já aprovadas
-                e já recusadas de vocês. Os números aparecem no laudo técnico de qualquer
-                forma. Ligue só depois de calibrar — ver README.
+                Avisa quando o arquivo não sustenta a resolução que declara — o caso da
+                imagem pequena ampliada no editor. Está <strong>ligado</strong>. Ele é
+                conservador de propósito: fica calado na dúvida, então deixa passar mais
+                casos do que acusa, e o aviso é sempre ressalva — nunca reprova sozinho.
+                Se um dia acusar uma arte que você sabe que está boa, desligue aqui e me
+                avise: é sinal de que os limiares precisam do acervo de vocês para
+                calibrar.
               </em>
             </span>
           </label>

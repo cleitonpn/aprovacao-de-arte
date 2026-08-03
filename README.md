@@ -151,7 +151,7 @@ julgar se a arte está bonita, se a cor da marca está certa, se o logo é a
 versão atual, ou se há erro de digitação. Isso continua sendo olho humano. A
 ferramenta tira do time o trabalho de *medir*; o de *julgar* continua com ele.
 
-## Detector de nitidez real (experimental, desligado)
+## Detector de nitidez real (experimental, ligado)
 
 Existe um módulo de análise espectral (`src/core/espectro.js`) que tenta
 responder a uma pergunta valiosa: **o arquivo carrega detalhe real na
@@ -164,7 +164,7 @@ potência da baixa frequência até a Nyquist. Uma imagem ampliada segue a lei
 até a Nyquist do arquivo *original* e depois desaba num patamar de ruído. Um
 ajuste em dois segmentos localiza esse joelho.
 
-**Vem desligado por padrão, de propósito.** Em imagens sintéticas de
+**Ligado por decisão da operação**, e desligável no painel de regras. Em imagens sintéticas de
 laboratório ele separa bem (ver `test/calibracao.test.mjs`), mas nos testes
 com conteúdo real ele ainda oscila: em parte das ampliações o ajuste degenera
 e a evidência some. Limitações já medidas e registradas como teste:
@@ -175,8 +175,12 @@ e a evidência some. Limitações já medidas e registradas como teste:
   custa nada, porque um arquivo assim é barrado pelo cálculo de DPI, que é
   aritmética simples e não erra.
 
-Os números continuam visíveis no painel técnico mesmo com o detector
-desligado, porque são justamente o material bruto para calibrá-lo.
+O achado é sempre **ressalva** — ele nunca reprova uma arte sozinho. E o
+classificador é conservador: na dúvida, cala. Na prática isso significa que
+ele deixa passar mais casos do que acusa, que é o erro barato dos dois.
+
+Os números aparecem no painel técnico independentemente do detector estar
+ligado, porque são o material bruto para calibrá-lo.
 
 ### Como calibrar antes de ligar
 

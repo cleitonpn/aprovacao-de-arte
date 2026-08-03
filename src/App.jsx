@@ -104,8 +104,14 @@ export default function App() {
   }, [peca, perfil, escalaFator, politica, detectorNitidez])
 
   // Trocar a peça ou a escala muda o veredicto — reanalisa sem novo upload.
+  //
+  // Com espera: digitar "275" na largura dispara três mudanças de estado, e
+  // cada análise relê o arquivo inteiro (decodifica a imagem, roda a FFT).
+  // Numa arte de centenas de MB isso travaria a página a cada tecla.
   useEffect(() => {
-    if (arquivo && !analisando) rodar(arquivo)
+    if (!arquivo) return undefined
+    const t = setTimeout(() => rodar(arquivo), 450)
+    return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [perfilId, peca.larguraCm, peca.alturaCm, escalaFator, politica, detectorNitidez])
 

@@ -1,7 +1,49 @@
+import { useEffect, useState } from 'react'
 import { ESCALAS } from '../data/perfis.js'
 import { especificacao } from '../core/regras.js'
 
 const fmt = (n) => new Intl.NumberFormat('pt-BR').format(Math.round(n))
+
+/**
+ * Campo de medida que se deixa apagar.
+ *
+ * A versão anterior fazia `Math.max(1, ...)` a cada tecla: apagar o conteúdo
+ * virava "1" instantaneamente e não havia como digitar outro número — para
+ * trocar 200 por 275 era preciso brigar com o campo. Agora o que está sendo
+ * digitado vive num estado de texto próprio, e o valor só sobe para a
+ * aplicação quando é um número válido. Sair do campo vazio restaura o último
+ * valor bom, em vez de deixar a peça sem medida.
+ */
+function CampoMedida({ rotulo, valor, onValor }) {
+  const [texto, setTexto] = useState(String(valor))
+
+  // mantém o campo em dia quando o valor muda por fora (ex.: trocar de peça)
+  useEffect(() => {
+    setTexto((atual) => (Number(atual) === valor ? atual : String(valor)))
+  }, [valor])
+
+  const digitar = (e) => {
+    const bruto = e.target.value
+    setTexto(bruto)
+    const n = Number(bruto)
+    if (bruto !== '' && Number.isFinite(n) && n > 0) onValor(n)
+  }
+
+  const sair = () => {
+    const n = Number(texto)
+    if (!(texto !== '' && Number.isFinite(n) && n > 0)) setTexto(String(valor))
+  }
+
+  return (
+    <label className="campo">
+      <span>{rotulo}</span>
+      <input
+        type="number" inputMode="decimal" min="1" step="1"
+        value={texto} onChange={digitar} onBlur={sair}
+      />
+    </label>
+  )
+}
 
 export default function PecaForm({ perfis, perfilId, peca, escalaFator, politica, onChange }) {
   const perfil = perfis.find((p) => p.id === perfilId) || perfis[0]
@@ -27,20 +69,16 @@ export default function PecaForm({ perfis, perfilId, peca, escalaFator, politica
       {perfil.obs && <p className="nota">{perfil.obs}</p>}
 
       <div className="linha">
-        <label className="campo">
-          <span>Largura (cm)</span>
-          <input
-            type="number" min="1" step="1" value={peca.larguraCm}
-            onChange={(e) => onChange({ peca: { ...peca, larguraCm: Math.max(1, Number(e.target.value) || 0) } })}
-          />
-        </label>
-        <label className="campo">
-          <span>Altura (cm)</span>
-          <input
-            type="number" min="1" step="1" value={peca.alturaCm}
-            onChange={(e) => onChange({ peca: { ...peca, alturaCm: Math.max(1, Number(e.target.value) || 0) } })}
-          />
-        </label>
+        <CampoMedida
+          rotulo="Largura (cm)"
+          valor={peca.larguraCm}
+          onValor={(v) => onChange({ peca: { ...peca, larguraCm: v } })}
+        />
+        <CampoMedida
+          rotulo="Altura (cm)"
+          valor={peca.alturaCm}
+          onValor={(v) => onChange({ peca: { ...peca, alturaCm: v } })}
+        />
       </div>
 
       <label className="campo">
