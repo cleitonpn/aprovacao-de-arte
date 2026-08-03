@@ -14,58 +14,69 @@ navegador. Isto liga o botão *Enviar arte para produção*.
 **Já feito:** ✅ plano Blaze · ✅ Authentication com Google · ✅ Firestore +
 coleção `admins` · ✅ Google Drive API ativada
 
-**Falta:** tela de consentimento → ID de cliente → refresh token → deploy.
+**Falta:** consentimento OAuth → cliente OAuth → refresh token → segredos no
+GitHub → clicar em *Run workflow*.
+
+> Nenhum passo daqui em diante precisa de terminal. Tudo é feito por telas do
+> Google Cloud e do GitHub.
 
 ---
 
-## Passo 3 — Tela de consentimento OAuth
+## Passo 3 — Consentimento OAuth (Google Auth Platform)
 
-👉 https://console.cloud.google.com/apis/credentials/consent?project=aprovacao-de-arte-49bc3
+👉 https://console.cloud.google.com/auth/overview?project=aprovacao-de-arte-49bc3
 
-*(no menu lateral do Google Cloud isso aparece como **APIs e serviços → Tela de
-permissão OAuth**; em projetos novos o Google renomeou para **Google Auth
-Platform → Branding**)*
+O Google reorganizou essa área e ela agora se chama **Google Auth Platform**.
+Não existe mais um assistente único: as configurações estão espalhadas em três
+itens do menu lateral. Faça nesta ordem.
 
-1. Tipo de usuário: **Externo** → *Criar*.
-2. Preencha o mínimo:
-   - Nome do app: `Aprovacao de Arte`
-   - E-mail de suporte: `cleitonpnascimento@gmail.com`
-   - E-mail do desenvolvedor: `cleitonpnascimento@gmail.com`
-3. *Salvar e continuar*.
-4. Em **Escopos** → *Adicionar ou remover escopos* → no campo de filtro, cole:
+### 3.1 — Menu "Acesso a dados" → o escopo
+
+1. Clique em **Acesso a dados** no menu da esquerda.
+2. **Adicionar ou remover escopos**.
+3. No campo de filtro, cole:
    ```
    https://www.googleapis.com/auth/drive.file
    ```
-   marque a caixa → *Atualizar* → *Salvar e continuar*.
-5. Em **Usuários de teste** → adicione `cleitonpnascimento@gmail.com` →
-   *Salvar e continuar*.
+4. Marque a caixa da linha que aparecer → **Atualizar** → **Salvar**.
 
-### ⚠️ Agora o passo que quase todo mundo pula
+Deixe **apenas** esse escopo. Ele não é "sensível", e é isso que permite
+publicar o app sem passar pela verificação do Google.
 
-Volte ao **resumo da tela de consentimento** e clique em **"Publicar app"**
-(botão *PUBLISH APP*) → confirme.
+### 3.2 — Menu "Público-alvo" → tipo, testador e publicação
 
-**Por quê:** enquanto o app estiver com status **"Teste"**, o Google expira o
-refresh token em **7 dias**. Vai funcionar hoje, e na semana que vem os envios
-começam a falhar sem nenhum erro visível para o cliente — o tipo de problema
-que consome dias até alguém descobrir a causa.
+1. Clique em **Público-alvo**.
+2. Confirme que o tipo de usuário é **Externo**.
+3. Em *Usuários de teste*, adicione `cleitonpnascimento@gmail.com`.
+4. **Clique em "Publicar app"** e confirme.
 
-Publicar **não exige verificação do Google** aqui, porque `drive.file` não é
-um escopo sensível. Se aparecer algo sobre "verificação necessária", é sinal
-de que sobrou algum escopo a mais na lista — deixe só o `drive.file`.
+> 🚨 **Este é o passo que quase todo mundo pula.** Enquanto o app estiver em
+> **"Teste"**, o Google expira o refresh token em **7 dias**. Vai funcionar
+> hoje e, na semana que vem, os envios param sem nenhum erro visível para o
+> cliente — o tipo de problema que consome dias até alguém achar a causa.
+>
+> Depois de publicar, o status em *Público-alvo* deve mostrar **"Em produção"**.
+> Se pedir verificação do Google, sobrou escopo a mais no passo 3.1.
+
+### 3.3 — Menu "Branding" (só se estiver vazio)
+
+Nome do app (`Aprovacao de Arte`), e-mail de suporte e e-mail do desenvolvedor:
+todos `cleitonpnascimento@gmail.com`.
 
 ---
 
-## Passo 4 — ID do cliente OAuth
+## Passo 4 — Criar o cliente OAuth
 
-👉 https://console.cloud.google.com/apis/credentials?project=aprovacao-de-arte-49bc3
+Ainda na **Google Auth Platform**, menu **Clientes**:
 
-1. **+ Criar credenciais** → **ID do cliente OAuth**.
+👉 https://console.cloud.google.com/auth/clients?project=aprovacao-de-arte-49bc3
+
+1. **+ Criar cliente**.
 2. Tipo de aplicativo: **App para computador** (*Desktop app*).
-3. Nome: `aprovacao-de-arte` → *Criar*.
-4. Aparece uma janela com **ID do cliente** e **Chave secreta do cliente**.
-   **Copie os dois** — vamos usar já em seguida. (Dá para reabrir depois pelo
-   ícone de lápis na lista de credenciais.)
+3. Nome: `aprovacao-de-arte` → **Criar**.
+4. Abre uma janela com **ID do cliente** e **Chave secreta do cliente**.
+   **Copie os dois agora** — usamos no passo seguinte. Dá para reabrir depois
+   clicando no nome do cliente na lista.
 
 ---
 
@@ -88,86 +99,95 @@ de que sobrou algum escopo a mais na lista — deixe só o `drive.file`.
 6. Clique em **Exchange authorization code for tokens**.
 7. **Copie o `Refresh token`** (a linha que começa com `1//`).
 
-> Se aparecer `Error 400: redirect_uri_mismatch`: volte na credencial do passo
-> 4, e em *URIs de redirecionamento autorizados* adicione
-> `https://developers.google.com/oauthplayground`.
+> Se aparecer `Error 400: redirect_uri_mismatch`: volte em **Clientes**,
+> clique no cliente que você criou e, em *URIs de redirecionamento
+> autorizados*, adicione `https://developers.google.com/oauthplayground`.
+> Salve e tente de novo.
 
 ---
 
-## Passo 6 — Preencher as credenciais
+## Passo 6 — Conta de serviço para o GitHub publicar
 
-Na pasta do projeto, copie `functions/.env.exemplo` para **`functions/.env`** e
-preencha:
+O GitHub precisa de uma credencial para publicar a função no seu projeto.
+Tudo por telas, sem terminal.
 
-```env
-TOKEN_EVENTO=uma-frase-difícil-que-você-inventa
-OAUTH_CLIENT_ID=...apps.googleusercontent.com
-OAUTH_CLIENT_SECRET=GOCSPX-...
-OAUTH_REFRESH_TOKEN=1//0h...
-```
+👉 https://console.cloud.google.com/iam-admin/serviceaccounts?project=aprovacao-de-arte-49bc3
 
-O `functions/.env` **não vai para o Git** — fica só na sua máquina e é
-publicado junto com a função no deploy.
+1. **+ Criar conta de serviço**.
+2. Nome: `github-deploy` → **Criar e continuar**.
+3. Em *Conceder acesso*, adicione **dois** papéis:
+   - **Editor**
+   - **Administrador do Firebase** (*Firebase Admin*)
 
----
+   > Editor é um papel amplo. Escolhi ele de propósito: montar a lista exata de
+   > seis papéis que o deploy de uma função v2 exige é a receita mais comum de
+   > erro `PERMISSION_DENIED` no meio do processo, e você não teria como
+   > diagnosticar. Como é o seu próprio projeto e a credencial fica só no
+   > GitHub, o risco é aceitável. Se um dia quiser restringir, dá para trocar
+   > depois com o deploy já funcionando.
 
-## Passo 7 — Publicar a função
-
-Esta é a única parte que precisa de terminal. São cinco comandos, uma vez só.
-
-**Se você não tem Node.js instalado:** baixe a versão LTS em
-https://nodejs.org e instale (avançar, avançar, concluir). Depois abra o
-**Prompt de Comando** (Windows) ou o **Terminal** (Mac).
-
-Navegue até a pasta do projeto e rode:
-
-```bash
-npm install -g firebase-tools
-firebase login
-firebase use aprovacao-de-arte-49bc3
-
-cd functions
-npm install
-cd ..
-
-firebase deploy --only functions,firestore:rules,firestore:indexes
-```
-
-O `firebase login` abre o navegador para você entrar com a conta Google.
-
-No fim o deploy imprime a URL da função — algo como:
-
-```
-Function URL (envio(southamerica-east1)):
-https://envio-xxxxxxxxxx-rj.a.run.app
-```
-
-**Copie essa URL.**
-
-> Se travar em algo, me manda a mensagem de erro inteira que eu te digo o que
-> é. Se preferir não mexer com terminal nenhum, me avisa: dá para eu montar um
-> workflow no GitHub que publica a função sozinho a cada push, e aí você só
-> preenche as credenciais na tela de *Settings → Secrets* do repositório.
+4. **Concluir**.
+5. Na lista, clique na conta `github-deploy` → aba **Chaves** →
+   **Adicionar chave** → **Criar nova chave** → tipo **JSON** → **Criar**.
+   Um arquivo `.json` é baixado. Abra-o num editor de texto e **copie todo o
+   conteúdo**, das chaves `{` `}` inclusive.
 
 ---
 
-## Passo 8 — Ligar no frontend
+## Passo 7 — Colar os segredos no GitHub
 
-Edite o `.env` da **raiz** do projeto e preencha as duas linhas vazias:
+👉 https://github.com/cleitonpn/aprovacao-de-arte/settings/secrets/actions
 
-```env
-VITE_ENVIO_ENDPOINT=  ← a URL que o deploy imprimiu
-VITE_EVENTO_TOKEN=    ← o mesmo TOKEN_EVENTO do functions/.env
+Clique em **New repository secret** e crie **cinco** segredos:
+
+| Nome | Valor |
+|---|---|
+| `GCP_SA_KEY` | o conteúdo inteiro do arquivo JSON do passo 6 |
+| `TOKEN_EVENTO` | uma frase difícil que você inventa (ex.: `forum-2026-kJ8x!vRm`) |
+| `OAUTH_CLIENT_ID` | do passo 4, termina em `.apps.googleusercontent.com` |
+| `OAUTH_CLIENT_SECRET` | do passo 4, começa com `GOCSPX-` |
+| `OAUTH_REFRESH_TOKEN` | do passo 5, começa com `1//` |
+
+O nome tem que ser **exatamente** esse, em maiúsculas. Depois de salvos, o
+GitHub nunca mais mostra o valor — se errar, é só criar de novo por cima.
+
+> O `TOKEN_EVENTO` é usado nos dois lados: a função exige ele para aceitar um
+> envio, e o site o embute no build. Por isso vale um segredo só.
+
+---
+
+## Passo 8 — Publicar, sem terminal
+
+### 8.1 — A função
+
+👉 https://github.com/cleitonpn/aprovacao-de-arte/actions/workflows/deploy-funcao.yml
+
+1. Clique em **Run workflow** → **Run workflow** (o botão verde).
+2. Acompanhe. O primeiro deploy demora uns 3 a 5 minutos, porque o Google
+   precisa ligar várias APIs e montar o ambiente.
+3. Terminando, a página mostra um resumo com o endereço da função.
+
+Se algum segredo faltar, o workflow para logo no começo e diz **qual** —
+justamente para você não descobrir isso só depois de cinco minutos.
+
+### 8.2 — O site
+
+👉 https://github.com/cleitonpn/aprovacao-de-arte/actions/workflows/deploy.yml
+
+**Run workflow** também, para o site ser reconstruído já com o
+`TOKEN_EVENTO` embutido.
+
+O endereço da função **já está configurado** no projeto — é previsível a
+partir do nome do projeto e da região, então não há nada para copiar e colar.
+
+### 8.3 — O link do expositor
+
+```
+https://cleitonpn.github.io/aprovacao-de-arte/?e=SEU_TOKEN_EVENTO
 ```
 
-Commit e push — o GitHub Actions publica o site sozinho.
-
-O link para o expositor leva o token na URL, o que permite trocá-lo por evento
-sem republicar nada:
-
-```
-https://cleitonpn.github.io/aprovacao-de-arte/?e=SEU_TOKEN
-```
+Trocar o token por evento é só mudar a URL do convite — não precisa
+republicar nada.
 
 ---
 
@@ -199,10 +219,13 @@ mover não muda o ID.
 | `failed-precondition` no painel | falta o índice do Firestore — o link para criá-lo sai no console do navegador (F12) |
 | `Link do evento inválido` | `VITE_EVENTO_TOKEN` diferente do `TOKEN_EVENTO` |
 | Funcionava e parou depois de ~7 dias | app OAuth ficou em status "Teste" — publique |
-| `invalid_grant` nos logs | refresh token expirado ou revogado; gere outro no passo 5 |
+| `invalid_grant` nos logs | refresh token expirado ou revogado; gere outro no passo 5 e atualize o segredo |
+| `PERMISSION_DENIED` no workflow | falta o papel Editor ou Firebase Admin na conta `github-deploy` |
+| Workflow para dizendo que falta segredo | crie o segredo com o nome exato indicado |
 | Arte foi para uma pasta inesperada | veja `config/drive` no Firestore |
 
-Ver os logs: `firebase functions:log --only envio`
+Ver os logs da função (pelo navegador):
+https://console.cloud.google.com/functions/details/southamerica-east1/envio?project=aprovacao-de-arte-49bc3&tab=logs
 
 ---
 

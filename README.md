@@ -237,6 +237,10 @@ Ver **[SETUP.md](SETUP.md)** para ligar. Em resumo:
   Admin SDK. O painel exige login Google *e* um documento na coleção `admins`
   (`firestore.rules`). O endpoint é protegido por um token de evento que viaja
   na URL do convite (`…/?e=TOKEN`).
+- **Publicação sem terminal.** Dois workflows: `deploy.yml` publica o site no
+  GitHub Pages e `deploy-funcao.yml` publica a Cloud Function e as regras do
+  Firestore. As credenciais ficam em *Settings → Secrets* do repositório e são
+  escritas em `functions/.env` dentro do runner, nunca no Git.
 
 ## Fase 3 — quando fizer sentido
 
