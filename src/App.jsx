@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  carregarPerfis, salvarPerfis, carregarPiso, salvarPiso,
+  carregarPerfis, salvarPerfis, carregarPolitica, salvarPolitica,
   carregarDetectorNitidez, salvarDetectorNitidez,
 } from './data/perfis.js'
-import { DPI_MINIMO_GLOBAL } from './core/regras.js'
+import { POLITICA_PADRAO } from './core/regras.js'
 import { analisar } from './core/analise.js'
 import { listar, registrar, marcarRiscoAceito } from './store/historico.js'
 import PecaForm from './components/PecaForm.jsx'
@@ -18,7 +18,7 @@ export default function App() {
   const [perfilId, setPerfilId] = useState('lona-parede')
   const [peca, setPeca] = useState({ larguraCm: 200, alturaCm: 290 })
   const [escalaFator, setEscalaFator] = useState(1)
-  const [dpiMinimoGlobal, setDpiMinimoGlobal] = useState(() => carregarPiso(DPI_MINIMO_GLOBAL))
+  const [politica, setPolitica] = useState(() => carregarPolitica(POLITICA_PADRAO))
   const [detectorNitidez, setDetectorNitidez] = useState(carregarDetectorNitidez)
 
   const [arquivo, setArquivo] = useState(null)
@@ -40,9 +40,12 @@ export default function App() {
     salvarPerfis(novos)
   }, [])
 
-  const guardarPiso = useCallback((valor) => {
-    setDpiMinimoGlobal(valor)
-    salvarPiso(valor)
+  const guardarPolitica = useCallback((mudanca) => {
+    setPolitica((atual) => {
+      const nova = { ...atual, ...mudanca }
+      salvarPolitica(nova)
+      return nova
+    })
   }, [])
 
   const guardarDetector = useCallback((ligado) => {
@@ -62,7 +65,7 @@ export default function App() {
     setResultado(null)
     setRegistroAtual(null)
     try {
-      const r = await analisar(arq, peca, perfil, { escalaFator, dpiMinimoGlobal, detectorNitidez })
+      const r = await analisar(arq, peca, perfil, { escalaFator, politica, detectorNitidez })
       setResultado(r)
       const reg = registrar({
         hash: r.medidas.arquivo?.hash,
@@ -79,13 +82,13 @@ export default function App() {
     } finally {
       setAnalisando(false)
     }
-  }, [peca, perfil, escalaFator, dpiMinimoGlobal, detectorNitidez])
+  }, [peca, perfil, escalaFator, politica, detectorNitidez])
 
   // Trocar a peça ou a escala muda o veredicto — reanalisa sem novo upload.
   useEffect(() => {
     if (arquivo && !analisando) rodar(arquivo)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [perfilId, peca.larguraCm, peca.alturaCm, escalaFator, dpiMinimoGlobal, detectorNitidez])
+  }, [perfilId, peca.larguraCm, peca.alturaCm, escalaFator, politica, detectorNitidez])
 
   const receberArquivo = (arq) => {
     setArquivo(arq)
@@ -118,16 +121,16 @@ export default function App() {
             perfilId={perfilId}
             peca={peca}
             escalaFator={escalaFator}
-            dpiMinimoGlobal={dpiMinimoGlobal}
+            politica={politica}
             onChange={atualizar}
           />
-          <Gabarito peca={peca} perfil={perfil} escalaFator={escalaFator} dpiMinimoGlobal={dpiMinimoGlobal} />
+          <Gabarito peca={peca} perfil={perfil} escalaFator={escalaFator} politica={politica} />
           {modoTecnico && (
             <PainelPerfis
               perfis={perfis}
               onSalvar={guardarPerfis}
-              dpiMinimoGlobal={dpiMinimoGlobal}
-              onPiso={guardarPiso}
+              politica={politica}
+              onPolitica={guardarPolitica}
               detectorNitidez={detectorNitidez}
               onDetector={guardarDetector}
             />

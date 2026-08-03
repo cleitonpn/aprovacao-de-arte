@@ -13,12 +13,12 @@ const n = (v, casas = 0) => fmt.format(Number(Number(v).toFixed(casas)))
 
 export function mensagemParaDesigner(resultado) {
   const { peca, perfil, achados, veredicto, medidas, escalaFator } = resultado
-  const spec = especificacao(peca, perfil, resultado.dpiMinimoGlobal)
+  const spec = especificacao(peca, perfil, resultado.politica)
   const linhas = []
 
   linhas.push(`Peça: ${perfil.nome}`)
   linhas.push(`Tamanho final: ${n(peca.larguraCm)} × ${n(peca.alturaCm)} cm`)
-  linhas.push(`Com sangria (${perfil.sangriaMm} mm por lado): ${n(spec.comSangria.larguraCm)} × ${n(spec.comSangria.alturaCm)} cm`)
+  linhas.push(`Com sangria (${spec.sangriaMm} mm por lado): ${n(spec.comSangria.larguraCm)} × ${n(spec.comSangria.alturaCm)} cm`)
   linhas.push(`Margem de segurança: ${perfil.margemMm} mm (nada de logo ou texto nessa faixa)`)
   linhas.push(`Resolução mínima (no arquivo com sangria): ${n(spec.minimo.largura)} × ${n(spec.minimo.altura)} px (${spec.minimo.dpi} dpi)`)
   linhas.push(`Resolução ideal (no arquivo com sangria): ${n(spec.ideal.largura)} × ${n(spec.ideal.altura)} px (${spec.ideal.dpi} dpi)`)
@@ -66,12 +66,12 @@ export function laudoJson(resultado) {
       formato: medidas.formato,
     },
     peca: { ...peca, escalaFator },
-    dpiMinimoGlobal: resultado.dpiMinimoGlobal ?? null,
+    politica: resultado.politica ?? null,
     perfil: {
       id: perfil.id, nome: perfil.nome, dpiMin: perfil.dpiMin, dpiIdeal: perfil.dpiIdeal,
-      sangriaMm: perfil.sangriaMm, margemMm: perfil.margemMm, distanciaM: perfil.distanciaM,
+      sangriaMm: spec.sangriaMm, margemMm: perfil.margemMm, distanciaM: perfil.distanciaM,
     },
-    especificacao: especificacao(peca, perfil, resultado.dpiMinimoGlobal),
+    especificacao: especificacao(peca, perfil, resultado.politica),
     medidas: {
       larguraPx: medidas.larguraPx ?? null,
       alturaPx: medidas.alturaPx ?? null,

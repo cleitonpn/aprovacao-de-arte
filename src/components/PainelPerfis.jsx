@@ -13,7 +13,7 @@ const CAMPOS = [
   { chave: 'margemMm', rotulo: 'Margem segura (mm)', passo: 5, min: 0 },
 ]
 
-export default function PainelPerfis({ perfis, onSalvar, dpiMinimoGlobal, onPiso, detectorNitidez, onDetector }) {
+export default function PainelPerfis({ perfis, onSalvar, politica, onPolitica, detectorNitidez, onDetector }) {
   const [aberto, setAberto] = useState(false)
 
   const alterar = (id, chave, valor) => {
@@ -30,16 +30,26 @@ export default function PainelPerfis({ perfis, onSalvar, dpiMinimoGlobal, onPiso
       {aberto && (
         <>
           <div className="piso">
-            <label className="campo">
-              <span>Piso de DPI da empresa (vale para toda peça)</span>
-              <input
-                type="number" min="10" step="10" value={dpiMinimoGlobal}
-                onChange={(e) => onPiso(Math.max(10, Number(e.target.value) || 0))}
-              />
-            </label>
+            <div className="linha">
+              <label className="campo">
+                <span>Piso de DPI (toda peça)</span>
+                <input
+                  type="number" min="10" step="10" value={politica.dpiMinimoGlobal}
+                  onChange={(e) => onPolitica({ dpiMinimoGlobal: Math.max(10, Number(e.target.value) || 0) })}
+                />
+              </label>
+              <label className="campo">
+                <span>Sangria mínima (mm, cada lado)</span>
+                <input
+                  type="number" min="0" step="10" value={politica.sangriaMinimaMm}
+                  onChange={(e) => onPolitica({ sangriaMinimaMm: Math.max(0, Number(e.target.value) || 0) })}
+                />
+              </label>
+            </div>
             <p className="nota">
-              Nenhuma arte é aprovada abaixo deste valor. O mínimo de cada peça
-              na tabela só é aplicado quando for <em>mais</em> exigente que o piso.
+              Pisos da empresa: valem para toda peça. Os valores por tipo de peça
+              na tabela abaixo só são aplicados quando forem <em>mais</em>
+              exigentes que o piso.
             </p>
           </div>
 

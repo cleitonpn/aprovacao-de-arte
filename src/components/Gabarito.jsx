@@ -7,8 +7,8 @@ import { especificacao } from '../core/regras.js'
 const fmt = (n) => new Intl.NumberFormat('pt-BR').format(Math.round(n))
 const LARGURA_SAIDA = 2400
 
-export default function Gabarito({ peca, perfil, escalaFator, dpiMinimoGlobal }) {
-  const spec = especificacao(peca, perfil, dpiMinimoGlobal)
+export default function Gabarito({ peca, perfil, escalaFator, politica }) {
+  const spec = especificacao(peca, perfil, politica)
 
   const gerar = () => {
     const totalL = spec.comSangria.larguraCm
@@ -25,7 +25,7 @@ export default function Gabarito({ peca, perfil, escalaFator, dpiMinimoGlobal })
     ctx.fillStyle = '#ffffff'
     ctx.fillRect(0, 0, W, H)
 
-    const sangria = (perfil.sangriaMm / 10) * escala
+    const sangria = (spec.sangriaMm / 10) * escala
     const margem = (perfil.margemMm / 10) * escala
     const base = Math.max(2, Math.round(W / 600))
 
@@ -67,7 +67,7 @@ export default function Gabarito({ peca, perfil, escalaFator, dpiMinimoGlobal })
       `${perfil.nome}`,
       `Tamanho final: ${fmt(peca.larguraCm)} × ${fmt(peca.alturaCm)} cm` +
         (escalaFator > 1 ? `  ·  montar em escala 1:${escalaFator}` : ''),
-      `Com sangria: ${fmt(totalL)} × ${fmt(totalA)} cm  ·  sangria ${perfil.sangriaMm} mm  ·  área segura ${perfil.margemMm} mm`,
+      `Com sangria: ${fmt(totalL)} × ${fmt(totalA)} cm  ·  sangria ${spec.sangriaMm} mm  ·  área segura ${perfil.margemMm} mm`,
       `Resolução mínima deste arquivo (com sangria) ${fmt(spec.minimo.largura)} × ${fmt(spec.minimo.altura)} px (${spec.minimo.dpi} dpi)  ·  ideal ${fmt(spec.ideal.largura)} × ${fmt(spec.ideal.altura)} px (${spec.ideal.dpi} dpi)`,
     ]
     texto.forEach((t, i) => ctx.fillText(t, W / 2, H / 2 - fonte * 2 + i * fonte * 1.6))

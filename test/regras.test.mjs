@@ -1,6 +1,9 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { avaliar, pxNecessarios, dpiEfetivo, especificacao, veredictoDe, exigencia, DPI_MINIMO_GLOBAL } from '../src/core/regras.js'
+import {
+  avaliar, pxNecessarios, dpiEfetivo, especificacao, veredictoDe, exigencia,
+  DPI_MINIMO_GLOBAL, SANGRIA_MINIMA_MM,
+} from '../src/core/regras.js'
 import { PERFIS_PADRAO } from '../src/data/perfis.js'
 
 const perfil = (id) => PERFIS_PADRAO.find((p) => p.id === id)
@@ -29,17 +32,28 @@ function medidasRaster(extra = {}) {
   }
 }
 
-test('o piso da empresa se sobrepõe ao mínimo do perfil', () => {
+test('os pisos da empresa se sobrepõem aos valores do perfil', () => {
   assert.equal(DPI_MINIMO_GLOBAL, 150)
+  assert.equal(SANGRIA_MINIMA_MM, 100)
+
   // lona tem dpiMin 50 no perfil, mas o piso manda
   assert.equal(exigencia(lona).dpiMin, 150)
   // e o ideal nunca fica abaixo do mínimo aplicável
   assert.equal(exigencia(lona).dpiIdeal, 150)
-  // o balcão é mais exigente que o piso, então mantém o dele
+  // o balcão é mais exigente que o piso no ideal, então mantém o dele
   assert.equal(exigencia(balcao).dpiIdeal, 300)
-  // o piso é configurável pelo time de CV
-  assert.equal(exigencia(lona, 200).dpiMin, 200)
-  assert.equal(exigencia(lona, 30).dpiMin, 50, 'piso menor não pode afrouxar o perfil')
+
+  // sangria: 10 cm de cada lado em toda peça, inclusive nas pequenas, onde o
+  // perfil pedia 3 mm
+  assert.equal(exigencia(lona).sangriaMm, 100)
+  assert.equal(exigencia(balcao).sangriaMm, 100)
+
+  // os pisos são configuráveis pelo time de CV
+  assert.equal(exigencia(lona, { dpiMinimoGlobal: 200 }).dpiMin, 200)
+  assert.equal(exigencia(lona, { sangriaMinimaMm: 150 }).sangriaMm, 150)
+  // e um piso mais frouxo nunca afrouxa um perfil mais exigente
+  assert.equal(exigencia(lona, { dpiMinimoGlobal: 30 }).dpiMin, 50)
+  assert.equal(exigencia(balcao, { sangriaMinimaMm: 0 }).sangriaMm, 3)
 })
 
 test('conversões de resolução', () => {
@@ -131,13 +145,29 @@ test('proporção divergente é medida em % de corte', () => {
   assert.ok(a.dados.cortePct > 30)
 })
 
-test('desvio pequeno de proporção vira ressalva, não reprovação', () => {
-  // 3,6% fora da proporção: corta um pouco, mas não justifica travar a peça
+test('desvio moderado de proporção vira ressalva, não reprovação', () => {
+  // 0,80 contra 0,690 (corte) e 0,710 (com sangria): ~13% fora da mais
+  // próxima. Corta um pedaço, mas não justifica travar a peça sozinho.
   const r = avaliar({
     peca: pecaLona, perfil: lona,
-    medidas: medidasRaster({ larguraPx: 12000, alturaPx: 16800 }),
+    medidas: medidasRaster({ larguraPx: 12000, alturaPx: 15000 }),
   })
   assert.equal(achado(r, 'proporcao').nivel, 'ressalva')
+})
+
+test('arte montada COM a sangria de 10 cm não é acusada de proporção errada', () => {
+  // 220 × 310 cm (peça 200 × 290 + 10 cm de sangria por lado) tem proporção
+  // 0,710 contra os 0,690 do tamanho de corte: 3% de diferença. Sem aceitar
+  // as duas leituras, o arquivo montado corretamente seria reprovado.
+  const r = avaliar({
+    peca: pecaLona, perfil: lona,
+    medidas: medidasRaster({
+      larguraPx: pxNecessarios(220, 150),
+      alturaPx: pxNecessarios(310, 150),
+    }),
+  })
+  assert.equal(achado(r, 'proporcao').nivel, 'ok')
+  assert.equal(r.veredicto, 'aprovado')
 })
 
 test('desvio desprezível de proporção nem aparece como ressalva', () => {
@@ -205,12 +235,19 @@ test('escala de trabalho não faz o arquivo ser reprovado por dimensão', () => 
   assert.equal(r.veredicto, 'aprovado')
 })
 
-test('especificação da peça inclui a sangria e respeita o piso', () => {
+test('especificação da peça inclui a sangria e respeita os pisos', () => {
   const e = especificacao(pecaLona, lona)
-  assert.equal(e.comSangria.larguraCm, 210) // 200 + 2*5cm
-  assert.equal(e.minimo.largura, pxNecessarios(210, 150))
+  assert.equal(e.sangriaMm, 100)
+  assert.equal(e.comSangria.larguraCm, 220) // 200 + 2 × 10 cm
+  assert.equal(e.comSangria.alturaCm, 310)
+  assert.equal(e.minimo.largura, pxNecessarios(220, 150))
   assert.equal(e.ideal.dpi, 150)
   assert.equal(especificacao(pecaLona, balcao).ideal.dpi, 300)
+
+  // a sangria da peça pequena também sobe para o piso de 10 cm
+  const balcaoSpec = especificacao({ larguraCm: 100, alturaCm: 50 }, balcao)
+  assert.equal(balcaoSpec.comSangria.larguraCm, 120)
+  assert.equal(balcaoSpec.comSangria.alturaCm, 70)
 })
 
 test('a margem de segurança nunca reprova nem vira ressalva', () => {

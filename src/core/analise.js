@@ -99,7 +99,7 @@ async function medirRaster(blob, formato, meta, peca, perfil) {
  */
 export async function analisar(arquivo, peca, perfil, opcoes = {}) {
   const escalaFator = opcoes.escalaFator || 1
-  const dpiMinimoGlobal = opcoes.dpiMinimoGlobal
+  const politica = opcoes.politica || {}
   const detectorNitidez = opcoes.detectorNitidez === true
   const buffer = await arquivo.arrayBuffer()
   const formatoReal = detectarFormato(buffer)
@@ -122,7 +122,7 @@ export async function analisar(arquivo, peca, perfil, opcoes = {}) {
 
   if (formato !== 'jpeg' && formato !== 'png' && formato !== 'pdf' && formato !== 'ai') {
     const medidas = { ...base, formatoSuportado: false }
-    return { medidas, ...avaliar({ peca, perfil, medidas, escalaFator, dpiMinimoGlobal, detectorNitidez }), peca, perfil, escalaFator, dpiMinimoGlobal }
+    return { medidas, ...avaliar({ peca, perfil, medidas, escalaFator, politica, detectorNitidez }), peca, perfil, escalaFator, politica }
   }
 
   let medidas
@@ -158,8 +158,8 @@ export async function analisar(arquivo, peca, perfil, opcoes = {}) {
     }
   }
 
-  const resultado = avaliar({ peca, perfil, medidas, escalaFator, dpiMinimoGlobal, detectorNitidez })
-  return { medidas, ...resultado, peca, perfil, escalaFator, dpiMinimoGlobal }
+  const resultado = avaliar({ peca, perfil, medidas, escalaFator, politica, detectorNitidez })
+  return { medidas, ...resultado, peca, perfil, escalaFator, politica }
 }
 
 async function medirPdf(buffer, base, peca, perfil, escalaFator) {

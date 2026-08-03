@@ -3,9 +3,9 @@ import { especificacao } from '../core/regras.js'
 
 const fmt = (n) => new Intl.NumberFormat('pt-BR').format(Math.round(n))
 
-export default function PecaForm({ perfis, perfilId, peca, escalaFator, dpiMinimoGlobal, onChange }) {
+export default function PecaForm({ perfis, perfilId, peca, escalaFator, politica, onChange }) {
   const perfil = perfis.find((p) => p.id === perfilId) || perfis[0]
-  const spec = especificacao(peca, perfil, dpiMinimoGlobal)
+  const spec = especificacao(peca, perfil, politica)
 
   return (
     <section className="cartao">
@@ -64,7 +64,7 @@ export default function PecaForm({ perfis, perfilId, peca, escalaFator, dpiMinim
             <dd>{fmt(peca.larguraCm)} × {fmt(peca.alturaCm)} cm</dd>
           </div>
           <div>
-            <dt>Com sangria ({perfil.sangriaMm} mm por lado)</dt>
+            <dt>Com sangria ({spec.sangriaMm} mm por lado)</dt>
             <dd>{fmt(spec.comSangria.larguraCm)} × {fmt(spec.comSangria.alturaCm)} cm</dd>
           </div>
           <div>

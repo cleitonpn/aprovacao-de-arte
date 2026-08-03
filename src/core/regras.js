@@ -16,10 +16,16 @@
 export const NIVEL = { ok: 0, info: 1, ressalva: 2, bloqueante: 3 }
 const POL_POR_CM = 1 / 2.54
 
-// Piso da empresa: nenhuma arte entra abaixo disto, qualquer que seja a peça.
-// Vale sobre o mínimo por tipo de peça — o perfil só pode ser MAIS exigente,
-// nunca menos. Editável no painel do time de comunicação visual.
+// Política da empresa: pisos que valem para TODA peça. O perfil de cada tipo
+// de peça só pode ser MAIS exigente que eles, nunca menos. Editáveis no painel
+// do time de comunicação visual.
 export const DPI_MINIMO_GLOBAL = 150
+export const SANGRIA_MINIMA_MM = 100
+
+export const POLITICA_PADRAO = {
+  dpiMinimoGlobal: DPI_MINIMO_GLOBAL,
+  sangriaMinimaMm: SANGRIA_MINIMA_MM,
+}
 
 // Meio por cento de folga na comparação de densidade. Um arquivo de
 // 11.811 px onde a conta pede 11.812 está pronto para impressão; sem esta
@@ -27,10 +33,16 @@ export const DPI_MINIMO_GLOBAL = 150
 // designer por nada — exatamente o ciclo que a ferramenta existe para cortar.
 const TOLERANCIA = 0.995
 
-/** Mínimo e ideal aplicáveis, já com o piso da empresa embutido. */
-export function exigencia(perfil, dpiMinimoGlobal = DPI_MINIMO_GLOBAL) {
-  const mim = Math.max(perfil.dpiMin || 0, dpiMinimoGlobal || 0)
-  return { dpiMin: mim, dpiIdeal: Math.max(perfil.dpiIdeal || 0, mim) }
+/** Exigências aplicáveis a uma peça, já com os pisos da empresa embutidos. */
+export function exigencia(perfil, politica = {}) {
+  const p = { ...POLITICA_PADRAO, ...politica }
+  const dpiMin = Math.max(perfil.dpiMin || 0, p.dpiMinimoGlobal || 0)
+  return {
+    dpiMin,
+    dpiIdeal: Math.max(perfil.dpiIdeal || 0, dpiMin),
+    sangriaMm: Math.max(perfil.sangriaMm || 0, p.sangriaMinimaMm || 0),
+    margemMm: perfil.margemMm || 0,
+  }
 }
 
 const nivelMax = (achados) =>
@@ -72,7 +84,8 @@ export function dpiEfetivo(pixels, cm) {
  */
 export function avaliar(ctx) {
   const { peca, perfil, medidas } = ctx
-  const { dpiMin, dpiIdeal } = exigencia(perfil, ctx.dpiMinimoGlobal)
+  const politica = { ...POLITICA_PADRAO, ...(ctx.politica || {}) }
+  const { dpiMin, dpiIdeal, sangriaMm } = exigencia(perfil, politica)
   const escala = ctx.escalaFator || 1
   const achados = []
   const add = (a) => achados.push(a)
@@ -112,7 +125,8 @@ export function avaliar(ctx) {
     minimo: { largura: necMinL, altura: necMinA, dpi: dpiMin },
     ideal: { largura: necIdealL, altura: necIdealA, dpi: dpiIdeal },
     enviado: { largura: larguraPx, altura: alturaPx },
-    pisoEmpresa: ctx.dpiMinimoGlobal ?? DPI_MINIMO_GLOBAL,
+    pisoEmpresa: politica.dpiMinimoGlobal,
+    sangriaMm,
   }
 
   if (medidas.puroVetor) {
@@ -178,7 +192,17 @@ export function avaliar(ctx) {
   if (peca.larguraCm > 0 && peca.alturaCm > 0 && larguraPx && alturaPx) {
     const arPeca = peca.larguraCm / peca.alturaCm
     const arArte = larguraPx / alturaPx
-    const desvio = Math.abs(arArte - arPeca) / arPeca
+
+    // A arte pode chegar no tamanho de corte OU já com a sangria. Com sangria
+    // de 10 cm as duas proporções são visivelmente diferentes (200×290 dá
+    // 0,69; 220×310 dá 0,71), então aceitamos as duas — comparar só com o
+    // tamanho de corte reprovaria justamente o arquivo montado do jeito certo.
+    const sangriaCm = sangriaMm / 10
+    const arComSangria = (peca.larguraCm + 2 * sangriaCm) / (peca.alturaCm + 2 * sangriaCm)
+    const desvio = Math.min(
+      Math.abs(arArte - arPeca) / arPeca,
+      Math.abs(arArte - arComSangria) / arComSangria,
+    )
     if (desvio > 0.02) {
       // quanto sobra de um lado se encaixarmos preservando a proporção
       const cortePct = (1 - Math.min(arArte, arPeca) / Math.max(arArte, arPeca)) * 100
@@ -368,9 +392,9 @@ export function avaliar(ctx) {
 }
 
 /** Dimensões-alvo da peça, com e sem sangria. Base do gabarito. */
-export function especificacao(peca, perfil, dpiMinimoGlobal = DPI_MINIMO_GLOBAL) {
-  const { dpiMin, dpiIdeal } = exigencia(perfil, dpiMinimoGlobal)
-  const sangriaCm = (perfil.sangriaMm || 0) / 10
+export function especificacao(peca, perfil, politica = {}) {
+  const { dpiMin, dpiIdeal, sangriaMm } = exigencia(perfil, politica)
+  const sangriaCm = sangriaMm / 10
   const totalL = peca.larguraCm + 2 * sangriaCm
   const totalA = peca.alturaCm + 2 * sangriaCm
   return {
@@ -386,7 +410,7 @@ export function especificacao(peca, perfil, dpiMinimoGlobal = DPI_MINIMO_GLOBAL)
       altura: pxNecessarios(totalA, dpiIdeal),
       dpi: dpiIdeal,
     },
-    sangriaMm: perfil.sangriaMm,
+    sangriaMm,
     margemMm: perfil.margemMm,
   }
 }

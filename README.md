@@ -52,12 +52,36 @@ O veredicto é sempre o pior achado. Toda regra é determinística e auditável:
 nada aqui é "o modelo achou que está ruim", porque isso é indefensável numa
 negociação com o cliente.
 
+## Política da empresa (pisos globais)
+
+Dois pisos valem para **toda** peça, e o perfil de cada tipo de peça só pode
+ser mais exigente que eles — nunca menos. Ambos editáveis no modo técnico.
+
+| Piso | Valor | Efeito |
+|---|---|---|
+| **DPI mínimo** | 150 dpi | Nenhuma arte é aprovada abaixo disso |
+| **Sangria mínima** | 100 mm por lado | Toda peça pede 10 cm de sangria de cada lado |
+
+Com a sangria de 10 cm, uma lona de 2,00 × 2,90 m é entregue como arquivo de
+**2,20 × 3,10 m**. Duas consequências que o código já trata:
+
+- a checagem de proporção aceita **tanto o tamanho de corte quanto o tamanho
+  com sangria** — 200 × 290 dá proporção 0,690 e 220 × 310 dá 0,710, uma
+  diferença de 3%. Comparar só com o tamanho de corte reprovaria justamente o
+  arquivo montado do jeito certo;
+- o gabarito, a mensagem para o designer e a resolução exigida já saem
+  calculados sobre o tamanho **com** sangria.
+
+> ⚠️ **Peças pequenas.** O piso de 10 cm vale para todas: um adesivo de balcão
+> de 10 × 5 cm passaria a exigir arquivo de 30 × 25 cm. Se isso não for a
+> intenção da operação, baixe a sangria mínima no painel e deixe cada perfil
+> com o valor adequado — a tabela por tipo de peça continua valendo para
+> qualquer valor acima do piso.
+
 ## Critério de resolução
 
-**Piso da empresa: 150 dpi.** Nenhuma arte é aprovada abaixo disso, em
-qualquer peça. O perfil de cada tipo de peça só pode ser **mais** exigente
-que o piso, nunca menos — o balcão exige 300 dpi como ideal, por exemplo.
-Ambos são editáveis no modo técnico.
+**Piso: 150 dpi.** O balcão continua exigindo 300 dpi como *ideal*, porque o
+perfil pode ser mais exigente que o piso.
 
 O que a ferramenta mede é o **DPI efetivo no tamanho impresso**:
 

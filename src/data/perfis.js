@@ -12,7 +12,7 @@ export const PERFIS_PADRAO = [
     distanciaM: 2.5,
     dpiMin: 50,
     dpiIdeal: 100,
-    sangriaMm: 50,
+    sangriaMm: 100,
     margemMm: 100,
     obs: 'Impressão em lona tensionada ou colada em parede de napa.',
   },
@@ -22,7 +22,7 @@ export const PERFIS_PADRAO = [
     distanciaM: 5,
     dpiMin: 30,
     dpiIdeal: 72,
-    sangriaMm: 50,
+    sangriaMm: 100,
     margemMm: 150,
     obs: 'Peça alta, vista sempre de longe. Margem generosa: a estrutura come as bordas.',
   },
@@ -42,7 +42,7 @@ export const PERFIS_PADRAO = [
     distanciaM: 1.5,
     dpiMin: 72,
     dpiIdeal: 120,
-    sangriaMm: 50,
+    sangriaMm: 100,
     margemMm: 50,
     obs: 'Considere o desgaste e o laminado de proteção, que suavizam o detalhe.',
   },
@@ -82,7 +82,7 @@ export const FORMATOS_ACEITOS = ['jpg', 'jpeg', 'png', 'pdf', 'ai']
 export const FORMATOS_CONHECIDOS = [...FORMATOS_ACEITOS, 'cdr', 'eps', 'psd', 'tif', 'tiff', 'svg', 'webp', 'gif', 'bmp', 'heic']
 
 const CHAVE = 'aprovacao-arte:perfis'
-const CHAVE_PISO = 'aprovacao-arte:piso-dpi'
+const CHAVE_POLITICA = 'aprovacao-arte:politica'
 const CHAVE_NITIDEZ = 'aprovacao-arte:detector-nitidez'
 
 export function carregarPerfis() {
@@ -116,20 +116,22 @@ export function restaurarPerfis() {
   return PERFIS_PADRAO
 }
 
-// Piso de DPI da empresa. Vale para toda peça; o perfil só pode ser mais
-// exigente que ele, nunca menos.
-export function carregarPiso(padrao) {
+// Política da empresa (pisos de DPI e de sangria). Persistida inteira, para
+// que acrescentar um novo piso no futuro não exija nova chave de storage.
+export function carregarPolitica(padrao) {
   try {
-    const v = Number(localStorage.getItem(CHAVE_PISO))
-    return Number.isFinite(v) && v > 0 ? v : padrao
+    const bruto = localStorage.getItem(CHAVE_POLITICA)
+    if (!bruto) return padrao
+    const salvo = JSON.parse(bruto)
+    return salvo && typeof salvo === 'object' ? { ...padrao, ...salvo } : padrao
   } catch {
     return padrao
   }
 }
 
-export function salvarPiso(valor) {
+export function salvarPolitica(politica) {
   try {
-    localStorage.setItem(CHAVE_PISO, String(valor))
+    localStorage.setItem(CHAVE_POLITICA, JSON.stringify(politica))
   } catch {
     /* localStorage indisponível */
   }
