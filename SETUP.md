@@ -12,7 +12,7 @@ botão *Enviar arte para produção* e a tela `#/admin`.
 **Já feito:** ✅ plano Blaze · ✅ Authentication com Google · ✅ Firestore +
 coleção `admins`
 
-**Falta:** 4 passos, todos no Firebase Console. Nenhum terminal, nenhuma
+**Falta:** 5 passos, todos no Firebase Console. Nenhum terminal, nenhuma
 credencial para gerar, nada no Google Cloud Console.
 
 ---
@@ -29,6 +29,27 @@ login**. O navegador dele recebe uma credencial descartável, sem tela e sem
 senha — ele nem percebe que existe. As regras de segurança exigem essa
 credencial para aceitar qualquer gravação; sem ela, o projeto ficaria aberto
 ao mundo.
+
+---
+
+## Passo 1.5 — Autorizar o domínio do site
+
+👉 https://console.firebase.google.com/project/aprovacao-de-arte-49bc3/authentication/settings
+
+Em **Domínios autorizados**, clique em *Adicionar domínio* e inclua:
+
+```
+cleitonpn.github.io
+```
+
+**Por que isso é obrigatório:** o Firebase só aceita login com Google vindo de
+domínios que você autorizou. De fábrica a lista tem só `localhost` e
+`aprovacao-de-arte-49bc3.firebaseapp.com` — o endereço do GitHub Pages não
+está lá. Sem isso, o botão *Entrar com Google* do painel abre a janela e falha
+com `auth/unauthorized-domain`.
+
+O envio do expositor **não** depende disto (a sessão anônima não usa janela de
+login), então esse erro atinge só o painel do time.
 
 ---
 
@@ -113,6 +134,7 @@ https://cleitonpn.github.io/aprovacao-de-arte/#/admin
 
 | Sintoma | Causa provável |
 |---|---|
+| `auth/unauthorized-domain` ao entrar | falta `cleitonpn.github.io` nos domínios autorizados (passo 1.5) |
 | `permission-denied` no painel | falta o documento com seu e-mail na coleção `admins` — o **ID do documento** tem que ser o e-mail inteiro |
 | Envio recusado pelas regras | regras não publicadas, ou publicadas só num dos dois lugares (Firestore **e** Storage) |
 | `auth/operation-not-allowed` no envio | o login **Anônimo** não foi ativado no passo 1 |

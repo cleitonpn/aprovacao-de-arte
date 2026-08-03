@@ -96,7 +96,7 @@ export default function Admin() {
       provedor.setCustomParameters({ prompt: 'select_account' })
       await fb.auth.signInWithPopup(autenticacao, provedor)
     } catch (e) {
-      setErro(e?.message || 'Não foi possível entrar.')
+      setErro(traduzirErro(e))
     }
   }
 
@@ -331,6 +331,12 @@ export default function Admin() {
 
 function traduzirErro(e) {
   const codigo = e?.code || ''
+  if (codigo.includes('unauthorized-domain')) {
+    return 'O endereço deste site não está nos domínios autorizados do Firebase. Adicione "cleitonpn.github.io" em Authentication → Settings → Domínios autorizados.'
+  }
+  if (codigo.includes('popup-blocked')) {
+    return 'O navegador bloqueou a janela de login. Libere os pop-ups para este site e tente de novo.'
+  }
   if (codigo.includes('permission-denied')) {
     return 'Sua conta não está liberada para este painel. É preciso um documento com o seu e-mail na coleção "admins" do Firestore.'
   }
