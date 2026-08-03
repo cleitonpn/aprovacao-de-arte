@@ -12,8 +12,27 @@ import Resultado from './components/Resultado.jsx'
 import Gabarito from './components/Gabarito.jsx'
 import PainelPerfis from './components/PainelPerfis.jsx'
 import Historico from './components/Historico.jsx'
+import Cadastro from './components/Cadastro.jsx'
+import Admin from './components/Admin.jsx'
+import * as cadastroStore from './data/cadastro.js'
+
+// Rota simples por hash: #/admin abre o painel do time. Sem router para não
+// carregar uma dependência inteira por causa de duas telas.
+function usarRotaAdmin() {
+  const ler = () => typeof window !== 'undefined' && window.location.hash.replace(/^#\/?/, '') === 'admin'
+  const [ehAdmin, setEhAdmin] = useState(ler)
+  useEffect(() => {
+    const aoMudar = () => setEhAdmin(ler())
+    window.addEventListener('hashchange', aoMudar)
+    return () => window.removeEventListener('hashchange', aoMudar)
+  }, [])
+  return ehAdmin
+}
 
 export default function App() {
+  const ehAdmin = usarRotaAdmin()
+  const [cadastro, setCadastro] = useState(cadastroStore.carregar)
+  const [editandoCadastro, setEditandoCadastro] = useState(false)
   const [perfis, setPerfis] = useState(carregarPerfis)
   const [perfilId, setPerfilId] = useState('lona-parede')
   const [peca, setPeca] = useState({ larguraCm: 200, alturaCm: 290 })
@@ -101,12 +120,67 @@ export default function App() {
     setRegistroAtual({ ...registroAtual, riscoAceito: { em: new Date().toISOString() } })
   }
 
+  const confirmarCadastro = (dados) => {
+    cadastroStore.salvar(dados)
+    setCadastro(dados)
+    setEditandoCadastro(false)
+  }
+
+  if (ehAdmin) {
+    return (
+      <div className="app">
+        <header className="topo">
+          <div>
+            <h1>Painel do time</h1>
+            <p>Artes recebidas por feira.</p>
+          </div>
+          <a className="btn btn-ghost" href="#/">Voltar à ferramenta</a>
+        </header>
+        <div className="coluna">
+          <Admin />
+        </div>
+      </div>
+    )
+  }
+
+  if (!cadastro) {
+    return (
+      <div className="app estreito">
+        <header className="topo">
+          <div>
+            <h1>Aprovação de arte</h1>
+            <p>Confira se a arte está pronta para impressão antes de enviá-la.</p>
+          </div>
+        </header>
+        <Cadastro onConfirmar={confirmarCadastro} />
+      </div>
+    )
+  }
+
+  if (editandoCadastro) {
+    return (
+      <div className="app estreito">
+        <header className="topo">
+          <div><h1>Seus dados</h1></div>
+        </header>
+        <Cadastro
+          inicial={cadastro}
+          onConfirmar={confirmarCadastro}
+          onCancelar={() => setEditandoCadastro(false)}
+        />
+      </div>
+    )
+  }
+
   return (
     <div className="app">
       <header className="topo">
         <div>
           <h1>Aprovação de arte</h1>
-          <p>Confira se a arte está pronta para impressão antes de enviá-la.</p>
+          <p>
+            {cadastro.stand} · {cadastro.feira}{' '}
+            <button className="link" onClick={() => setEditandoCadastro(true)}>alterar</button>
+          </p>
         </div>
         <label className="alternador">
           <input type="checkbox" checked={modoTecnico} onChange={(e) => setModoTecnico(e.target.checked)} />
@@ -155,6 +229,8 @@ export default function App() {
               modoTecnico={modoTecnico}
               onAceitarRisco={aceitarRisco}
               riscoAceito={registroAtual?.riscoAceito}
+              arquivo={arquivo}
+              cadastro={cadastro}
             />
           )}
 
@@ -180,7 +256,8 @@ export default function App() {
       </div>
 
       <footer className="rodape">
-        Tudo roda no seu navegador — nenhum arquivo é enviado para servidor algum.
+        A análise roda no seu navegador. O arquivo só é enviado quando você
+        clicar em <strong>Enviar arte para produção</strong>.
       </footer>
     </div>
   )

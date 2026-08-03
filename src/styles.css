@@ -240,3 +240,44 @@ input:focus-visible, select:focus-visible, button:focus-visible, .solta:focus-vi
 .alternador.experimental input { margin-top: 2px; flex: 0 0 16px; }
 .alternador.experimental strong { display: block; color: var(--texto); font-size: 13.5px; }
 .alternador.experimental em { display: block; font-style: normal; margin-top: 4px; font-size: 12.5px; line-height: 1.5; }
+
+/* ---------------------------------------------------------- cadastro / envio */
+.app.estreito { max-width: 520px; }
+
+.cadastro .acoes { margin-top: 4px; }
+.opcional { font-style: normal; color: var(--suave); opacity: .75; }
+.erro-campo { font-style: normal; font-size: 12px; color: var(--ruim); }
+.dica-campo { font-style: normal; font-size: 12px; color: var(--suave); }
+input[aria-invalid='true'] { border-color: var(--ruim); }
+
+.link {
+  background: none; border: 0; padding: 0; font: inherit; cursor: pointer;
+  color: var(--acento); text-decoration: underline;
+}
+
+.envio { margin: 0 0 16px; }
+.btn-enviar { background: var(--ok); font-weight: 600; padding: 13px 15px; }
+.btn-enviar:disabled { background: var(--borda); color: var(--suave); cursor: not-allowed; filter: none; }
+.envio .nota { text-align: center; }
+.envio.nao-configurado p { margin: 0; font-size: 13px; color: var(--suave); }
+.envio.enviado { background: var(--ok-fundo); border-radius: 9px; padding: 14px; }
+.envio.enviado h3 { margin: 0 0 6px; color: var(--ok); }
+.envio.enviado p { margin: 0 0 4px; font-size: 13.5px; }
+.erro-envio { color: var(--ruim); font-size: 13px; margin: 8px 0 0; }
+
+.barra { height: 6px; background: var(--borda); border-radius: 999px; overflow: hidden; margin-top: 9px; }
+.barra > div { height: 100%; background: var(--ok); transition: width .25s ease; }
+
+/* --------------------------------------------------------------------- admin */
+.admin-topo { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 14px; }
+.admin-topo h2 { margin: 0; }
+.admin-topo .ajuda { margin: 2px 0 0; }
+.resumo-admin { margin: 12px 0 0; }
+.envios { border-collapse: collapse; width: 100%; font-size: 13px; min-width: 760px; }
+.envios th { text-align: left; color: var(--suave); font-weight: 500; padding: 8px 10px 8px 0; white-space: nowrap; border-bottom: 1px solid var(--borda); }
+.envios td { padding: 10px 10px 10px 0; border-bottom: 1px solid var(--borda); vertical-align: top; }
+.envios a { color: var(--acento); }
+.tag { font-size: 11px; padding: 2px 7px; border-radius: 20px; font-weight: 600; white-space: nowrap; display: inline-block; }
+.tag.aprovado { background: var(--ok-fundo); color: var(--ok); }
+.tag.ressalva { background: var(--alerta-fundo); color: var(--alerta); }
+.tag.reprovado { background: var(--ruim-fundo); color: var(--ruim); }

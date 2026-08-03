@@ -2,3 +2,10 @@ node_modules
 dist
 .DS_Store
 *.local
+
+# .env fica versionado de propósito: só tem valores públicos do Firebase.
+# Segredos de verdade (chave da service account, token do evento) ficam nos
+# secrets da Cloud Function, nunca aqui.
+.env.local
+functions/node_modules
+.firebase

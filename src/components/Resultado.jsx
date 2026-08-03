@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { ROTULO_VEREDICTO } from '../core/regras.js'
 import { mensagemParaDesigner, laudoJson } from '../core/mensagem.js'
 import Simulador from './Simulador.jsx'
+import Envio from './Envio.jsx'
 
 const ICONE = { ok: '✓', info: 'i', ressalva: '!', bloqueante: '×' }
 const ORDEM = { bloqueante: 0, ressalva: 1, info: 2, ok: 3 }
@@ -23,7 +24,7 @@ function baixar(nome, conteudo, tipo) {
   setTimeout(() => URL.revokeObjectURL(url), 5000)
 }
 
-export default function Resultado({ resultado, modoTecnico, onAceitarRisco, riscoAceito }) {
+export default function Resultado({ resultado, modoTecnico, onAceitarRisco, riscoAceito, arquivo, cadastro }) {
   const [copiado, setCopiado] = useState(false)
   const { veredicto, achados, medidas, peca, perfil } = resultado
   const ordenados = [...achados].sort((a, b) => ORDEM[a.nivel] - ORDEM[b.nivel])
@@ -103,8 +104,17 @@ export default function Resultado({ resultado, modoTecnico, onAceitarRisco, risc
         </div>
       )}
 
+      {arquivo && cadastro && (
+        <Envio
+          resultado={resultado}
+          arquivo={arquivo}
+          cadastro={cadastro}
+          riscoAceito={riscoAceito}
+        />
+      )}
+
       <div className="acoes">
-        <button className="btn" onClick={copiar}>
+        <button className="btn btn-ghost" onClick={copiar}>
           {copiado ? '✓ Copiado' : 'Copiar mensagem para o designer'}
         </button>
         <button

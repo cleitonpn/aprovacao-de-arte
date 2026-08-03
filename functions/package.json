@@ -1,0 +1,19 @@
+{
+  "name": "aprovacao-de-arte-functions",
+  "private": true,
+  "description": "Cloud Function que assina o upload da arte aprovada para o Google Drive.",
+  "main": "index.js",
+  "engines": {
+    "node": "20"
+  },
+  "scripts": {
+    "serve": "firebase emulators:start --only functions",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.6.0",
+    "firebase-functions": "^6.1.0",
+    "google-auth-library": "^9.14.0"
+  }
+}

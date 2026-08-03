@@ -1,0 +1,45 @@
+rules_version = '2';
+
+// Regras do Firestore.
+//
+// Princípio: NADA é gravado pelo navegador. Quem escreve é a Cloud Function,
+// que usa o Admin SDK e passa por cima destas regras — então o cliente não
+// consegue forjar um envio, nem marcar como aprovada uma arte reprovada.
+//
+// Leitura é só do time: precisa estar autenticado E ter um documento com o
+// próprio e-mail na coleção `admins`. O expositor nunca faz login.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function ehAdmin() {
+      return request.auth != null
+        && request.auth.token.email_verified == true
+        && exists(/databases/$(database)/documents/admins/$(request.auth.token.email));
+    }
+
+    // Envios de arte: o painel do time lê; ninguém escreve pelo cliente.
+    match /envios/{protocolo} {
+      allow read: if ehAdmin();
+      allow write: if false;
+    }
+
+    // Feiras: alimenta o seletor do painel.
+    match /feiras/{feiraId} {
+      allow read: if ehAdmin();
+      allow write: if false;
+    }
+
+    // Allowlist do painel. Um admin enxerga a lista; incluir ou remover
+    // alguém é feito pelo console do Firebase, de propósito — assim ninguém
+    // se autopromove pela aplicação.
+    match /admins/{email} {
+      allow read: if ehAdmin();
+      allow write: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

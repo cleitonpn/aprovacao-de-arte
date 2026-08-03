@@ -4,9 +4,12 @@ Ferramenta de análise automática de arte para impressão em grande formato
 (stands e eventos). O cliente sobe o arquivo, informa a peça, e recebe na
 hora um veredicto com **o que exatamente pedir ao designer**.
 
-Roda **100% no navegador**: nenhum arquivo é enviado a servidor algum. Isso
-elimina custo por análise, elimina infraestrutura e resolve a conversa sobre
-confidencialidade de arte não divulgada antes do evento.
+A **análise roda 100% no navegador** — o arquivo não sai da máquina do cliente
+enquanto ele não decidir enviar. Isso elimina custo por análise e resolve a
+conversa sobre confidencialidade de arte não divulgada antes do evento.
+
+Quando a arte passa, um botão sobe o arquivo direto para uma pasta do Google
+Drive, **sem o expositor precisar de login**. Ver [SETUP.md](SETUP.md).
 
 ```bash
 npm install
@@ -14,6 +17,20 @@ npm run dev       # desenvolvimento
 npm test          # testes das regras e da calibração
 npm run build     # build de produção (dist/)
 ```
+
+## Fluxo completo
+
+1. **Cadastro** na entrada: nome, e-mail, feira, stand e localização
+   (opcional). Fica salvo — quem volta para a segunda peça entra direto.
+2. **Peça**: tipo, medidas e escala de trabalho. A ferramenta já mostra o que
+   pedir ao designer e gera o gabarito.
+3. **Arte**: análise em segundos, com veredicto e ações prescritivas.
+4. **Envio**: só é liberado se a arte foi **aprovada**, ou se foi *aprovada
+   com ressalva* **e** o cliente aceitou o risco explicitamente. Arte
+   reprovada nunca sobe. A trava está na interface e repetida no servidor,
+   para quem chamar a API direto não conseguir contorná-la.
+5. **Painel do time** (`#/admin`): seleciona a feira e lista quem já enviou,
+   com veredicto, protocolo e link do arquivo no Drive.
 
 ## O problema que ela resolve
 
@@ -186,10 +203,16 @@ src/
     espectro.js    FFT + espectro radial + detector de nitidez real
     pdf.js         Inspeção de PDF/AI via pdf.js
     mensagem.js    Texto para o designer e laudo JSON
-  data/perfis.js   Tipos de peça, limiares, escalas (editável e persistido)
-  store/historico.js  Registro das análises (localStorage; ver fase 2)
-  components/      Interface
-test/              Testes das regras e calibração do detector
+  data/
+    perfis.js      Tipos de peça, limiares, escalas (editável e persistido)
+    cadastro.js    Cadastro do expositor e validação
+  services/envio.js   Upload retomável em pedaços, direto para o Google
+  store/historico.js  Histórico local das análises
+  components/      Interface (inclui Cadastro, Envio e Admin)
+  config.js        Variáveis de ambiente (nada secreto aqui)
+functions/         Cloud Function que assina o upload no Drive
+firestore.rules    Leitura só para admins; escrita só pela função
+test/              Testes das regras, da calibração e das travas de envio
 ```
 
 Detalhe de implementação que não é óbvio: a análise espectral roda sobre
@@ -198,13 +221,25 @@ Reduzir a imagem antes de medir destruiria exatamente a evidência procurada,
 e medir região chapada não diz nada — é por isso que existe a máscara de
 detalhe em `metricas.js`.
 
-## Fase 2 — quando fizer sentido
+## Envio e painel
 
-Nada disto é necessário para a ferramenta funcionar hoje:
+Ver **[SETUP.md](SETUP.md)** para ligar. Em resumo:
 
-- **Firebase**: login por cliente, histórico multiusuário, painel do time de
-  CV, registro do "aceito o risco" com identidade. Só `store/historico.js`
-  precisa mudar — nada mais no app conhece o mecanismo de persistência.
+- **Arquivo no Drive, registro no Firestore.** Drive porque o armazenamento já
+  está pago junto com o Workspace, e arte de grande formato é pesada — no
+  Firebase Storage um único evento já estouraria a cota gratuita. Firestore
+  porque o laudo é JSON de ~2 KB e cabe folgado na cota.
+- **Cliente sem login.** Uma Cloud Function guarda a credencial do Drive e
+  devolve ao navegador uma URL de sessão de upload. Os bytes vão direto do
+  navegador para o Google — a função troca alguns kilobytes, então um arquivo
+  de 500 MB custa o mesmo que um de 5 MB.
+- **Segurança.** Nada é gravado pelo navegador: quem escreve é a função, com o
+  Admin SDK. O painel exige login Google *e* um documento na coleção `admins`
+  (`firestore.rules`). O endpoint é protegido por um token de evento que viaja
+  na URL do convite (`…/?e=TOKEN`).
+
+## Fase 3 — quando fizer sentido
+
 - **Backend** com Ghostscript/ImageMagick: abrir `.cdr`, `.eps`, TIFF CMYK e
   fazer conversão de perfil ICC de verdade. Hoje `.cdr` recebe uma instrução
   clara de exportar PDF, que é o que a gráfica quer receber de qualquer jeito.
