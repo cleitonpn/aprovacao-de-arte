@@ -4,194 +4,205 @@ Roteiro para ligar o envio automático da arte aprovada e o painel do time.
 A ferramenta **já funciona sem nada disto** — a análise inteira roda no
 navegador. Isto liga o botão *Enviar arte para produção*.
 
-**Projeto Firebase:** `aprovacao-de-arte-49bc3`
-**Pasta do Drive:** `1O48_s3haaKpPX98BdBr8s_PggYUcC53H`
-**Admin do painel:** `cleitonpnascimento@gmail.com`
-**Conta Google comum** (sem Workspace) → caminho do *refresh token*.
+| | |
+|---|---|
+| Projeto Firebase | `aprovacao-de-arte-49bc3` |
+| Pasta do Drive | `1O48_s3haaKpPX98BdBr8s_PggYUcC53H` |
+| Admin do painel | `cleitonpnascimento@gmail.com` |
+| Tipo de conta | Google comum, plano de 5 TB (sem Workspace) |
 
-Já feito: ✅ plano Blaze · ✅ Authentication com provedor Google
+**Já feito:** ✅ plano Blaze · ✅ Authentication com Google · ✅ Firestore +
+coleção `admins` · ✅ Google Drive API ativada
+
+**Falta:** tela de consentimento → ID de cliente → refresh token → deploy.
 
 ---
 
-## Por que existe uma Cloud Function
+## Passo 3 — Tela de consentimento OAuth
 
-Você pediu que o expositor **não precise de login** — e está certo: exigir
-conta Google de cada cliente é a barreira que a ferramenta existe para
-remover.
+👉 https://console.cloud.google.com/apis/credentials/consent?project=aprovacao-de-arte-49bc3
 
-Só que escrever no Drive exige credencial, e credencial não pode ficar no
-navegador (qualquer um leria e passaria a escrever na pasta de vocês). A
-função guarda a credencial e devolve ao navegador uma **URL de sessão de
-upload** já autorizada.
+*(no menu lateral do Google Cloud isso aparece como **APIs e serviços → Tela de
+permissão OAuth**; em projetos novos o Google renomeou para **Google Auth
+Platform → Branding**)*
 
+1. Tipo de usuário: **Externo** → *Criar*.
+2. Preencha o mínimo:
+   - Nome do app: `Aprovacao de Arte`
+   - E-mail de suporte: `cleitonpnascimento@gmail.com`
+   - E-mail do desenvolvedor: `cleitonpnascimento@gmail.com`
+3. *Salvar e continuar*.
+4. Em **Escopos** → *Adicionar ou remover escopos* → no campo de filtro, cole:
+   ```
+   https://www.googleapis.com/auth/drive.file
+   ```
+   marque a caixa → *Atualizar* → *Salvar e continuar*.
+5. Em **Usuários de teste** → adicione `cleitonpnascimento@gmail.com` →
+   *Salvar e continuar*.
+
+### ⚠️ Agora o passo que quase todo mundo pula
+
+Volte ao **resumo da tela de consentimento** e clique em **"Publicar app"**
+(botão *PUBLISH APP*) → confirme.
+
+**Por quê:** enquanto o app estiver com status **"Teste"**, o Google expira o
+refresh token em **7 dias**. Vai funcionar hoje, e na semana que vem os envios
+começam a falhar sem nenhum erro visível para o cliente — o tipo de problema
+que consome dias até alguém descobrir a causa.
+
+Publicar **não exige verificação do Google** aqui, porque `drive.file` não é
+um escopo sensível. Se aparecer algo sobre "verificação necessária", é sinal
+de que sobrou algum escopo a mais na lista — deixe só o `drive.file`.
+
+---
+
+## Passo 4 — ID do cliente OAuth
+
+👉 https://console.cloud.google.com/apis/credentials?project=aprovacao-de-arte-49bc3
+
+1. **+ Criar credenciais** → **ID do cliente OAuth**.
+2. Tipo de aplicativo: **App para computador** (*Desktop app*).
+3. Nome: `aprovacao-de-arte` → *Criar*.
+4. Aparece uma janela com **ID do cliente** e **Chave secreta do cliente**.
+   **Copie os dois** — vamos usar já em seguida. (Dá para reabrir depois pelo
+   ícone de lápis na lista de credenciais.)
+
+---
+
+## Passo 5 — Refresh token
+
+👉 https://developers.google.com/oauthplayground
+
+1. Clique na **engrenagem** (canto superior direito).
+2. Marque **Use your own OAuth credentials**.
+3. Cole o **OAuth Client ID** e o **OAuth Client secret** do passo anterior.
+4. No painel da esquerda, no campo *Input your own scopes*, cole:
+   ```
+   https://www.googleapis.com/auth/drive.file
+   ```
+5. **Authorize APIs** → escolha `cleitonpnascimento@gmail.com`.
+   - Vai aparecer **"O Google não verificou este app"**. Clique em
+     **Avançado** → **Acessar Aprovacao de Arte (não seguro)**.
+     É a sua conta autorizando o seu próprio app — é esperado.
+   - Permita o acesso.
+6. Clique em **Exchange authorization code for tokens**.
+7. **Copie o `Refresh token`** (a linha que começa com `1//`).
+
+> Se aparecer `Error 400: redirect_uri_mismatch`: volte na credencial do passo
+> 4, e em *URIs de redirecionamento autorizados* adicione
+> `https://developers.google.com/oauthplayground`.
+
+---
+
+## Passo 6 — Preencher as credenciais
+
+Na pasta do projeto, copie `functions/.env.exemplo` para **`functions/.env`** e
+preencha:
+
+```env
+TOKEN_EVENTO=uma-frase-difícil-que-você-inventa
+OAUTH_CLIENT_ID=...apps.googleusercontent.com
+OAUTH_CLIENT_SECRET=GOCSPX-...
+OAUTH_REFRESH_TOKEN=1//0h...
 ```
-navegador  ──(1) só os metadados──▶  Cloud Function ──▶ Drive (autoriza)
-navegador  ◀──(2) URL da sessão────  Cloud Function
-navegador  ──(3) OS BYTES, direto──▶ Google
-navegador  ──(4) confirma─────────▶  Cloud Function ──▶ Firestore
-```
 
-Os bytes **nunca passam pela função**. Ela troca alguns kilobytes de JSON, e é
-isso que faz um arquivo de 500 MB custar o mesmo que um de 5 MB.
+O `functions/.env` **não vai para o Git** — fica só na sua máquina e é
+publicado junto com a função no deploy.
 
 ---
 
-## Passo 1 — Firestore
+## Passo 7 — Publicar a função
 
-1. Console do Firebase → **Firestore Database** → *Criar banco de dados* →
-   modo **produção** → região `southamerica-east1`.
-2. Crie a coleção **`admins`** com um documento cujo **ID é o e-mail**:
+Esta é a única parte que precisa de terminal. São cinco comandos, uma vez só.
 
-   - ID do documento: `cleitonpnascimento@gmail.com`
-   - Campo qualquer, ex.: `nome` (string) = `Cleiton`
+**Se você não tem Node.js instalado:** baixe a versão LTS em
+https://nodejs.org e instale (avançar, avançar, concluir). Depois abra o
+**Prompt de Comando** (Windows) ou o **Terminal** (Mac).
 
-   Sem esse documento o painel responde *permission-denied*. Adicionar admin
-   é feito só pelo console, de propósito — assim ninguém se autopromove pela
-   aplicação.
-
----
-
-## Passo 2 — Credencial do Drive
-
-Sem Workspace, a função age **em nome da sua conta Google**, e os arquivos
-ficam no Drive dela.
-
-### 2.1 Ative a API
-
-Google Cloud Console (mesmo projeto `aprovacao-de-arte-49bc3`) →
-*APIs e serviços* → *Biblioteca* → busque **Google Drive API** → **Ativar**.
-
-### 2.2 Tela de consentimento
-
-*APIs e serviços* → **Tela de permissão OAuth**:
-
-- Tipo: **Externo**
-- Nome do app, e-mail de suporte e e-mail do desenvolvedor: os seus
-- Escopos: adicione `.../auth/drive.file`
-- Usuários de teste: `cleitonpnascimento@gmail.com`
-
-> 🚨 **A pegadinha que faz tudo parar de funcionar em uma semana.** Enquanto o
-> app estiver com status **"Teste"**, o Google expira o refresh token em **7
-> dias** — o envio funciona, e sete dias depois começa a falhar sem motivo
-> aparente. Volte na tela de permissão e clique em **"Publicar app"**.
->
-> Como `drive.file` **não é um escopo sensível**, publicar não exige
-> verificação do Google. Ao autorizar você verá um aviso de "app não
-> verificado" — clique em *Avançado* → *Acessar (não seguro)*. É a sua própria
-> conta autorizando o seu próprio app.
-
-### 2.3 Crie o ID do cliente OAuth
-
-*Credenciais* → *Criar credenciais* → **ID do cliente OAuth** →
-tipo **App para computador** → nome: `aprovacao-de-arte`.
-
-Anote o **Client ID** e o **Client secret**.
-
-### 2.4 Gere o refresh token
-
-Abra o [OAuth Playground](https://developers.google.com/oauthplayground):
-
-1. Engrenagem (canto superior direito) → marque **Use your own OAuth
-   credentials** → cole o Client ID e o Client secret.
-2. No painel esquerdo, cole o escopo à mão:
-   `https://www.googleapis.com/auth/drive.file`
-3. **Authorize APIs** → entre com `cleitonpnascimento@gmail.com` → aceite o
-   aviso de app não verificado.
-4. **Exchange authorization code for tokens** → copie o **Refresh token**.
-
-> Se o Playground reclamar de `redirect_uri_mismatch`, adicione
-> `https://developers.google.com/oauthplayground` nos URIs de redirecionamento
-> autorizados do seu ID de cliente.
-
----
-
-## Passo 3 — Segredos e deploy
-
-Na raiz do projeto (`npm i -g firebase-tools` se ainda não tiver):
+Navegue até a pasta do projeto e rode:
 
 ```bash
+npm install -g firebase-tools
 firebase login
 firebase use aprovacao-de-arte-49bc3
 
-# Frase difícil de adivinhar. É ela que impede o endpoint de ficar aberto
-# ao mundo — e vai na URL que você manda ao expositor.
-firebase functions:secrets:set TOKEN_EVENTO
+cd functions
+npm install
+cd ..
 
-firebase functions:secrets:set OAUTH_CLIENT_ID
-firebase functions:secrets:set OAUTH_CLIENT_SECRET
-firebase functions:secrets:set OAUTH_REFRESH_TOKEN
-
-cd functions && npm install && cd ..
 firebase deploy --only functions,firestore:rules,firestore:indexes
 ```
 
-O deploy imprime a URL da função:
+O `firebase login` abre o navegador para você entrar com a conta Google.
+
+No fim o deploy imprime a URL da função — algo como:
 
 ```
-https://southamerica-east1-aprovacao-de-arte-49bc3.cloudfunctions.net/envio
+Function URL (envio(southamerica-east1)):
+https://envio-xxxxxxxxxx-rj.a.run.app
 ```
 
-### Sobre a pasta de destino
+**Copie essa URL.**
 
-O ID da sua pasta já está no código como padrão. Mas o escopo `drive.file` só
-dá acesso aos arquivos que **a própria aplicação criou** — uma pasta que você
-criou à mão costuma responder 404, mesmo sendo a mesma conta.
-
-A função trata isso sozinha: testa a pasta configurada e, se não conseguir
-alcançá-la, **cria uma pasta própria** chamada
-*"Artes aprovadas — Aprovação de Arte"* no seu Drive e passa a usá-la. O ID
-escolhido fica em `config/drive` no Firestore e aparece nos logs
-(`firebase functions:log`). Pode mover ou compartilhar essa pasta à vontade —
-mover não muda o ID.
-
-Se você fizer questão de usar exatamente a pasta que já criou, gere o refresh
-token com o escopo `https://www.googleapis.com/auth/drive` (completo) e defina
-a variável de ambiente `DRIVE_ESCOPO` da função com esse valor. Aí a pasta
-original passa a ser acessível — ao custo de dar ao app acesso a todo o seu
-Drive, o que só recomendo se você usar uma conta Google dedicada a isso.
+> Se travar em algo, me manda a mensagem de erro inteira que eu te digo o que
+> é. Se preferir não mexer com terminal nenhum, me avisa: dá para eu montar um
+> workflow no GitHub que publica a função sozinho a cada push, e aí você só
+> preenche as credenciais na tela de *Settings → Secrets* do repositório.
 
 ---
 
-## Passo 4 — Ligar no frontend
+## Passo 8 — Ligar no frontend
 
-Edite o `.env` na raiz e preencha as duas linhas vazias:
+Edite o `.env` da **raiz** do projeto e preencha as duas linhas vazias:
 
 ```env
-VITE_ENVIO_ENDPOINT=https://southamerica-east1-aprovacao-de-arte-49bc3.cloudfunctions.net/envio
-VITE_EVENTO_TOKEN=o-mesmo-valor-que-você-usou-no-TOKEN_EVENTO
+VITE_ENVIO_ENDPOINT=  ← a URL que o deploy imprimiu
+VITE_EVENTO_TOKEN=    ← o mesmo TOKEN_EVENTO do functions/.env
 ```
 
-Commit e push — o GitHub Actions publica sozinho.
+Commit e push — o GitHub Actions publica o site sozinho.
 
-O link para o expositor pode carregar o token na URL, o que permite trocá-lo
-por evento sem republicar o site:
+O link para o expositor leva o token na URL, o que permite trocá-lo por evento
+sem republicar nada:
 
 ```
-https://cleitonpn.github.io/aprovacao-de-arte/?e=TOKEN_DO_EVENTO
+https://cleitonpn.github.io/aprovacao-de-arte/?e=SEU_TOKEN
 ```
 
 ---
 
-## Passo 5 — Conferir
+## Passo 9 — Conferir
 
 1. Abra a ferramenta, preencha o cadastro, suba uma arte **aprovada** e clique
    em *Enviar arte para produção*. Deve aparecer um protocolo `AP-…`.
-2. Confira o Drive: o arquivo chega como
-   `stand__peca__protocolo.jpg`, dentro de uma subpasta com o nome da feira.
-3. Abra `…/aprovacao-de-arte/#/admin`, entre com o Google e selecione a feira.
+2. Confira o Drive: o arquivo chega como `stand__peca__protocolo.jpg`, dentro
+   de uma subpasta com o nome da feira.
+3. Abra `…/aprovacao-de-arte/#/admin`, entre com o Google e escolha a feira.
+
+### Sobre a pasta de destino
+
+O escopo `drive.file` só dá acesso aos arquivos que **a própria aplicação
+criou** — uma pasta criada à mão costuma responder 404, mesmo sendo a mesma
+conta. É a pegadinha clássica deste caminho.
+
+A função trata isso sozinha: testa a pasta configurada e, se não conseguir
+alcançá-la, **cria uma pasta própria** chamada *"Artes aprovadas — Aprovação
+de Arte"* no seu Drive e passa a usá-la. O ID escolhido aparece nos logs e em
+`config/drive` no Firestore. Pode mover ou compartilhar essa pasta à vontade:
+mover não muda o ID.
 
 ### Se der errado
 
 | Sintoma | Causa provável |
 |---|---|
 | `permission-denied` no painel | falta o documento com seu e-mail em `admins` |
-| `failed-precondition` no painel | falta o índice do Firestore — o link para criá-lo aparece no console do navegador |
-| `Link do evento inválido` | `VITE_EVENTO_TOKEN` diferente do segredo `TOKEN_EVENTO` |
-| Envio funcionava e parou depois de ~7 dias | app OAuth ainda em status "Teste" — publique |
-| `invalid_grant` nos logs | refresh token expirado ou revogado; gere outro |
-| Arquivo foi para uma pasta inesperada | o `drive.file` não alcançou a pasta configurada e a função criou a própria; veja `config/drive` no Firestore |
+| `failed-precondition` no painel | falta o índice do Firestore — o link para criá-lo sai no console do navegador (F12) |
+| `Link do evento inválido` | `VITE_EVENTO_TOKEN` diferente do `TOKEN_EVENTO` |
+| Funcionava e parou depois de ~7 dias | app OAuth ficou em status "Teste" — publique |
+| `invalid_grant` nos logs | refresh token expirado ou revogado; gere outro no passo 5 |
+| Arte foi para uma pasta inesperada | veja `config/drive` no Firestore |
 
-Logs: `firebase functions:log --only envio`
+Ver os logs: `firebase functions:log --only envio`
 
 ---
 
@@ -213,13 +224,11 @@ quando.
 
 | Item | Consumo esperado | Custo |
 |---|---|---|
-| Armazenamento das artes | dezenas de GB por evento | **R$ 0** até os 15 GB da conta Google; depois, Google One (~R$ 10/mês por 100 GB) |
+| Armazenamento das artes | dezenas de GB por evento | **R$ 0** — cabe no plano de 5 TB que vocês já têm |
 | Cloud Function | ~2 chamadas por arte, alguns KB | **R$ 0** — cota de 2 M invocações/mês |
 | Firestore | ~2 KB por arte | **R$ 0** — cota de 50 mil leituras/dia |
 | Hospedagem | estática | **R$ 0** — GitHub Pages |
 
-> ⚠️ Sem Workspace, as artes consomem os **15 GB gratuitos** da sua conta
-> Google, compartilhados com Gmail e Fotos. Arte de grande formato é pesada:
-> um evento pode consumir isso sozinho. Vale acompanhar e, quando apertar,
-> assinar o Google One — continua sendo bem mais barato que o Firebase
-> Storage para esse volume.
+O que faz essa conta fechar é a arquitetura: os bytes do arquivo vão direto do
+navegador para o Google, sem passar por infraestrutura paga no meio. Com 5 TB
+de espaço, o armazenamento deixa de ser preocupação por bastante tempo.

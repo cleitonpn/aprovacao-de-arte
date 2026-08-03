@@ -11,7 +11,6 @@
  */
 
 const { onRequest } = require('firebase-functions/v2/https')
-const { defineSecret, defineString } = require('firebase-functions/params')
 const { initializeApp } = require('firebase-admin/app')
 const { getFirestore, FieldValue } = require('firebase-admin/firestore')
 const { GoogleAuth, OAuth2Client } = require('google-auth-library')
@@ -20,26 +19,27 @@ initializeApp()
 const bd = getFirestore()
 
 // --- configuração -----------------------------------------------------------
-// Pasta destino: não é segredo (é só um identificador), então fica como
-// parâmetro simples em vez de gastar um segredo do Secret Manager.
-const DRIVE_PASTA_RAIZ = defineString('DRIVE_PASTA_RAIZ', {
-  default: '1O48_s3haaKpPX98BdBr8s_PggYUcC53H',
-  description: 'ID da pasta do Drive que recebe as artes aprovadas',
-})
+//
+// Tudo vem de variáveis de ambiente, definidas no arquivo `functions/.env`
+// (que o firebase-tools lê e publica junto com a função). Preferi isto ao
+// Secret Manager por um motivo prático: são quatro valores, e um arquivo que
+// se preenche uma vez é muito menos frágil do que quatro comandos de
+// terminal que precisam ser digitados na ordem certa.
+//
+// O `functions/.env` NÃO vai para o Git (está no .gitignore). As credenciais
+// ficam visíveis para quem tiver acesso ao projeto no Google Cloud — o que,
+// aqui, são as mesmas pessoas que já teriam acesso a tudo.
+const config = (nome, padrao = '') => (process.env[nome] || padrao).trim()
 
-// --- segredos (firebase functions:secrets:set NOME) --------------------------
-const TOKEN_EVENTO = defineSecret('TOKEN_EVENTO')
-// Conta comum do Google (funciona sem Workspace) — é o caminho em uso aqui.
-const OAUTH_CLIENT_ID = defineSecret('OAUTH_CLIENT_ID')
-const OAUTH_CLIENT_SECRET = defineSecret('OAUTH_CLIENT_SECRET')
-const OAUTH_REFRESH_TOKEN = defineSecret('OAUTH_REFRESH_TOKEN')
+const DRIVE_PASTA_RAIZ = () => config('DRIVE_PASTA_RAIZ', '1O48_s3haaKpPX98BdBr8s_PggYUcC53H')
+const TOKEN_EVENTO = () => config('TOKEN_EVENTO')
 
 // Escopo do Drive. `drive.file` é o mínimo e o preferível: dá acesso apenas
 // aos arquivos que esta aplicação criou. Se a criação da subpasta da feira
 // falhar com 404 — acontece quando a pasta raiz não foi criada por ela —,
 // gere o refresh token com o escopo `drive` completo e informe aqui.
-const ESCOPO = process.env.DRIVE_ESCOPO || 'https://www.googleapis.com/auth/drive.file'
-const ORIGENS_LIBERADAS = (process.env.ORIGENS_LIBERADAS || '').split(',').filter(Boolean)
+const ESCOPO = config('DRIVE_ESCOPO', 'https://www.googleapis.com/auth/drive.file')
+const ORIGENS_LIBERADAS = config('ORIGENS_LIBERADAS').split(',').map((o) => o.trim()).filter(Boolean)
 
 const TIPOS_ACEITOS = new Set([
   'image/jpeg', 'image/png', 'application/pdf',
@@ -63,16 +63,16 @@ const TAMANHO_MAXIMO = 1024 * 1024 * 1024 // 1 GB
 async function tokenDoDrive() {
   // Só tratamos como service account se realmente vier um JSON — assim um
   // segredo deixado com valor de placeholder não derruba o caminho OAuth.
-  const chave = (process.env.SERVICE_ACCOUNT_JSON || '').trim()
+  const chave = config('SERVICE_ACCOUNT_JSON')
   if (chave.startsWith('{')) {
     const auth = new GoogleAuth({ credentials: JSON.parse(chave), scopes: [ESCOPO] })
     const cliente = await auth.getClient()
     const { token } = await cliente.getAccessToken()
     return token
   }
-  const refresh = OAUTH_REFRESH_TOKEN.value()
+  const refresh = config('OAUTH_REFRESH_TOKEN')
   if (refresh) {
-    const cliente = new OAuth2Client(OAUTH_CLIENT_ID.value(), OAUTH_CLIENT_SECRET.value())
+    const cliente = new OAuth2Client(config('OAUTH_CLIENT_ID'), config('OAUTH_CLIENT_SECRET'))
     cliente.setCredentials({ refresh_token: refresh })
     const { token } = await cliente.getAccessToken()
     return token
@@ -231,7 +231,6 @@ function validarPedido(corpo) {
 exports.envio = onRequest(
   {
     region: 'southamerica-east1',
-    secrets: [TOKEN_EVENTO, OAUTH_CLIENT_ID, OAUTH_CLIENT_SECRET, OAUTH_REFRESH_TOKEN],
     memory: '256MiB',
     timeoutSeconds: 60,
     maxInstances: 10,
@@ -242,7 +241,7 @@ exports.envio = onRequest(
     if (!origemLiberada) return res.status(403).json({ erro: 'Origem não autorizada.' })
     if (req.method !== 'POST') return res.status(405).json({ erro: 'Método não permitido.' })
 
-    const esperado = TOKEN_EVENTO.value()
+    const esperado = TOKEN_EVENTO()
     if (esperado && req.body?.tokenEvento !== esperado) {
       return res.status(401).json({ erro: 'Link do evento inválido ou expirado.' })
     }
@@ -268,7 +267,7 @@ async function abrirSessao(req, res) {
   const protocolo = protocoloNovo()
 
   const token = await tokenDoDrive()
-  const raiz = await raizUtilizavel(token, DRIVE_PASTA_RAIZ.value())
+  const raiz = await raizUtilizavel(token, DRIVE_PASTA_RAIZ())
   const pastaId = await pastaDaFeira(token, raiz, feiraId, cadastro.feira.trim())
 
   const extensao = (arquivo.nome.match(/\.[a-z0-9]+$/i) || [''])[0].toLowerCase()

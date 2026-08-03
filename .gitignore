@@ -9,3 +9,4 @@ dist
 .env.local
 functions/node_modules
 .firebase
+functions/.env
