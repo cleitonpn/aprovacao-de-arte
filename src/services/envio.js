@@ -14,7 +14,16 @@ import { sessaoAnonima } from './firebase.js'
 import { ENVIO, envioConfigurado } from '../config.js'
 import { paraNomeArquivo } from '../data/cadastro.js'
 
-const TIPOS_ACEITOS = new Set(['image/jpeg', 'image/png', 'application/pdf', 'application/octet-stream'])
+// O tipo é derivado do formato que a ANÁLISE detectou pela assinatura
+// binária, não do que o navegador informa. Num .ai — ou num PDF escolhido
+// pelo gerenciador de arquivos do celular — o navegador costuma mandar
+// application/octet-stream ou string vazia, e as regras do Storage recusariam.
+const TIPO_POR_FORMATO = {
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  pdf: 'application/pdf',
+  ai: 'application/pdf', // .ai é PDF por dentro
+}
 
 export function protocoloNovo() {
   const d = new Date()
@@ -26,10 +35,18 @@ export function protocoloNovo() {
 
 export const idDeFeira = (nome) => paraNomeArquivo(nome, 60).toLowerCase()
 
-function traduzirErro(e) {
+function traduzirErro(e, etapa) {
   const codigo = e?.code || ''
   if (codigo.includes('unauthorized') || codigo.includes('permission-denied')) {
-    return 'O envio foi recusado pelas regras de segurança. Se a arte tem ressalva, é preciso aceitar o risco antes.'
+    // Separar as duas etapas importa: uma recusa no arquivo aponta para as
+    // regras do Storage, uma recusa no registro aponta para as do Firestore.
+    // Sem isso, a mesma frase serve para dois problemas bem diferentes.
+    return etapa === 'arquivo'
+      ? 'O envio do arquivo foi recusado pelas regras de segurança do Storage. Confira se elas foram publicadas no console do Firebase.'
+      : 'O registro do envio foi recusado pelas regras do Firestore. Se a arte tem ressalva, é preciso aceitar o risco antes.'
+  }
+  if (codigo.includes('unauthenticated') || codigo.includes('operation-not-allowed')) {
+    return 'O login anônimo não está ativado no Firebase. Ative-o em Authentication → Método de login → Anônimo.'
   }
   if (codigo.includes('quota-exceeded')) return 'O espaço de armazenamento acabou. Avise o time de comunicação visual.'
   if (codigo.includes('retry-limit-exceeded') || codigo.includes('unavailable')) {
@@ -51,13 +68,15 @@ export async function enviarArte(arquivo, dados, aoProgredir) {
   if (arquivo.size > limite) {
     throw new Error(`O arquivo tem ${(arquivo.size / 1048576).toFixed(0)} MB e o limite é ${ENVIO.tamanhoMaximoMb} MB.`)
   }
-  const tipo = arquivo.type || 'application/octet-stream'
-  if (!TIPOS_ACEITOS.has(tipo)) throw new Error(`Tipo de arquivo não aceito para envio: ${tipo}.`)
+  const { cadastro, peca, perfil, veredicto, riscoAceito, laudo } = dados
+  const tipo = TIPO_POR_FORMATO[laudo?.arquivo?.formato]
+  if (!tipo) {
+    throw new Error(`Este formato (${laudo?.arquivo?.formato || 'desconhecido'}) não pode ser enviado. Exporte em PDF, JPG ou PNG.`)
+  }
 
   aoProgredir?.(0)
 
   const { app, firestore, storage } = await sessaoAnonima()
-  const { cadastro, peca, perfil, veredicto, riscoAceito, laudo } = dados
 
   const protocolo = protocoloNovo()
   const feiraId = idDeFeira(cadastro.feira)
@@ -65,6 +84,7 @@ export async function enviarArte(arquivo, dados, aoProgredir) {
   const nomeNoStorage = `${paraNomeArquivo(cadastro.stand)}__${paraNomeArquivo(perfil.nome)}__${protocolo}${extensao}`
   const caminho = `envios/${feiraId}/${nomeNoStorage}`
 
+  let etapa = 'arquivo'
   try {
     const bucket = storage.getStorage(app)
     const alvo = storage.ref(bucket, caminho)
@@ -94,6 +114,7 @@ export async function enviarArte(arquivo, dados, aoProgredir) {
 
     const link = await storage.getDownloadURL(alvo)
 
+    etapa = 'registro'
     const bd = firestore.getFirestore(app)
     // setDoc com merge:false num documento novo — as regras só permitem criar,
     // nunca sobrescrever, então um protocolo já usado é recusado pelo servidor.
@@ -130,7 +151,7 @@ export async function enviarArte(arquivo, dados, aoProgredir) {
     aoProgredir?.(1)
     return { protocolo, link, nomeNoStorage }
   } catch (e) {
-    console.error('falha no envio', e)
-    throw new Error(traduzirErro(e))
+    console.error(`falha no envio (etapa: ${etapa})`, e)
+    throw new Error(traduzirErro(e, etapa))
   }
 }

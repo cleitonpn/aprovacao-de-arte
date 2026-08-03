@@ -65,6 +65,12 @@ Não se preocupe com as regras que ele cria — vamos substituí-las no passo 4.
 
 ---
 
+> 🔁 **Se você já colou as regras antes de 03/08/2026, cole de novo.** As
+> primeiras versões tinham dois defeitos que recusavam todo envio: as do
+> Storage usavam `allow create`, que só existe no Firestore e nega tudo em
+> silêncio; e a validação de e-mail estava com excesso de contrabarras, o que
+> na prática recusava qualquer endereço que contivesse a letra "s".
+
 ## Passo 3 — Colar as regras do Firestore
 
 👉 https://console.firebase.google.com/project/aprovacao-de-arte-49bc3/firestore/rules
@@ -136,7 +142,8 @@ https://cleitonpn.github.io/aprovacao-de-arte/#/admin
 |---|---|
 | `auth/unauthorized-domain` ao entrar | falta `cleitonpn.github.io` nos domínios autorizados (passo 1.5) |
 | `permission-denied` no painel | falta o documento com seu e-mail na coleção `admins` — o **ID do documento** tem que ser o e-mail inteiro |
-| Envio recusado pelas regras | regras não publicadas, ou publicadas só num dos dois lugares (Firestore **e** Storage) |
+| "envio do **arquivo** recusado" | regras do **Storage** não publicadas, ou desatualizadas |
+| "registro do envio recusado" | regras do **Firestore** não publicadas, ou desatualizadas |
 | `auth/operation-not-allowed` no envio | o login **Anônimo** não foi ativado no passo 1 |
 | Botão de envio não aparece | o site foi publicado antes de o Storage existir — rode o workflow de novo |
 

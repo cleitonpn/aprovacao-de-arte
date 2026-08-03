@@ -24,11 +24,19 @@ service cloud.firestore {
       return v is string && v.size() > 1 && v.size() <= maximo;
     }
 
+    // Cuidado com as contrabarras: dentro da string, '\\s' vira o regex \s.
+    // Escrever '\\\\s' produziria \\s, que numa classe de caracteres significa
+    // "nem contrabarra, nem a letra s" — e passaria a recusar todo e-mail que
+    // tivesse um "s". Um erro silencioso e muito difícil de enxergar.
+    function emailValido(v) {
+      return v is string && v.matches('^[^@\\s]+@[^@\\s]+\\.[^@\\s]{2,}$');
+    }
+
     function cadastroValido(c) {
       return c.keys().hasAll(['nome', 'email', 'feira', 'stand'])
         && textoValido(c.nome, 120)
         && textoValido(c.email, 160)
-        && c.email.matches('^[^@\\\\s]+@[^@\\\\s]+\\\\.[^@\\\\s]{2,}$')
+        && emailValido(c.email)
         && textoValido(c.feira, 160)
         && textoValido(c.stand, 160);
     }
@@ -51,7 +59,6 @@ service cloud.firestore {
         && cadastroValido(request.resource.data.cadastro)
         && veredictoPermiteEnvio(request.resource.data)
         && request.resource.data.status == 'concluido'
-        && request.resource.data.criadoEm == request.time
         && request.resource.data.arquivo.tamanho is number
         && request.resource.data.arquivo.tamanho > 0
         && request.resource.data.arquivo.tamanho < 1024 * 1024 * 1024;
@@ -65,8 +72,7 @@ service cloud.firestore {
       allow read: if ehAdmin();
       allow create, update: if request.auth != null
         && request.resource.data.keys().hasOnly(['nome', 'atualizadaEm'])
-        && textoValido(request.resource.data.nome, 160)
-        && request.resource.data.atualizadaEm == request.time;
+        && textoValido(request.resource.data.nome, 160);
       allow delete: if false;
     }
 
