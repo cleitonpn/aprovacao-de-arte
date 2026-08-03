@@ -20,6 +20,9 @@ export const FIREBASE = {
 
 export const ENVIO = {
   tamanhoMaximoMb: Number(env.VITE_TAMANHO_MAXIMO_MB || 800),
+  // Arquivo de apoio é logo e fonte, não arte de grande formato. O limite
+  // menor é o que impede a pasta de apoio de virar depósito de arquivo pesado.
+  tamanhoMaximoAvulsoMb: Number(env.VITE_TAMANHO_MAXIMO_AVULSO_MB || 100),
 }
 
 export const firebaseConfigurado = () => Boolean(FIREBASE.apiKey && FIREBASE.projectId)

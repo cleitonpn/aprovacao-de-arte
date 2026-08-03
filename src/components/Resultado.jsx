@@ -24,7 +24,7 @@ function baixar(nome, conteudo, tipo) {
   setTimeout(() => URL.revokeObjectURL(url), 5000)
 }
 
-export default function Resultado({ resultado, modoTecnico, onAceitarRisco, riscoAceito, arquivo, cadastro }) {
+export default function Resultado({ resultado, modoTecnico, onAceitarRisco, riscoAceito, arquivo, cadastro, projeto, onEnviado }) {
   const [copiado, setCopiado] = useState(false)
   const { veredicto, achados, medidas, peca, perfil } = resultado
   const ordenados = [...achados].sort((a, b) => ORDEM[a.nivel] - ORDEM[b.nivel])
@@ -112,6 +112,8 @@ export default function Resultado({ resultado, modoTecnico, onAceitarRisco, risc
           arquivo={arquivo}
           cadastro={cadastro}
           riscoAceito={riscoAceito}
+          projeto={projeto}
+          onEnviado={onEnviado}
         />
       )}
 

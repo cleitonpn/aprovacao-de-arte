@@ -4,8 +4,7 @@ import {
   carregarDetectorNitidez, salvarDetectorNitidez,
 } from './data/perfis.js'
 import { POLITICA_PADRAO } from './core/regras.js'
-import { analisar } from './core/analise.js'
-import { listar, registrar, marcarRiscoAceito } from './store/historico.js'
+import { usarAnalise } from './store/usarAnalise.js'
 import PecaForm from './components/PecaForm.jsx'
 import Upload from './components/Upload.jsx'
 import Resultado from './components/Resultado.jsx'
@@ -13,24 +12,118 @@ import Gabarito from './components/Gabarito.jsx'
 import PainelPerfis from './components/PainelPerfis.jsx'
 import Historico from './components/Historico.jsx'
 import Cadastro from './components/Cadastro.jsx'
+import Acesso from './components/Acesso.jsx'
 import Admin from './components/Admin.jsx'
+import Projetos from './components/Projetos.jsx'
+import Usuarios from './components/Usuarios.jsx'
+import Projeto from './components/Projeto.jsx'
+import { usarSessao } from './services/sessao.js'
 import * as cadastroStore from './data/cadastro.js'
 
-// Rota simples por hash: #/admin abre o painel do time. Sem router para não
-// carregar uma dependência inteira por causa de duas telas.
-function usarRotaAdmin() {
-  const ler = () => typeof window !== 'undefined' && window.location.hash.replace(/^#\/?/, '') === 'admin'
-  const [ehAdmin, setEhAdmin] = useState(ler)
+// Rota por hash, sem biblioteca de roteamento: são cinco telas e nenhuma delas
+// precisa de rota aninhada, parâmetro de busca ou histórico elaborado.
+//
+//   #/            ferramenta aberta (cliente informa as medidas)
+//   #/p/TOKEN     projeto cadastrado (medidas vêm do time) — sem login
+//   #/admin       artes recebidas          ⎫
+//   #/projetos    cadastro de projetos     ⎬ time interno, com login
+//   #/analistas   quem tem acesso          ⎭
+function usarRota() {
+  const ler = () => (typeof window === 'undefined' ? '' : window.location.hash.replace(/^#\/?/, ''))
+  const [caminho, setCaminho] = useState(ler)
   useEffect(() => {
-    const aoMudar = () => setEhAdmin(ler())
+    const aoMudar = () => setCaminho(ler())
     window.addEventListener('hashchange', aoMudar)
     return () => window.removeEventListener('hashchange', aoMudar)
   }, [])
-  return ehAdmin
+
+  const partes = caminho.split('/').filter(Boolean)
+  if (partes[0] === 'p' && partes[1]) return { tela: 'projeto', token: partes[1] }
+  if (['admin', 'projetos', 'analistas'].includes(partes[0])) return { tela: partes[0] }
+  return { tela: 'ferramenta' }
 }
 
+const TELAS_INTERNAS = [
+  { id: 'admin', rotulo: 'Artes recebidas' },
+  { id: 'projetos', rotulo: 'Projetos' },
+  { id: 'analistas', rotulo: 'Analistas' },
+]
+
 export default function App() {
-  const ehAdmin = usarRotaAdmin()
+  const rota = usarRota()
+
+  if (rota.tela === 'projeto') {
+    return (
+      <div className="app estreito">
+        <header className="topo">
+          <div>
+            <h1>Envio de artes</h1>
+            <p>Confira e envie as artes do seu stand.</p>
+          </div>
+        </header>
+        <div className="coluna">
+          <Projeto token={rota.token} />
+        </div>
+        <footer className="rodape">
+          A análise roda no seu navegador. O arquivo só é enviado quando você
+          clicar em <strong>Enviar arte para produção</strong>.
+        </footer>
+      </div>
+    )
+  }
+
+  if (rota.tela !== 'ferramenta') return <PainelInterno tela={rota.tela} />
+
+  return <Ferramenta />
+}
+
+function PainelInterno({ tela }) {
+  const sessao = usarSessao()
+
+  return (
+    <div className="app">
+      <header className="topo">
+        <div>
+          <h1>Aprovação de arte</h1>
+          <p>Painel do time de comunicação visual.</p>
+        </div>
+        {sessao.liberado && (
+          <div className="sessao-topo">
+            <span className="dica-campo">{sessao.usuario?.email}</span>
+            <button className="btn btn-ghost" onClick={sessao.sair}>Sair</button>
+          </div>
+        )}
+      </header>
+
+      {sessao.liberado && (
+        <nav className="abas">
+          {TELAS_INTERNAS.map((t) => (
+            <a key={t.id} href={`#/${t.id}`} className={t.id === tela ? 'ativa' : ''}>{t.rotulo}</a>
+          ))}
+          <a href="#/" className="fora">Abrir a ferramenta</a>
+        </nav>
+      )}
+
+      <div className="coluna">
+        <Acesso sessao={sessao}>
+          {tela === 'admin' && <Admin sessao={sessao} />}
+          {tela === 'projetos' && <Projetos sessao={sessao} />}
+          {tela === 'analistas' && <Usuarios sessao={sessao} />}
+        </Acesso>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * A ferramenta aberta: o cliente informa as medidas.
+ *
+ * Continua existindo depois do cadastro de projetos, e não por acomodação. No
+ * começo de uma feira nem todo stand está cadastrado, e nenhum cliente pode
+ * ficar sem conseguir mandar arte por causa disso. Também serve ao próprio
+ * time, que confere arte solta o dia inteiro.
+ */
+function Ferramenta() {
   const [cadastro, setCadastro] = useState(cadastroStore.carregar)
   const [editandoCadastro, setEditandoCadastro] = useState(false)
   const [perfis, setPerfis] = useState(carregarPerfis)
@@ -39,20 +132,14 @@ export default function App() {
   const [escalaFator, setEscalaFator] = useState(1)
   const [politica, setPolitica] = useState(() => carregarPolitica(POLITICA_PADRAO))
   const [detectorNitidez, setDetectorNitidez] = useState(carregarDetectorNitidez)
-
-  const [arquivo, setArquivo] = useState(null)
-  const [analisando, setAnalisando] = useState(false)
-  const [resultado, setResultado] = useState(null)
-  const [erro, setErro] = useState(null)
-  const [registroAtual, setRegistroAtual] = useState(null)
-
   const [modoTecnico, setModoTecnico] = useState(false)
-  const [registros, setRegistros] = useState(listar)
 
   const perfil = useMemo(
     () => perfis.find((p) => p.id === perfilId) || perfis[0],
     [perfis, perfilId],
   )
+
+  const analise = usarAnalise({ peca, perfil, escalaFator, politica, detectorNitidez })
 
   const guardarPerfis = useCallback((novos) => {
     setPerfis(novos)
@@ -78,75 +165,10 @@ export default function App() {
     if ('escalaFator' in mudanca) setEscalaFator(mudanca.escalaFator)
   }, [])
 
-  const rodar = useCallback(async (arq) => {
-    setAnalisando(true)
-    setErro(null)
-    setResultado(null)
-    setRegistroAtual(null)
-    try {
-      const r = await analisar(arq, peca, perfil, { escalaFator, politica, detectorNitidez })
-      setResultado(r)
-      const reg = registrar({
-        hash: r.medidas.arquivo?.hash,
-        nome: r.medidas.arquivo?.nome,
-        veredicto: r.veredicto,
-        peca: `${perfil.nome} ${peca.larguraCm}×${peca.alturaCm} cm`,
-        dpi: r.resolucao?.dpi ?? null,
-      })
-      setRegistroAtual(reg)
-      setRegistros(listar())
-    } catch (e) {
-      console.error(e)
-      setErro(e?.message || 'Não foi possível ler este arquivo.')
-    } finally {
-      setAnalisando(false)
-    }
-  }, [peca, perfil, escalaFator, politica, detectorNitidez])
-
-  // Trocar a peça ou a escala muda o veredicto — reanalisa sem novo upload.
-  //
-  // Com espera: digitar "275" na largura dispara três mudanças de estado, e
-  // cada análise relê o arquivo inteiro (decodifica a imagem, roda a FFT).
-  // Numa arte de centenas de MB isso travaria a página a cada tecla.
-  useEffect(() => {
-    if (!arquivo) return undefined
-    const t = setTimeout(() => rodar(arquivo), 450)
-    return () => clearTimeout(t)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [perfilId, peca.larguraCm, peca.alturaCm, escalaFator, politica, detectorNitidez])
-
-  const receberArquivo = (arq) => {
-    setArquivo(arq)
-    rodar(arq)
-  }
-
-  const aceitarRisco = () => {
-    if (!registroAtual) return
-    setRegistros(marcarRiscoAceito(registroAtual.id))
-    setRegistroAtual({ ...registroAtual, riscoAceito: { em: new Date().toISOString() } })
-  }
-
   const confirmarCadastro = (dados) => {
     cadastroStore.salvar(dados)
     setCadastro(dados)
     setEditandoCadastro(false)
-  }
-
-  if (ehAdmin) {
-    return (
-      <div className="app">
-        <header className="topo">
-          <div>
-            <h1>Painel do time</h1>
-            <p>Artes recebidas por feira.</p>
-          </div>
-          <a className="btn btn-ghost" href="#/">Voltar à ferramenta</a>
-        </header>
-        <div className="coluna">
-          <Admin />
-        </div>
-      </div>
-    )
   }
 
   if (!cadastro) {
@@ -215,32 +237,32 @@ export default function App() {
               onDetector={guardarDetector}
             />
           )}
-          {modoTecnico && <Historico registros={registros} onMudar={setRegistros} />}
+          {modoTecnico && <Historico registros={analise.registros} onMudar={analise.setRegistros} />}
         </div>
 
         <div className="coluna">
-          <Upload onArquivo={receberArquivo} analisando={analisando} nomeAtual={arquivo?.name} />
+          <Upload onArquivo={analise.receberArquivo} analisando={analise.analisando} nomeAtual={analise.arquivo?.name} />
 
-          {erro && (
+          {analise.erro && (
             <div className="cartao erro">
               <strong>Não foi possível analisar este arquivo</strong>
-              <p>{erro}</p>
+              <p>{analise.erro}</p>
               <p className="acao">→ Tente exportar a arte em PDF, JPG ou PNG e enviar novamente.</p>
             </div>
           )}
 
-          {resultado && (
+          {analise.resultado && (
             <Resultado
-              resultado={resultado}
+              resultado={analise.resultado}
               modoTecnico={modoTecnico}
-              onAceitarRisco={aceitarRisco}
-              riscoAceito={registroAtual?.riscoAceito}
-              arquivo={arquivo}
+              onAceitarRisco={analise.aceitarRisco}
+              riscoAceito={analise.riscoAceito}
+              arquivo={analise.arquivo}
               cadastro={cadastro}
             />
           )}
 
-          {!resultado && !erro && !analisando && (
+          {!analise.resultado && !analise.erro && !analise.analisando && (
             <div className="cartao vazio">
               <h3>O que é verificado</h3>
               <ul>

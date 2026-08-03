@@ -17,8 +17,8 @@ export function carregarFirebase() {
         import('firebase/firestore'),
         import('firebase/storage'),
       ])
-      const instancia = app.getApps()[0] || app.initializeApp(FIREBASE)
-      return { app: instancia, auth, firestore, storage }
+      const instancia = app.getApps().find((a) => a.name === '[DEFAULT]') || app.initializeApp(FIREBASE)
+      return { app: instancia, appMod: app, auth, firestore, storage }
     })()
   }
   return promessa
@@ -39,4 +39,20 @@ export async function sessaoAnonima() {
     await fb.auth.signInAnonymously(autenticacao)
   }
   return { ...fb, usuario: autenticacao.currentUser }
+}
+
+/**
+ * Aplicação secundária, usada só para CRIAR contas de analista.
+ *
+ * `createUserWithEmailAndPassword` autentica a conta recém-criada na hora.
+ * Chamado na aplicação principal, isso derrubaria a sessão de quem está
+ * cadastrando: o gestor clica em "criar" e é deslogado, agora logado como o
+ * analista novo. Uma segunda instância do SDK, com seu próprio estado de
+ * autenticação, isola esse efeito — a sessão do gestor nem toma conhecimento.
+ */
+export async function appSecundario() {
+  const fb = await carregarFirebase()
+  const existente = fb.appMod.getApps().find((a) => a.name === 'criacao-de-conta')
+  const secundario = existente || fb.appMod.initializeApp(FIREBASE, 'criacao-de-conta')
+  return { ...fb, secundario }
 }

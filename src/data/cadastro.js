@@ -74,6 +74,16 @@ export function limpar() {
   }
 }
 
+/**
+ * Identificador da feira, derivado do nome.
+ *
+ * Serve de ID de documento no Firestore e de pasta no armazenamento, então
+ * precisa ser estável: a mesma feira digitada por dois expositores tem que
+ * cair no mesmo lugar. Fica aqui, e não no serviço de envio, porque o cadastro
+ * de projetos também precisa dele e importar o envio traria junto o SDK.
+ */
+export const idDeFeira = (nome) => paraNomeArquivo(nome, 60).toLowerCase()
+
 /** Trecho seguro para compor nome de arquivo e de pasta no Drive. */
 export function paraNomeArquivo(texto, maximo = 40) {
   return (texto || '')

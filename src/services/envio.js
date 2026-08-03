@@ -12,7 +12,7 @@
 
 import { sessaoAnonima } from './firebase.js'
 import { ENVIO, envioConfigurado } from '../config.js'
-import { paraNomeArquivo } from '../data/cadastro.js'
+import { paraNomeArquivo, idDeFeira } from '../data/cadastro.js'
 import { semIndefinidos } from '../core/mensagem.js'
 
 // O tipo é derivado do formato que a ANÁLISE detectou pela assinatura
@@ -26,6 +26,23 @@ const TIPO_POR_FORMATO = {
   ai: 'application/pdf', // .ai é PDF por dentro
 }
 
+// Arquivos de apoio (logo, fontes, manual de marca) não passam pela análise —
+// não são peça, não têm tamanho impresso, não têm veredicto. Vão para um
+// prefixo separado no armazenamento justamente para que as regras da arte
+// possam continuar estritas: lá só entram JPG, PNG e PDF.
+const TIPO_AVULSO_POR_EXTENSAO = {
+  svg: 'image/svg+xml',
+  pdf: 'application/pdf',
+  ai: 'application/postscript',
+  eps: 'application/postscript',
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  zip: 'application/zip',
+}
+
+export const EXTENSOES_AVULSAS = Object.keys(TIPO_AVULSO_POR_EXTENSAO)
+
 export function protocoloNovo() {
   const d = new Date()
   const data = [d.getFullYear() % 100, d.getMonth() + 1, d.getDate()]
@@ -34,7 +51,7 @@ export function protocoloNovo() {
   return `AP-${data}-${aleatorio}`
 }
 
-export const idDeFeira = (nome) => paraNomeArquivo(nome, 60).toLowerCase()
+export { idDeFeira }
 
 function traduzirErro(e, etapa) {
   const codigo = e?.code || ''
@@ -69,7 +86,7 @@ export async function enviarArte(arquivo, dados, aoProgredir) {
   if (arquivo.size > limite) {
     throw new Error(`O arquivo tem ${(arquivo.size / 1048576).toFixed(0)} MB e o limite é ${ENVIO.tamanhoMaximoMb} MB.`)
   }
-  const { cadastro, peca, perfil, veredicto, riscoAceito, laudo } = dados
+  const { cadastro, peca, perfil, veredicto, riscoAceito, laudo, projeto } = dados
   const tipo = TIPO_POR_FORMATO[laudo?.arquivo?.formato]
   if (!tipo) {
     throw new Error(`Este formato (${laudo?.arquivo?.formato || 'desconhecido'}) não pode ser enviado. Exporte em PDF, JPG ou PNG.`)
@@ -82,7 +99,11 @@ export async function enviarArte(arquivo, dados, aoProgredir) {
   const protocolo = protocoloNovo()
   const feiraId = idDeFeira(cadastro.feira)
   const extensao = (arquivo.name.match(/\.[a-z0-9]+$/i) || [''])[0].toLowerCase()
-  const nomeNoStorage = `${paraNomeArquivo(cadastro.stand)}__${paraNomeArquivo(perfil.nome)}__${protocolo}${extensao}`
+  // Quando o envio vem de um projeto cadastrado, o nome da peça é o do projeto
+  // — é o que o time reconhece na pasta de downloads. Sem projeto, sobra o
+  // nome do tipo de peça, que é o que a ferramenta sabe.
+  const rotuloPeca = projeto?.pecaRotulo || perfil.nome
+  const nomeNoStorage = `${paraNomeArquivo(cadastro.stand)}__${paraNomeArquivo(rotuloPeca)}__${protocolo}${extensao}`
   const caminho = `envios/${feiraId}/${nomeNoStorage}`
 
   let etapa = 'arquivo'
@@ -130,8 +151,14 @@ export async function enviarArte(arquivo, dados, aoProgredir) {
     await firestore.setDoc(firestore.doc(bd, 'envios', protocolo), semIndefinidos({
       protocolo,
       status: 'concluido',
+      tipoEnvio: 'arte',
       feiraId,
       feira: cadastro.feira,
+      // Amarra o arquivo à peça cadastrada. É o que permite ao painel dizer o
+      // que ainda falta, em vez de só listar o que chegou.
+      projetoId: projeto?.token || null,
+      pecaId: projeto?.pecaId || null,
+      pecaRotulo: projeto?.pecaRotulo || null,
       cadastro,
       peca,
       perfil: { id: perfil.id, nome: perfil.nome },
@@ -161,6 +188,84 @@ export async function enviarArte(arquivo, dados, aoProgredir) {
     return { protocolo, link, nomeNoStorage }
   } catch (e) {
     console.error(`falha no envio (etapa: ${etapa})`, e)
+    throw new Error(traduzirErro(e, etapa))
+  }
+}
+
+/**
+ * Envio de arquivo de apoio: logo, fonte, manual de marca.
+ *
+ * Vai sem análise, e é assim de propósito. Um logo em SVG não tem tamanho
+ * impresso nem resolução — reprovar por "menos de 150 dpi" seria absurdo, e
+ * obrigar o cliente a inventar uma medida para conseguir mandar o logo é
+ * exatamente o tipo de atrito que faz o material chegar por WhatsApp de novo.
+ *
+ * @param {File} arquivo
+ * @param {object} dados { cadastro, projeto: {token}, descricao }
+ */
+export async function enviarAvulso(arquivo, dados, aoProgredir) {
+  if (!envioConfigurado()) throw new Error('O envio não está configurado nesta instalação.')
+
+  const limite = ENVIO.tamanhoMaximoAvulsoMb * 1024 * 1024
+  if (arquivo.size > limite) {
+    throw new Error(`O arquivo tem ${(arquivo.size / 1048576).toFixed(0)} MB e o limite para arquivos de apoio é ${ENVIO.tamanhoMaximoAvulsoMb} MB.`)
+  }
+
+  const { cadastro, projeto, descricao } = dados
+  const ext = (arquivo.name.match(/\.([a-z0-9]+)$/i)?.[1] || '').toLowerCase()
+  const tipo = TIPO_AVULSO_POR_EXTENSAO[ext]
+  if (!tipo) {
+    throw new Error(`Arquivos .${ext || '(sem extensão)'} não são aceitos aqui. Envie ${EXTENSOES_AVULSAS.map((e) => `.${e}`).join(', ')} — ou compacte tudo num .zip.`)
+  }
+
+  aoProgredir?.(0)
+  const { app, firestore, storage } = await sessaoAnonima()
+
+  const protocolo = protocoloNovo()
+  const feiraId = idDeFeira(cadastro.feira)
+  const nomeNoStorage = `${paraNomeArquivo(cadastro.stand)}__apoio__${protocolo}.${ext}`
+  const caminho = `avulsos/${feiraId}/${nomeNoStorage}`
+
+  let etapa = 'arquivo'
+  try {
+    const alvo = storage.ref(storage.getStorage(app), caminho)
+    const tarefa = storage.uploadBytesResumable(alvo, arquivo, {
+      contentType: tipo,
+      customMetadata: { protocolo, expositor: cadastro.nome, stand: cadastro.stand, feira: cadastro.feira },
+    })
+    await new Promise((resolve, reject) => {
+      tarefa.on('state_changed', (s) => aoProgredir?.(s.totalBytes ? s.bytesTransferred / s.totalBytes : 0), reject, resolve)
+    })
+
+    let link = null
+    try {
+      link = await storage.getDownloadURL(alvo)
+    } catch (e) {
+      console.warn('arquivo de apoio enviado, mas não foi possível gerar o link', e)
+    }
+
+    etapa = 'registro'
+    const bd = firestore.getFirestore(app)
+    await firestore.setDoc(firestore.doc(bd, 'envios', protocolo), semIndefinidos({
+      protocolo,
+      status: 'concluido',
+      tipoEnvio: 'avulso',
+      feiraId,
+      feira: cadastro.feira,
+      projetoId: projeto?.token || null,
+      pecaId: null,
+      pecaRotulo: descricao || 'Arquivo de apoio',
+      cadastro,
+      arquivo: { nome: arquivo.name, tamanho: arquivo.size, tipo, sha256: null },
+      caminho,
+      link,
+      criadoEm: firestore.serverTimestamp(),
+    }))
+
+    aoProgredir?.(1)
+    return { protocolo, link, nomeNoStorage }
+  } catch (e) {
+    console.error(`falha no envio de apoio (etapa: ${etapa})`, e)
     throw new Error(traduzirErro(e, etapa))
   }
 }

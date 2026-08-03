@@ -12,6 +12,16 @@ Quando a arte passa, um botão envia o arquivo para o Firebase Storage — **sem
 o expositor precisar de login** — e o time baixa tudo por feira num painel
 próprio. Ver [SETUP.md](SETUP.md).
 
+Existem **dois caminhos de entrada**, e o segundo é o que resolve o erro mais
+caro da ferramenta:
+
+- **Ferramenta aberta** (`#/`): o cliente informa as medidas. Serve para quem
+  ainda não foi cadastrado e para o próprio time conferir arte solta.
+- **Projeto cadastrado** (`#/p/TOKEN`): o time cadastra antes quais peças cada
+  stand precisa entregar, e o cliente recebe um link que já abre com tudo
+  preenchido. Ele **não digita medida nenhuma** — que era de onde vinha o pior
+  defeito possível: aprovar com confiança uma arte contra a medida errada.
+
 ```bash
 npm install
 npm run dev       # desenvolvimento
@@ -33,6 +43,21 @@ npm run build     # build de produção (dist/)
 5. **Painel do time** (`#/admin`): seleciona a feira, lista quem já enviou e
    baixa as artes — uma a uma ou todas de uma vez, além de exportar a
    planilha do que chegou.
+
+### Fluxo invertido (projeto cadastrado)
+
+1. **O time cadastra o projeto** em `#/projetos`: feira, stand, cliente,
+   e-mail e a lista de peças com tipo e medida. Manualmente ou **importando a
+   planilha** que a operação já mantém.
+2. **O cliente recebe um link** (`#/p/TOKEN`) e abre a lista das peças dele,
+   cada uma com a medida certa e a resolução mínima já calculada.
+3. **Ele escolhe a peça e sobe o arquivo.** A análise é a mesma, mas agora
+   contra a medida do projeto.
+4. **Arquivos de apoio** (logo, fontes, manual de marca) sobem por um caminho
+   separado, sem análise — não são peça impressa e não têm resolução a
+   conferir.
+5. **O painel mostra o que falta**, não só o que chegou, e gera o e-mail de
+   cobrança já escrito com a lista das peças pendentes.
 
 ## O problema que ela resolve
 
@@ -209,16 +234,23 @@ src/
     espectro.js    FFT + espectro radial + detector de nitidez real
     pdf.js         Inspeção de PDF/AI via pdf.js
     mensagem.js    Texto para o designer e laudo JSON
+    importacao.js  Leitura da planilha de projetos (CSV), nos dois formatos
   data/
     perfis.js      Tipos de peça, limiares, escalas (editável e persistido)
     cadastro.js    Cadastro do expositor e validação
-  services/envio.js   Upload retomável em pedaços, direto para o Google
-  store/historico.js  Histórico local das análises
-  components/      Interface (inclui Cadastro, Envio e Admin)
+    projeto.js     Projeto do stand: peças, token do link, medidas
+  services/
+    envio.js       Upload retomável, direto para o Google
+    projetos.js    Leitura/gravação dos projetos (time e expositor)
+    sessao.js      Login do time: Google, e-mail/senha e liberação de acesso
+  store/
+    historico.js   Histórico local das análises
+    usarAnalise.js Estado da análise, compartilhado pelas duas telas
+  components/      Interface (Cadastro, Envio, Projeto, Projetos, Admin…)
   config.js        Variáveis de ambiente (nada secreto aqui)
-functions/         Cloud Function que assina o upload no Drive
-firestore.rules    Leitura só para admins; escrita só pela função
-test/              Testes das regras, da calibração e das travas de envio
+firestore.rules    Quem lê e escreve cada coleção
+storage.rules      Tipo, tamanho e pasta de cada arquivo
+test/              Testes das regras, da calibração, do laudo e da importação
 ```
 
 Detalhe de implementação que não é óbvio: a análise espectral roda sobre
@@ -257,7 +289,10 @@ de serviço. Essa versão está no histórico do repositório.
   clara de exportar PDF, que é o que a gráfica quer receber de qualquer jeito.
 - **Integração com o configurador de stand**: o projeto
   `personalize-stand-forum-` já conhece a dimensão real de cada parede, então
-  a especificação de cada peça sai automática, sem ninguém digitar medida.
+  o cadastro de projetos poderia sair dele direto, sem nem a planilha no meio.
+- **Lembrete automático de pendência**: hoje a cobrança é um botão que abre o
+  e-mail já escrito. Mandar sozinho exigiria um serviço rodando, com custo e
+  manutenção — vale só se o botão não der conta.
 - **Modo sombra**: por 30 dias, a ferramenta analisa e o time avalia como
   sempre; comparar os dois calibra os limiares com a realidade da operação.
 

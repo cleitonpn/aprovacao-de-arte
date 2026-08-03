@@ -8,12 +8,23 @@ rules_version = '2';
 // está duplicada: quem chamar a API direto também não consegue subir arte
 // reprovada.
 //
-// O expositor grava com uma sessão ANÔNIMA (criada sem nenhuma tela, ele nem
-// percebe). O time do painel entra com Google e precisa constar em `admins`.
+// Três públicos, três níveis de acesso:
+//
+// 1. O time interno entra com Google ou e-mail/senha, precisa do e-mail
+//    verificado e tem que constar em `admins`. Lê e escreve tudo.
+// 2. O expositor com projeto cadastrado usa uma sessão ANÔNIMA e o token do
+//    link. O token é o ID do documento e é a credencial: sem ele não se chega
+//    ao projeto, e listar a coleção é proibido para quem não é do time.
+// 3. O expositor sem projeto usa a ferramenta aberta e só cria o envio dele.
 
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // A verificação de e-mail não é burocracia. Com o login por e-mail e senha
+    // ligado, qualquer pessoa cria uma conta com o endereço que quiser. Se
+    // bastasse constar em `admins`, daria para se cadastrar com o e-mail de um
+    // analista que ainda não criou conta e entrar no lugar dele. Exigir a
+    // verificação obriga a ter acesso à caixa de entrada.
     function ehAdmin() {
       return request.auth != null
         && request.auth.token.email_verified == true
@@ -48,6 +59,16 @@ service cloud.firestore {
         || (d.veredicto == 'ressalva' && d.riscoAceito != null);
     }
 
+    // Arquivo de apoio (logo, fonte, manual de marca) não tem veredicto: não é
+    // peça impressa, não tem tamanho final nem resolução a conferir. Em troca
+    // da isenção, exigimos que ele pertença a um projeto que existe de fato —
+    // é o que impede a coleção de virar depósito de qualquer coisa.
+    function envioDeApoioValido(d) {
+      return d.tipoEnvio == 'avulso'
+        && d.projetoId is string
+        && exists(/databases/$(database)/documents/projetos/$(d.projetoId));
+    }
+
     match /envios/{protocolo} {
       allow read: if ehAdmin();
 
@@ -57,30 +78,62 @@ service cloud.firestore {
       allow create: if request.auth != null
         && request.resource.data.protocolo == protocolo
         && cadastroValido(request.resource.data.cadastro)
-        && veredictoPermiteEnvio(request.resource.data)
         && request.resource.data.status == 'concluido'
         && request.resource.data.arquivo.tamanho is number
         && request.resource.data.arquivo.tamanho > 0
-        && request.resource.data.arquivo.tamanho < 1024 * 1024 * 1024;
+        && request.resource.data.arquivo.tamanho < 1024 * 1024 * 1024
+        && (envioDeApoioValido(request.resource.data)
+            || veredictoPermiteEnvio(request.resource.data));
 
       allow update, delete: if false;
     }
 
-    // Alimenta o seletor de feiras do painel. O expositor só pode gravar o
-    // nome e a data — nada além disso, para a coleção não virar depósito.
+    // Os projetos: quais peças cada stand precisa entregar.
+    match /projetos/{token} {
+      // Leitura por ID é liberada a qualquer sessão autenticada — inclusive a
+      // anônima do expositor — porque o token de 12 caracteres aleatórios É a
+      // credencial, e ele só existe no link enviado ao cliente. Listar a
+      // coleção continua restrito ao time: sem `list`, ninguém varre os
+      // projetos atrás do de outro cliente.
+      allow get: if request.auth != null;
+      allow list: if ehAdmin();
+
+      allow create, delete: if ehAdmin();
+
+      // Duas escritas possíveis, e a diferença importa:
+      //
+      // - o time altera o projeto inteiro;
+      // - o expositor só consegue tocar em `entregas`, o espelho que marca a
+      //   peça como enviada na tela dele. Sem esta restrição, quem tivesse o
+      //   link poderia reescrever as medidas das peças — e a ferramenta
+      //   voltaria a aprovar arte contra medida errada, que é exatamente o
+      //   problema que o cadastro veio resolver.
+      allow update: if ehAdmin()
+        || (request.auth != null
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['entregas']));
+    }
+
+    // Alimenta o seletor de feiras. O expositor só pode gravar o nome e a data
+    // — nada além disso, para a coleção não virar depósito.
     match /feiras/{feiraId} {
       allow read: if ehAdmin();
       allow create, update: if request.auth != null
         && request.resource.data.keys().hasOnly(['nome', 'atualizadaEm'])
         && textoValido(request.resource.data.nome, 160);
-      allow delete: if false;
+      allow delete: if ehAdmin();
     }
 
-    // Allowlist do painel. Incluir ou remover alguém é feito pelo console do
-    // Firebase, de propósito — assim ninguém se autopromove pela aplicação.
+    // Allowlist do painel, agora gerenciada pela tela "Analistas".
+    //
+    // Quem já tem acesso pode liberar outra pessoa. É uma escolha consciente:
+    // sem servidor nosso no meio, a alternativa seria voltar a depender do
+    // console do Firebase a cada contratação. A lista deve ficar curta, e o
+    // campo `criadoPor` registra quem liberou quem.
     match /admins/{email} {
-      allow read: if ehAdmin();
-      allow write: if false;
+      allow read: if request.auth != null
+        && request.auth.token.email_verified == true
+        && (request.auth.token.email == email || ehAdmin());
+      allow create, update, delete: if ehAdmin();
     }
 
     match /{document=**} {

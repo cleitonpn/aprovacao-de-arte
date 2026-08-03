@@ -17,7 +17,7 @@ const MOTIVO = {
   ressalva: 'Aceite o risco acima para liberar o envio.',
 }
 
-export default function Envio({ resultado, arquivo, cadastro, riscoAceito }) {
+export default function Envio({ resultado, arquivo, cadastro, riscoAceito, projeto, onEnviado }) {
   const [estado, setEstado] = useState('parado') // parado | enviando | enviado | erro
   const [progresso, setProgresso] = useState(0)
   const [erro, setErro] = useState(null)
@@ -61,9 +61,18 @@ export default function Envio({ resultado, arquivo, cadastro, riscoAceito }) {
         veredicto: resultado.veredicto,
         riscoAceito,
         laudo: laudoJson(resultado),
+        projeto,
       }, setProgresso)
       setRecibo(r)
       setEstado('enviado')
+      // O aviso ao projeto é o que marca a peça como entregue na tela do
+      // cliente. Se falhar, o envio continua válido — quem manda é o registro
+      // em `envios`, que o time lê no painel.
+      try {
+        await onEnviado?.({ ...r, veredicto: resultado.veredicto, riscoAceito })
+      } catch (falha) {
+        console.warn('arte enviada, mas não foi possível atualizar o painel do cliente', falha)
+      }
     } catch (e) {
       setErro(e?.message || 'Não foi possível enviar a arte.')
       setEstado('erro')
