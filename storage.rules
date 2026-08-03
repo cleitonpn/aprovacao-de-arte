@@ -11,17 +11,21 @@ rules_version = '2';
 // silenciosamente. A semântica de "só criar, nunca sobrescrever" se obtém
 // combinando `resource == null` (não existe arquivo no caminho ainda) com
 // `request.resource != null` (não é uma exclusão).
-//
-// Leitura é negada de propósito. O painel do time não lê pelo caminho: ele usa
-// o link de download gerado no envio, que carrega um token próprio e continua
-// funcionando. Assim ninguém consegue varrer o armazenamento procurando artes
-// de outros clientes.
 
 service firebase.storage {
   match /b/{bucket}/o {
 
     match /envios/{feiraId}/{arquivo} {
-      allow read: if false;
+      // A leitura precisa existir: `getDownloadURL()` é uma operação de
+      // leitura, e é ela que produz o link guardado no registro do envio.
+      // Negar leitura aqui fazia o arquivo subir e o envio falhar logo em
+      // seguida, deixando o arquivo órfão no armazenamento.
+      //
+      // Isto NÃO abre o acervo: listar a pasta continua proibido (não há
+      // regra para o prefixo `/envios/{feiraId}`), então é preciso saber o
+      // caminho exato do arquivo — que carrega um protocolo aleatório. Na
+      // prática, a mesma proteção do link com token.
+      allow read: if request.auth != null;
 
       allow write: if request.auth != null
         && resource == null                                    // não sobrescreve
@@ -31,6 +35,7 @@ service firebase.storage {
         && request.resource.contentType.matches('image/jpeg|image/png|application/pdf');
     }
 
+    // Nada mais é acessível — inclusive listar o conteúdo das pastas.
     match /{allPaths=**} {
       allow read, write: if false;
     }

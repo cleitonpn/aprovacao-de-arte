@@ -102,9 +102,10 @@ Não se preocupe com as regras que ele cria — vamos substituí-las no passo 4.
 3. **Publicar**.
 
 Limitam a pasta, o tipo (JPG, PNG, PDF) e o tamanho (até 1 GB), e proíbem
-sobrescrever arquivo existente. Leitura é negada de propósito: o painel usa o
-link gerado no momento do envio, que tem token próprio, então ninguém
-consegue varrer o armazenamento procurando arte de outros clientes.
+sobrescrever arquivo existente. Listar o conteúdo das pastas continua
+proibido, então ninguém consegue varrer o armazenamento atrás de arte de
+outros clientes — é preciso saber o caminho exato, que carrega um protocolo
+aleatório.
 
 ---
 
@@ -142,6 +143,7 @@ https://cleitonpn.github.io/aprovacao-de-arte/#/admin
 |---|---|
 | `auth/unauthorized-domain` ao entrar | falta `cleitonpn.github.io` nos domínios autorizados (passo 1.5) |
 | `permission-denied` no painel | falta o documento com seu e-mail na coleção `admins` — o **ID do documento** tem que ser o e-mail inteiro |
+| "envio do **arquivo** recusado", mas o arquivo aparece no Storage | regras do Storage sem `allow read` — `getDownloadURL()` é leitura; republique a versão atual |
 | "envio do **arquivo** recusado" | regras do **Storage** não publicadas, ou desatualizadas |
 | "registro do envio recusado" | regras do **Firestore** não publicadas, ou desatualizadas |
 | `auth/operation-not-allowed` no envio | o login **Anônimo** não foi ativado no passo 1 |

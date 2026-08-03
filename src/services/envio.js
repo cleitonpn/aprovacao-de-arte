@@ -112,7 +112,15 @@ export async function enviarArte(arquivo, dados, aoProgredir) {
       )
     })
 
-    const link = await storage.getDownloadURL(alvo)
+    // O link é conveniência, não requisito. Se a leitura falhar, o arquivo já
+    // está guardado e o envio não pode ser perdido por causa disso — o
+    // registro guarda o `caminho`, que localiza o arquivo de qualquer forma.
+    let link = null
+    try {
+      link = await storage.getDownloadURL(alvo)
+    } catch (e) {
+      console.warn('arquivo enviado, mas não foi possível gerar o link de download', e)
+    }
 
     etapa = 'registro'
     const bd = firestore.getFirestore(app)
