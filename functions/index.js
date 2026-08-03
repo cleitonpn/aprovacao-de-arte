@@ -11,7 +11,7 @@
  */
 
 const { onRequest } = require('firebase-functions/v2/https')
-const { defineSecret } = require('firebase-functions/params')
+const { defineSecret, defineString } = require('firebase-functions/params')
 const { initializeApp } = require('firebase-admin/app')
 const { getFirestore, FieldValue } = require('firebase-admin/firestore')
 const { GoogleAuth, OAuth2Client } = require('google-auth-library')
@@ -19,17 +19,26 @@ const { GoogleAuth, OAuth2Client } = require('google-auth-library')
 initializeApp()
 const bd = getFirestore()
 
+// --- configuração -----------------------------------------------------------
+// Pasta destino: não é segredo (é só um identificador), então fica como
+// parâmetro simples em vez de gastar um segredo do Secret Manager.
+const DRIVE_PASTA_RAIZ = defineString('DRIVE_PASTA_RAIZ', {
+  default: '1O48_s3haaKpPX98BdBr8s_PggYUcC53H',
+  description: 'ID da pasta do Drive que recebe as artes aprovadas',
+})
+
 // --- segredos (firebase functions:secrets:set NOME) --------------------------
 const TOKEN_EVENTO = defineSecret('TOKEN_EVENTO')
-const DRIVE_PASTA_RAIZ = defineSecret('DRIVE_PASTA_RAIZ')
-// Caminho A — Drive compartilhado (recomendado, exige Google Workspace)
-const SERVICE_ACCOUNT_JSON = defineSecret('SERVICE_ACCOUNT_JSON')
-// Caminho B — conta comum do Google (funciona sem Workspace)
+// Conta comum do Google (funciona sem Workspace) — é o caminho em uso aqui.
 const OAUTH_CLIENT_ID = defineSecret('OAUTH_CLIENT_ID')
 const OAUTH_CLIENT_SECRET = defineSecret('OAUTH_CLIENT_SECRET')
 const OAUTH_REFRESH_TOKEN = defineSecret('OAUTH_REFRESH_TOKEN')
 
-const ESCOPO = 'https://www.googleapis.com/auth/drive.file'
+// Escopo do Drive. `drive.file` é o mínimo e o preferível: dá acesso apenas
+// aos arquivos que esta aplicação criou. Se a criação da subpasta da feira
+// falhar com 404 — acontece quando a pasta raiz não foi criada por ela —,
+// gere o refresh token com o escopo `drive` completo e informe aqui.
+const ESCOPO = process.env.DRIVE_ESCOPO || 'https://www.googleapis.com/auth/drive.file'
 const ORIGENS_LIBERADAS = (process.env.ORIGENS_LIBERADAS || '').split(',').filter(Boolean)
 
 const TIPOS_ACEITOS = new Set([
@@ -39,20 +48,23 @@ const TIPOS_ACEITOS = new Set([
 const TAMANHO_MAXIMO = 1024 * 1024 * 1024 // 1 GB
 
 /**
- * Duas formas de autenticar no Drive, porque a escolha depende do plano de
- * Google que a empresa tem:
+ * Duas formas de autenticar no Drive; a escolha depende do plano de Google.
  *
- * A) Service account + Drive compartilhado. É o caminho limpo, mas exige
- *    Workspace. Atenção à pegadinha clássica: service account não tem cota de
- *    armazenamento própria, então enviar para uma pasta do "Meu Drive" de
- *    alguém FALHA. Só funciona dentro de um Drive compartilhado.
+ * A) Service account + Drive compartilhado. Exige Google Workspace. Atenção à
+ *    pegadinha clássica: service account não tem cota de armazenamento
+ *    própria, então enviar para uma pasta do "Meu Drive" de alguém FALHA com
+ *    "Service Accounts do not have storage quota". Só funciona dentro de um
+ *    Drive compartilhado.
  *
- * B) Refresh token de uma conta comum. Os arquivos ficam no Drive daquela
- *    conta, e funciona com Gmail comum.
+ * B) Refresh token de uma conta comum — o caminho em uso aqui, porque a
+ *    empresa não tem Workspace. Os arquivos ficam no Drive daquela conta e a
+ *    cota consumida é a dela.
  */
 async function tokenDoDrive() {
-  const chave = SERVICE_ACCOUNT_JSON.value()
-  if (chave) {
+  // Só tratamos como service account se realmente vier um JSON — assim um
+  // segredo deixado com valor de placeholder não derruba o caminho OAuth.
+  const chave = (process.env.SERVICE_ACCOUNT_JSON || '').trim()
+  if (chave.startsWith('{')) {
     const auth = new GoogleAuth({ credentials: JSON.parse(chave), scopes: [ESCOPO] })
     const cliente = await auth.getClient()
     const { token } = await cliente.getAccessToken()
@@ -84,6 +96,48 @@ async function drive(caminho, opcoes, token) {
 
 const escapar = (s) => String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'")
 
+/**
+ * Descobre a pasta raiz utilizável, e se vira sozinha se a configurada não
+ * servir.
+ *
+ * O escopo `drive.file` — que é o mínimo, e o único que dispensa verificação
+ * do Google — dá acesso apenas aos arquivos que ESTA aplicação criou. Ou
+ * seja: uma pasta criada à mão por uma pessoa costuma responder 404 aqui,
+ * ainda que a conta seja a mesma. É a pegadinha que trava a implantação.
+ *
+ * Então: tentamos a pasta configurada; se ela não for alcançável, criamos uma
+ * pasta própria e memorizamos o ID. A partir daí tudo é app-created e funciona
+ * sem exigir escopo amplo. O ID escolhido fica em `config/drive` no Firestore
+ * e sai nos logs, para vocês localizarem e moverem/compartilharem à vontade —
+ * mover uma pasta no Drive não muda o ID.
+ */
+async function raizUtilizavel(token, configurada) {
+  const ref = bd.collection('config').doc('drive')
+  const doc = await ref.get()
+  if (doc.exists && doc.data().raizId) return doc.data().raizId
+
+  if (configurada) {
+    try {
+      await drive(`files/${configurada}?fields=id&supportsAllDrives=true`, { method: 'GET' }, token)
+      await ref.set({ raizId: configurada, origem: 'configurada', em: FieldValue.serverTimestamp() })
+      return configurada
+    } catch (e) {
+      console.warn(`pasta configurada ${configurada} inacessível com este escopo; criando uma própria`, e.message)
+    }
+  }
+
+  const nova = await drive('files?fields=id', {
+    method: 'POST',
+    body: JSON.stringify({
+      name: 'Artes aprovadas — Aprovação de Arte',
+      mimeType: 'application/vnd.google-apps.folder',
+    }),
+  }, token)
+  console.log(`pasta raiz criada pela aplicação: ${nova.id} — mova ou compartilhe à vontade, o ID não muda`)
+  await ref.set({ raizId: nova.id, origem: 'criada', em: FieldValue.serverTimestamp() })
+  return nova.id
+}
+
 /** Uma pasta por feira, criada sob demanda e memorizada no Firestore. */
 async function pastaDaFeira(token, raiz, feiraId, nomeFeira) {
   const ref = bd.collection('feiras').doc(feiraId)
@@ -103,15 +157,24 @@ async function pastaDaFeira(token, raiz, feiraId, nomeFeira) {
 
   let pastaId = achados.files?.[0]?.id
   if (!pastaId) {
-    const nova = await drive('files?supportsAllDrives=true&fields=id', {
-      method: 'POST',
-      body: JSON.stringify({
-        name: nomeFeira,
-        mimeType: 'application/vnd.google-apps.folder',
-        parents: [raiz],
-      }),
-    }, token)
-    pastaId = nova.id
+    try {
+      const nova = await drive('files?supportsAllDrives=true&fields=id', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: nomeFeira,
+          mimeType: 'application/vnd.google-apps.folder',
+          parents: [raiz],
+        }),
+      }, token)
+      pastaId = nova.id
+    } catch (e) {
+      // Organizar por feira é conveniência, não requisito. Se o escopo do
+      // token não permitir criar subpasta na raiz, a arte vai para a raiz
+      // mesmo — melhor um arquivo no lugar quase certo do que um envio
+      // perdido na cara do cliente.
+      console.warn('não foi possível criar a subpasta da feira, usando a raiz', e)
+      return raiz
+    }
   }
 
   await ref.set({ nome: nomeFeira, pastaId, atualizadaEm: FieldValue.serverTimestamp() }, { merge: true })
@@ -168,8 +231,7 @@ function validarPedido(corpo) {
 exports.envio = onRequest(
   {
     region: 'southamerica-east1',
-    secrets: [TOKEN_EVENTO, DRIVE_PASTA_RAIZ, SERVICE_ACCOUNT_JSON,
-      OAUTH_CLIENT_ID, OAUTH_CLIENT_SECRET, OAUTH_REFRESH_TOKEN],
+    secrets: [TOKEN_EVENTO, OAUTH_CLIENT_ID, OAUTH_CLIENT_SECRET, OAUTH_REFRESH_TOKEN],
     memory: '256MiB',
     timeoutSeconds: 60,
     maxInstances: 10,
@@ -206,7 +268,8 @@ async function abrirSessao(req, res) {
   const protocolo = protocoloNovo()
 
   const token = await tokenDoDrive()
-  const pastaId = await pastaDaFeira(token, DRIVE_PASTA_RAIZ.value(), feiraId, cadastro.feira.trim())
+  const raiz = await raizUtilizavel(token, DRIVE_PASTA_RAIZ.value())
+  const pastaId = await pastaDaFeira(token, raiz, feiraId, cadastro.feira.trim())
 
   const extensao = (arquivo.nome.match(/\.[a-z0-9]+$/i) || [''])[0].toLowerCase()
   const nomeArquivo = [

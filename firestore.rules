@@ -30,6 +30,12 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Estado interno da função (qual pasta do Drive está em uso).
+    match /config/{doc} {
+      allow read: if ehAdmin();
+      allow write: if false;
+    }
+
     // Allowlist do painel. Um admin enxerga a lista; incluir ou remover
     // alguém é feito pelo console do Firebase, de propósito — assim ninguém
     // se autopromove pela aplicação.
