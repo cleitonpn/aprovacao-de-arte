@@ -55,6 +55,7 @@ export function mensagemParaDesigner(resultado) {
 /** Laudo estruturado — é o que a fase 2 vai gravar no Firebase. */
 export function laudoJson(resultado) {
   const { peca, perfil, achados, veredicto, medidas, escalaFator } = resultado
+  const espec = especificacao(peca, perfil, resultado.politica)
   return {
     versao: 1,
     analisadoEm: medidas.analisadoEm,
@@ -69,9 +70,11 @@ export function laudoJson(resultado) {
     politica: resultado.politica ?? null,
     perfil: {
       id: perfil.id, nome: perfil.nome, dpiMin: perfil.dpiMin, dpiIdeal: perfil.dpiIdeal,
-      sangriaMm: spec.sangriaMm, margemMm: perfil.margemMm, distanciaM: perfil.distanciaM,
+      sangriaMm: perfil.sangriaMm, margemMm: perfil.margemMm, distanciaM: perfil.distanciaM,
     },
-    especificacao: especificacao(peca, perfil, resultado.politica),
+    // Os valores do perfil acima são os brutos; os que valeram de fato na
+    // análise — já com os pisos da empresa aplicados — estão aqui.
+    especificacao: espec,
     medidas: {
       larguraPx: medidas.larguraPx ?? null,
       alturaPx: medidas.alturaPx ?? null,

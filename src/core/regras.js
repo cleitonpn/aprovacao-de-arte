@@ -64,6 +64,9 @@ export const ROTULO_VEREDICTO = {
 const fmt = new Intl.NumberFormat('pt-BR')
 const px = (n) => fmt.format(Math.round(n))
 const num = (n, casas = 1) => fmt.format(Number(n.toFixed(casas)))
+// Proporção sempre com duas casas: "2" no lugar de "2,00" fica com cara de
+// número inteiro e confunde num documento que vai para o cliente.
+const prop = (n) => n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
 /** Pixels necessários para uma dada densidade sobre um tamanho em cm. */
 export function pxNecessarios(cm, dpi) {
@@ -212,7 +215,7 @@ export function avaliar(ctx) {
         id: 'proporcao',
         nivel,
         titulo: `Proporção diferente da peça — sobra ${num(cortePct)}% da arte`,
-        detalhe: `A peça é ${num(peca.larguraCm)} × ${num(peca.alturaCm)} cm (proporção ${num(arPeca, 2)}) e a arte está em ${num(arArte, 2)}. Encaixando sem distorcer, cerca de ${num(cortePct)}% será cortado ${eixo}.`,
+        detalhe: `A peça é ${num(peca.larguraCm)} × ${num(peca.alturaCm)} cm — proporção ${prop(arPeca)}, ou ${prop(arComSangria)} com a sangria. A arte está em ${prop(arArte)}. Encaixando sem distorcer, cerca de ${num(cortePct)}% será cortado ${eixo}.`,
         acao: `Remonte a arte na proporção da peça, ou confirme por escrito que o corte ${eixo} é aceitável.`,
         dados: { arPeca, arArte, cortePct },
       })

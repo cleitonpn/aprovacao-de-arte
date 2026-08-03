@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ROTULO_VEREDICTO } from '../core/regras.js'
+import { ROTULO_VEREDICTO, especificacao } from '../core/regras.js'
 import { mensagemParaDesigner, laudoJson } from '../core/mensagem.js'
 import Simulador from './Simulador.jsx'
 import Envio from './Envio.jsx'
@@ -42,6 +42,8 @@ export default function Resultado({ resultado, modoTecnico, onAceitarRisco, risc
 
   return (
     <section className={`cartao resultado ${veredicto}`}>
+      <LaudoCabecalho resultado={resultado} cadastro={cadastro} />
+
       <header className="veredicto">
         <div className="selo" aria-hidden>{veredicto === 'aprovado' ? '✓' : veredicto === 'ressalva' ? '!' : '×'}</div>
         <div>
@@ -136,6 +138,43 @@ export default function Resultado({ resultado, modoTecnico, onAceitarRisco, risc
 
       {modoTecnico && <PainelTecnico resultado={resultado} />}
     </section>
+  )
+}
+
+/**
+ * Cabeçalho que só aparece no papel.
+ *
+ * O laudo impresso circula por e-mail e chega longe da tela que o gerou —
+ * então ele precisa dizer sozinho de quem é a arte, de que peça se trata e
+ * quando foi analisada. Na tela isso seria repetição do que já está à vista.
+ */
+function LaudoCabecalho({ resultado, cadastro }) {
+  const { peca, perfil, medidas, escalaFator } = resultado
+  const spec = especificacao(peca, perfil, resultado.politica)
+  const linha = (rotulo, valor) =>
+    valor ? <div key={rotulo}><dt>{rotulo}</dt><dd>{valor}</dd></div> : null
+
+  return (
+    <header className="laudo-cabecalho so-impressao">
+      <h1>Laudo de análise de arte</h1>
+      <p className="sub">
+        Gerado em {new Date(medidas.analisadoEm || Date.now()).toLocaleString('pt-BR')}
+        {medidas.arquivo?.hash && ` · SHA-256 ${medidas.arquivo.hash.slice(0, 16)}…`}
+      </p>
+      <dl>
+        {linha('Expositor', cadastro?.nome)}
+        {linha('Stand', cadastro?.stand)}
+        {linha('Feira', cadastro?.feira)}
+        {linha('Localização', cadastro?.localizacao)}
+        {linha('E-mail', cadastro?.email)}
+        {linha('Peça', perfil?.nome)}
+        {linha('Tamanho final', `${fmt(peca.larguraCm)} × ${fmt(peca.alturaCm)} cm`)}
+        {linha('Com sangria', `${fmt(spec.comSangria.larguraCm)} × ${fmt(spec.comSangria.alturaCm)} cm (${spec.sangriaMm} mm por lado)`)}
+        {escalaFator > 1 ? linha('Escala de trabalho', `1:${escalaFator}`) : null}
+        {linha('Arquivo', medidas.arquivo?.nome)}
+        {linha('Tamanho do arquivo', medidas.arquivo?.tamanhoRotulo)}
+      </dl>
+    </header>
   )
 }
 
