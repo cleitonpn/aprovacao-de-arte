@@ -9,7 +9,7 @@ import {
 import { usarAnalise } from '../store/usarAnalise.js'
 import Upload from './Upload.jsx'
 import Resultado from './Resultado.jsx'
-import Gabarito from './Gabarito.jsx'
+import Gabarito, { BotaoGabarito } from './Gabarito.jsx'
 import Avulsos from './Avulsos.jsx'
 
 // A tela do cliente quando o projeto está cadastrado.
@@ -128,30 +128,36 @@ export default function Projeto({ token }) {
 
   return (
     <>
-      <div className="cartao projeto-cabecalho">
-        <h2>{projeto.stand}</h2>
-        <p className="ajuda">
-          {projeto.feira}
-          {projeto.localizacao && ` · ${projeto.localizacao}`}
-        </p>
-        <div className="progresso-peças">
-          <div className="barra">
-            <div style={{ width: `${resumo.total ? (resumo.recebidas / resumo.total) * 100 : 0}%` }} />
-          </div>
-          <p className="ajuda">
-            {resumo.completo
-              ? '✓ Todas as artes deste stand já foram enviadas.'
-              : `${resumo.recebidas} de ${resumo.total} artes enviadas.`}
-            {resumo.emProducao > 0 && ` ${resumo.emProducao} já em produção.`}
+      <section className="capa">
+        <div className="capa-texto">
+          <span className="capa-etiqueta">{projeto.feira}</span>
+          <h2>{projeto.stand}</h2>
+          {projeto.localizacao && <p className="capa-local">{projeto.localizacao}</p>}
+          <p className="capa-frase">
+            As medidas de cada peça já vêm do projeto do seu stand — você não
+            precisa informar tamanho nenhum. A conferência acontece no seu
+            próprio navegador, e o arquivo só sai do seu computador quando você
+            clicar em enviar.
           </p>
+          {projeto.linkDrive && (
+            <a className="btn btn-drive" href={projeto.linkDrive} target="_blank" rel="noreferrer">
+              Ver o projeto do stand
+            </a>
+          )}
         </div>
-        <p className="nota">
-          As medidas de cada peça já vêm do projeto do seu stand — você não
-          precisa informar tamanho nenhum. A conferência acontece no seu próprio
-          navegador; o arquivo só sai do seu computador quando você clicar em
-          enviar.
-        </p>
-      </div>
+
+        <div className="capa-medidor">
+          <Anel feito={resumo.recebidas} total={resumo.total} />
+          <p className="capa-medidor-texto">
+            {resumo.completo
+              ? 'Todas as artes enviadas'
+              : `${resumo.recebidas} de ${resumo.total} artes enviadas`}
+          </p>
+          {resumo.emProducao > 0 && (
+            <p className="dica-campo">{resumo.emProducao} já em produção</p>
+          )}
+        </div>
+      </section>
 
       <AvisoPrazo prazo={resumo.prazo} />
 
@@ -168,7 +174,10 @@ export default function Projeto({ token }) {
       ))}
 
       <div className="cartao">
-        <h3>Peças deste stand</h3>
+        <div className="titulo-secao">
+          <h3>Peças deste stand</h3>
+          <span className="dica-campo">{resumo.total} {resumo.total === 1 ? 'peça' : 'peças'}</span>
+        </div>
         <ul className="pecas-cartoes">
           {resumo.pecas.map((s) => (
             <CartaoPeca
@@ -187,6 +196,33 @@ export default function Projeto({ token }) {
 
       {projeto.aceitaAvulsos !== false && <Avulsos projeto={projeto} cadastro={cadastro} />}
     </>
+  )
+}
+
+/**
+ * Anel de progresso.
+ *
+ * Substitui a barra reta por um motivo simples: o cliente abre esta tela para
+ * saber "quanto falta", e o anel responde isso de relance, sem ler. A diretoria
+ * achou a tela técnica demais — o número continua lá, mas agora vem embrulhado
+ * em algo que se entende antes de ler.
+ */
+function Anel({ feito, total }) {
+  const fracao = total ? feito / total : 0
+  const raio = 42
+  const volta = 2 * Math.PI * raio
+  return (
+    <svg className="anel" viewBox="0 0 100 100" role="img" aria-label={`${feito} de ${total} artes enviadas`}>
+      <circle className="anel-trilho" cx="50" cy="50" r={raio} />
+      <circle
+        className={`anel-marca ${fracao >= 1 ? 'completo' : ''}`}
+        cx="50" cy="50" r={raio}
+        strokeDasharray={`${volta * fracao} ${volta}`}
+      />
+      <text className="anel-numero" x="50" y="50" dominantBaseline="central" textAnchor="middle">
+        {total ? Math.round(fracao * 100) : 0}%
+      </text>
+    </svg>
   )
 }
 
@@ -408,6 +444,19 @@ function CartaoPeca({ situacao, perfis, politica, projeto, onEscolher, onAtualiz
       </div>
 
       <div className="peca-cartao-acao">
+        {/*
+          O gabarito fica AQUI, ao lado de enviar, e não escondido dentro da
+          tela de envio. O designer precisa dele ANTES de desenhar — obrigá-lo
+          a clicar em "enviar arte" para achar o gabarito é pedir que ele entre
+          na fila para descobrir a medida.
+        */}
+        <BotaoGabarito
+          peca={peca}
+          perfil={perfil}
+          escalaFator={peca.escalaFator || 1}
+          politica={politica}
+          className="btn btn-ghost"
+        />
         {situacao.podeEnviar && (
           <button className={`btn ${entrega ? 'btn-ghost' : ''}`} onClick={onEscolher}>
             {status === 'reprovada' ? 'Enviar arte corrigida' : entrega ? 'Enviar versão nova' : 'Enviar arte'}

@@ -89,6 +89,12 @@ const SINONIMOS = {
   medida: ['medida', 'medidas', 'tamanho', 'dimensao', 'dimensoes'],
   escala: ['escala'],
   obs: ['obs', 'observacao', 'observacoes', 'nota'],
+  // Pasta do projeto no Drive — é do STAND, não da peça.
+  linkDrive: ['link drive', 'drive', 'link do drive', 'link da pasta',
+    'pasta do projeto', 'link projeto', 'link do projeto', 'projeto'],
+  // Gabarito próprio — é da PEÇA. Pela planilha só entra como link: arquivo
+  // se envia na tela, um de cada vez.
+  gabarito: ['gabarito', 'link gabarito', 'link do gabarito', 'gabarito link'],
 }
 
 // "Arte A", "arte_1", "Peça 2 tipo", "arte B medida"
@@ -161,6 +167,34 @@ export function interpretarPeca(texto, rotuloPadrao = '') {
 // ------------------------------------------------------------------ importar
 
 const MEDIDA_SUSPEITA_CM = 10
+
+/**
+ * Endereço utilizável, ou string vazia.
+ *
+ * Duas coisas acontecem aqui, e as duas são de defesa:
+ *
+ * - `drive.google.com/...` sem o `https://` vira link RELATIVO no navegador,
+ *   e o botão levaria o cliente para dentro da nossa própria página em vez do
+ *   Drive. Como planilha quase sempre traz o endereço sem protocolo,
+ *   completamos em vez de recusar;
+ * - "sim", "ver com o projetista" e afins viram nada. Um botão que abre página
+ *   em branco é pior que botão nenhum: o cliente só descobre no momento em que
+ *   mais precisa do arquivo.
+ */
+export function paraUrl(texto) {
+  const bruto = String(texto || '').trim()
+  if (!bruto) return ''
+  if (/^https?:\/\//i.test(bruto)) return bruto
+  // Precisa parecer domínio: letras/números, um ponto, e nenhum espaço.
+  if (/^[a-z0-9-]+(\.[a-z0-9-]+)+(\/\S*)?$/i.test(bruto)) return `https://${bruto}`
+  return ''
+}
+
+/** Gabarito vindo da planilha — sempre como link; arquivo se envia na tela. */
+function gabaritoDe(texto) {
+  const url = paraUrl(texto)
+  return url ? { tipo: 'link', url, nome: 'Gabarito do projeto' } : null
+}
 
 function conferirMedida(peca, linha, rotulo, avisos) {
   if (peca.larguraCm < MEDIDA_SUSPEITA_CM || peca.alturaCm < MEDIDA_SUSPEITA_CM) {
@@ -238,7 +272,14 @@ export function importarProjetos(texto, opcoes = {}) {
     const id = `${chave(feira)}|${chave(stand)}`
     if (!grupos.has(id)) {
       grupos.set(id, {
-        projeto: projetoNovo({ feira, expositor, email, stand, localizacao: celula(linha, simples.localizacao) }),
+        projeto: projetoNovo({
+          feira,
+          expositor,
+          email,
+          stand,
+          localizacao: celula(linha, simples.localizacao),
+          linkDrive: paraUrl(celula(linha, simples.linkDrive)),
+        }),
         linhas: [numeroLinha],
       })
     }
@@ -249,6 +290,7 @@ export function importarProjetos(texto, opcoes = {}) {
     // preencher o e-mail na primeira linha.
     if (!p.email && email) p.email = email
     if (!p.localizacao) p.localizacao = celula(linha, simples.localizacao)
+    if (!p.linkDrive) p.linkDrive = paraUrl(celula(linha, simples.linkDrive))
     if (!p.expositor) p.expositor = expositor
     if (email && p.email && email !== p.email) {
       avisos.push({
@@ -332,6 +374,7 @@ function pecasDaLinhaSimples(linha, simples, celula, numeroLinha, erros) {
     alturaCm,
     escalaFator: interpretarEscala(celula(linha, simples.escala)),
     obs: celula(linha, simples.obs),
+    gabarito: gabaritoDe(celula(linha, simples.gabarito)),
   }]
 }
 
@@ -382,6 +425,7 @@ function pecasDaLinhaLarga(linha, largas, celula, numeroLinha, erros) {
       alturaCm,
       escalaFator: interpretarEscala(celula(linha, cols.escala)),
       obs: celula(linha, cols.obs),
+      gabarito: gabaritoDe(celula(linha, cols.gabarito)),
     })
   }
   return pecas
@@ -389,8 +433,8 @@ function pecasDaLinhaLarga(linha, largas, celula, numeroLinha, erros) {
 
 /** Planilha de exemplo, para o time baixar e preencher. */
 export const MODELO_CSV = [
-  'feira;cliente;email;stand;localizacao;peca;tipo;largura;altura;escala',
-  'Feira Exemplo 2026;Buddy Nutrition;contato@buddy.com.br;Buddy Nutrition;Rua 3, Pavilhão A;Lona de fundo;lona;275;275;1:1',
-  'Feira Exemplo 2026;Buddy Nutrition;contato@buddy.com.br;Buddy Nutrition;Rua 3, Pavilhão A;Adesivo do balcão;adesivo;100;100;1:1',
-  'Feira Exemplo 2026;Buddy Nutrition;contato@buddy.com.br;Buddy Nutrition;Rua 3, Pavilhão A;Testeira;testeira;150;50;1:1',
+  'feira;cliente;email;stand;localizacao;link drive;peca;tipo;largura;altura;escala;gabarito',
+  'Feira Exemplo 2026;Buddy Nutrition;contato@buddy.com.br;Buddy Nutrition;Rua 3, Pavilhão A;https://drive.google.com/drive/folders/EXEMPLO;Lona de fundo;lona;275;275;1:1;',
+  'Feira Exemplo 2026;Buddy Nutrition;contato@buddy.com.br;Buddy Nutrition;Rua 3, Pavilhão A;https://drive.google.com/drive/folders/EXEMPLO;Adesivo do balcão;adesivo;100;100;1:1;',
+  'Feira Exemplo 2026;Buddy Nutrition;contato@buddy.com.br;Buddy Nutrition;Rua 3, Pavilhão A;https://drive.google.com/drive/folders/EXEMPLO;Testeira com recorte;testeira;150;50;1:1;https://drive.google.com/file/d/EXEMPLO/view',
 ].join('\r\n')

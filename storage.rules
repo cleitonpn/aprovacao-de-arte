@@ -75,6 +75,24 @@ service firebase.storage {
         && request.resource.contentType.matches('image/jpeg|image/png|image/webp|application/pdf');
     }
 
+    // Gabarito próprio da peça, publicado pelo time.
+    //
+    // Mesma inversão da pasta de provas: quem grava é o analista, quem lê é o
+    // cliente. O gabarito gerado pela ferramenta resolve a parede retangular;
+    // recorte, curva e balcão em L têm desenho próprio, e é ele que precisa
+    // chegar ao designer do cliente.
+    match /gabaritos/{feiraId}/{arquivo} {
+      allow read: if request.auth != null;
+
+      allow write: if request.auth != null
+        && request.auth.token.email_verified == true
+        && firestore.exists(/databases/(default)/documents/admins/$(request.auth.token.email))
+        && request.resource != null
+        && request.resource.size > 0
+        && request.resource.size < 30 * 1024 * 1024              // 30 MB
+        && request.resource.contentType.matches('image/jpeg|image/png|application/pdf');
+    }
+
     // Nada mais é acessível — inclusive listar o conteúdo das pastas.
     match /{allPaths=**} {
       allow read, write: if false;

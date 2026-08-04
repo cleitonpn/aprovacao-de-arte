@@ -129,6 +129,23 @@ export function pecaNova(parcial = {}) {
     alturaCm: Number(parcial.alturaCm) || 0,
     escalaFator: Number(parcial.escalaFator) || 1,
     obs: parcial.obs || '',
+    // Gabarito próprio, quando existir. O gerado automaticamente resolve a
+    // parede retangular, que é a maioria — mas não resolve recorte, curva,
+    // balcão em L nem testeira com sanca. Nesses casos quem tem o desenho
+    // certo é o projetista, e o desenho dele tem que vencer o nosso.
+    gabarito: normalizarGabarito(parcial.gabarito),
+  }
+}
+
+/** @returns {{tipo:'arquivo'|'link', url:string, nome:string}|null} */
+export function normalizarGabarito(g) {
+  if (!g) return null
+  const url = String(g.url || '').trim()
+  if (!url) return null
+  return {
+    tipo: g.tipo === 'arquivo' ? 'arquivo' : 'link',
+    url: url.slice(0, 800),
+    nome: String(g.nome || '').trim().slice(0, 160) || 'Gabarito do projeto',
   }
 }
 
@@ -140,6 +157,9 @@ export function projetoNovo(parcial = {}) {
     email: parcial.email || '',
     stand: parcial.stand || '',
     localizacao: parcial.localizacao || '',
+    // Pasta do projeto no Drive: o cliente consulta planta, memorial e
+    // referências sem precisar pedir por e-mail.
+    linkDrive: parcial.linkDrive || '',
     pecas: (parcial.pecas || []).map(pecaNova),
     aceitaAvulsos: parcial.aceitaAvulsos !== false,
   }
@@ -180,6 +200,7 @@ export function normalizarProjeto(p) {
     email: texto(p.email, 160).toLowerCase(),
     stand: texto(p.stand, 160),
     localizacao: texto(p.localizacao, 160),
+    linkDrive: texto(p.linkDrive, 800),
     aceitaAvulsos: p.aceitaAvulsos !== false,
     pecas: (p.pecas || []).map((peca) => ({
       id: peca.id || idDePeca(),
@@ -189,6 +210,7 @@ export function normalizarProjeto(p) {
       alturaCm: Math.round(Number(peca.alturaCm) * 100) / 100,
       escalaFator: Number(peca.escalaFator) > 1 ? Number(peca.escalaFator) : 1,
       obs: texto(peca.obs, 240),
+      gabarito: normalizarGabarito(peca.gabarito),
     })),
   }
 }

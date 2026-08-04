@@ -284,7 +284,13 @@ export async function enviarAvulso(arquivo, dados, aoProgredir) {
   }
 }
 
-// -------------------------------------------------------- prova de aprovação
+// ------------------------------------------ arquivos publicados pelo TIME
+//
+// Prova de aprovação e gabarito têm a mesma natureza: quem grava é o analista,
+// quem lê é o cliente. É o inverso das outras pastas, onde o cliente escreve —
+// e por isso vivem em prefixos próprios, com regra própria no Storage. Se
+// fossem para o mesmo lugar da arte, o cliente poderia subir a própria prova
+// de aprovação e o documento perderia todo o valor.
 
 const TIPO_PROVA_POR_EXTENSAO = {
   png: 'image/png',
@@ -295,50 +301,68 @@ const TIPO_PROVA_POR_EXTENSAO = {
 }
 
 export const EXTENSOES_PROVA = Object.keys(TIPO_PROVA_POR_EXTENSAO)
+export const EXTENSOES_GABARITO = ['pdf', 'png', 'jpg', 'jpeg']
 
-/**
- * Sobe a prova de aprovação — o print/mockup que o analista manda ao cliente.
- *
- * Vai numa pasta própria (`provas/`), gravável só por quem consta em `admins`.
- * As outras duas pastas são graváveis por qualquer sessão anônima, porque é o
- * cliente que escreve nelas; esta é o contrário, e misturá-las deixaria o
- * cliente subir a própria prova de aprovação.
- *
- * Usa a sessão que já existe (a do analista logado). Não cria sessão anônima:
- * se não houver ninguém autenticado, é erro de verdade e precisa aparecer.
- */
-export async function enviarProva(arquivo, { feiraId, stand }, aoProgredir) {
+async function publicarArquivoDoTime(arquivo, { pasta, feiraId, nome, extensoes, limiteMb }, aoProgredir) {
   if (!envioConfigurado()) throw new Error('O envio não está configurado nesta instalação.')
 
   const ext = (arquivo.name.match(/\.([a-z0-9]+)$/i)?.[1] || '').toLowerCase()
-  const tipo = TIPO_PROVA_POR_EXTENSAO[ext]
+  const tipo = extensoes.includes(ext) ? TIPO_PROVA_POR_EXTENSAO[ext] : null
   if (!tipo) {
-    throw new Error(`Prova em .${ext || '(sem extensão)'} não é aceita. Envie ${EXTENSOES_PROVA.map((e) => `.${e}`).join(', ')}.`)
+    throw new Error(`Arquivo .${ext || '(sem extensão)'} não é aceito aqui. Envie ${extensoes.map((e) => `.${e}`).join(', ')}.`)
   }
-  const limite = ENVIO.tamanhoMaximoProvaMb * 1024 * 1024
-  if (arquivo.size > limite) {
-    throw new Error(`A prova tem ${(arquivo.size / 1048576).toFixed(0)} MB e o limite é ${ENVIO.tamanhoMaximoProvaMb} MB.`)
+  if (arquivo.size > limiteMb * 1024 * 1024) {
+    throw new Error(`O arquivo tem ${(arquivo.size / 1048576).toFixed(0)} MB e o limite é ${limiteMb} MB.`)
   }
 
   const fb = await carregarFirebase()
   const usuario = fb.auth.getAuth(fb.app).currentUser
-  if (!usuario || usuario.isAnonymous) throw new Error('Sua sessão expirou. Entre novamente para enviar a prova.')
+  if (!usuario || usuario.isAnonymous) throw new Error('Sua sessão expirou. Entre novamente para enviar este arquivo.')
 
-  const id = `pv_${protocoloNovo().slice(3).replace(/-/g, '').toLowerCase()}`
-  const caminho = `provas/${feiraId}/${paraNomeArquivo(stand)}__${id}.${ext}`
+  const id = `${pasta.slice(0, 2)}_${protocoloNovo().slice(3).replace(/-/g, '').toLowerCase()}`
+  const caminho = `${pasta}/${feiraId}/${paraNomeArquivo(nome)}__${id}.${ext}`
 
   aoProgredir?.(0)
   try {
     const alvo = fb.storage.ref(fb.storage.getStorage(fb.app), caminho)
     const tarefa = fb.storage.uploadBytesResumable(alvo, arquivo, { contentType: tipo })
     await new Promise((resolve, reject) => {
-      tarefa.on('state_changed', (s) => aoProgredir?.(s.totalBytes ? s.bytesTransferred / s.totalBytes : 0), reject, resolve)
+      tarefa.on('state_changed', (st) => aoProgredir?.(st.totalBytes ? st.bytesTransferred / st.totalBytes : 0), reject, resolve)
     })
     const link = await fb.storage.getDownloadURL(alvo)
     aoProgredir?.(1)
     return { id, arquivo: { nome: arquivo.name, tamanho: arquivo.size, tipo, caminho, link } }
   } catch (e) {
-    console.error('falha ao enviar a prova', e)
+    console.error(`falha ao publicar arquivo em ${pasta}`, e)
     throw new Error(traduzirErro(e, 'arquivo'))
   }
+}
+
+/** Prova de aprovação: o print/mockup que o analista manda ao cliente. */
+export function enviarProva(arquivo, { feiraId, stand }, aoProgredir) {
+  return publicarArquivoDoTime(arquivo, {
+    pasta: 'provas',
+    feiraId,
+    nome: stand,
+    extensoes: EXTENSOES_PROVA,
+    limiteMb: ENVIO.tamanhoMaximoProvaMb,
+  }, aoProgredir)
+}
+
+/**
+ * Gabarito próprio de uma peça.
+ *
+ * O gerado pela ferramenta resolve a parede retangular, que é a maioria — mas
+ * não resolve recorte, curva, balcão em L nem testeira com sanca. Nesses casos
+ * quem tem o desenho certo é o projetista, e o desenho dele precisa vencer o
+ * nosso.
+ */
+export function enviarGabarito(arquivo, { feiraId, stand, peca }, aoProgredir) {
+  return publicarArquivoDoTime(arquivo, {
+    pasta: 'gabaritos',
+    feiraId,
+    nome: `${stand}-${peca || 'peca'}`,
+    extensoes: EXTENSOES_GABARITO,
+    limiteMb: ENVIO.tamanhoMaximoProvaMb,
+  }, aoProgredir)
 }

@@ -40,17 +40,40 @@ test('importa uma linha por peça e agrupa por stand', () => {
   assert.equal(p.email, 'contato@buddy.com.br')
   assert.equal(p.stand, 'Buddy Nutrition')
   assert.equal(p.localizacao, 'Rua 3, Pavilhão A')
+  assert.equal(p.linkDrive, 'https://drive.google.com/drive/folders/EXEMPLO')
   assert.equal(p.pecas.length, 3)
   assert.deepEqual(
     p.pecas.map((x) => [x.rotulo, x.perfilId, x.larguraCm, x.alturaCm]),
     [
       ['Lona de fundo', 'lona-parede', 275, 275],
       ['Adesivo do balcão', 'adesivo-balcao', 100, 100],
-      ['Testeira', 'testeira', 150, 50],
+      ['Testeira com recorte', 'testeira', 150, 50],
     ],
   )
+  // A peça de recorte é a que justifica o gabarito próprio: um retângulo
+  // gerado não descreve o corte dela.
+  assert.equal(p.pecas[0].gabarito, null)
+  assert.equal(p.pecas[2].gabarito.tipo, 'link')
+  assert.match(p.pecas[2].gabarito.url, /^https:\/\//)
   // token é a credencial do link: precisa ser aleatório e não trivial
   assert.match(p.token, /^[a-z2-9]{12}$/)
+})
+
+test('o gabarito da planilha só entra se for endereço de verdade', () => {
+  const csv = [
+    'feira;cliente;email;stand;link drive;peca;medida;gabarito',
+    'Expo;Buddy;a@b.com;Buddy;drive.com/sem-protocolo;Lona;275x275;sim, falar com o projetista',
+    'Expo;Outro;c@d.com;Outro;https://drive.google.com/x;Lona;275x275;https://exemplo/gab.pdf',
+  ].join('\n')
+  const { projetos, erros } = importarProjetos(csv)
+  assert.deepEqual(erros, [])
+
+  // "sim, falar com o projetista" viraria um botão que abre nada — e o cliente
+  // descobriria isso no momento em que mais precisa do desenho.
+  assert.equal(projetos[0].pecas[0].gabarito, null)
+  assert.equal(projetos[0].linkDrive, 'https://drive.com/sem-protocolo',
+    'endereço sem protocolo é completado — senão vira link relativo e cai dentro da nossa própria página')
+  assert.equal(projetos[1].pecas[0].gabarito.url, 'https://exemplo/gab.pdf')
 })
 
 test('importa uma linha por stand, com colunas Arte A / Arte B / Arte C', () => {

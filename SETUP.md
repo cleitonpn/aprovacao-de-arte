@@ -61,6 +61,7 @@ Duas pastas com regras diferentes, de propósito:
 | `envios/` | arte de peça: JPG, PNG, PDF | o cliente | 1 GB |
 | `avulsos/` | apoio: SVG, EPS/AI, ZIP + os acima | o cliente | 200 MB |
 | `provas/` | prova de aprovação: JPG, PNG, WEBP, PDF | **só o time** | 30 MB |
+| `gabaritos/` | gabarito próprio da peça: PDF, PNG, JPG | **só o time** | 30 MB |
 
 Misturar as pastas obrigaria a afrouxar a regra da arte, e aí um `.zip`
 passaria a ser aceito como peça para impressão. Em `provas/` o sentido se
@@ -108,9 +109,9 @@ planilhas de produção têm na prática:
 **Uma linha por peça** (recomendado):
 
 ```
-feira;cliente;email;stand;localizacao;peca;tipo;largura;altura;escala
-Expo Sul 2026;Buddy Nutrition;ana@buddy.com;Buddy;Rua 3;Lona de fundo;lona;275;275;1:1
-Expo Sul 2026;Buddy Nutrition;ana@buddy.com;Buddy;Rua 3;Adesivo do balcão;adesivo;100;100;1:1
+feira;cliente;email;stand;localizacao;link drive;peca;tipo;largura;altura;escala;gabarito
+Expo Sul 2026;Buddy;ana@buddy.com;Buddy;Rua 3;https://drive.google.com/…;Lona de fundo;lona;275;275;1:1;
+Expo Sul 2026;Buddy;ana@buddy.com;Buddy;Rua 3;https://drive.google.com/…;Testeira com recorte;testeira;150;50;1:1;https://…/gabarito.pdf
 ```
 
 **Uma linha por stand**, com uma coluna por arte:
@@ -130,7 +131,15 @@ Detalhes que a importação resolve sozinha:
 - reconhece o ponto e vírgula do Excel em português **e** a acentuação de
   arquivo salvo em Windows-1252;
 - **não interrompe por uma linha torta**: importa o que dá e lista o que
-  ficou de fora, com o número da linha.
+  ficou de fora, com o número da linha;
+- completa o `https://` que falta num link — sem isso ele viraria endereço
+  relativo e o botão levaria o cliente para dentro da nossa própria página;
+- ignora gabarito que não seja endereço ("sim", "ver com o projetista"): botão
+  que abre nada é pior que botão nenhum.
+
+**Duas colunas novas:** `link drive` (a pasta do projeto, por stand — vira botão
+em destaque na tela do cliente) e `gabarito` (por peça, só link; arquivo se
+envia na tela de cadastro).
 
 Uma coisa ela **não** faz de propósito: adivinhar unidade. `10 x 10` tanto pode
 ser adesivo de 10 cm quanto lona de 10 m — chutar recriaria o erro silencioso

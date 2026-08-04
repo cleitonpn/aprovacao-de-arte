@@ -8,6 +8,8 @@ import { resumoDoProjeto } from '../core/fluxo.js'
 import {
   salvarProjeto, salvarProjetos, listarProjetos, apagarProjeto, salvarFeira,
 } from '../services/projetos.js'
+import { enviarGabarito, EXTENSOES_GABARITO } from '../services/envio.js'
+import { idDeFeira } from '../data/cadastro.js'
 import { traduzirErroAuth } from '../services/sessao.js'
 import { usarFeiras, baixarTexto } from './Admin.jsx'
 import PainelProjeto from './PainelProjeto.jsx'
@@ -189,7 +191,7 @@ export default function Projetos({ sessao }) {
     return <Importacao sessao={sessao} onPronto={async () => { setPainel(null); await recarregar() }} onCancelar={() => setPainel(null)} />
   }
   if (painel?.projeto) {
-    return <FormularioProjeto inicial={painel.projeto} onSalvar={guardar} onCancelar={() => setPainel(null)} />
+    return <FormularioProjeto sessao={sessao} inicial={painel.projeto} onSalvar={guardar} onCancelar={() => setPainel(null)} />
   }
   if (painel?.detalhe) {
     const bruto = projetos.find((p) => p.token === painel.detalhe)
@@ -704,7 +706,82 @@ function Importacao({ sessao, onPronto, onCancelar }) {
 
 // -------------------------------------------------------- cadastro manual
 
-function FormularioProjeto({ inicial, onSalvar, onCancelar }) {
+/**
+ * Gabarito próprio da peça: arquivo ou link.
+ *
+ * Os dois existem porque a operação tem os dois casos. Às vezes o desenho está
+ * num PDF que o projetista acabou de exportar — sobe o arquivo. Às vezes ele
+ * já vive numa pasta do Drive versionada, e copiar para cá criaria uma segunda
+ * cópia que envelhece sozinha — cola o link.
+ */
+function EditorGabarito({ sessao, feira, stand, peca, onMudar }) {
+  const [enviando, setEnviando] = useState(null)
+  const [erro, setErro] = useState(null)
+  const entrada = useRef(null)
+  const gabarito = peca.gabarito
+
+  const subir = async (arquivo) => {
+    if (!arquivo) return
+    setErro(null)
+    setEnviando(0)
+    try {
+      const r = await enviarGabarito(
+        arquivo,
+        { feiraId: idDeFeira(feira), stand: stand || 'stand', peca: peca.rotulo },
+        setEnviando,
+      )
+      onMudar({ tipo: 'arquivo', url: r.arquivo.link, nome: r.arquivo.nome })
+    } catch (e) {
+      setErro(e?.message || 'Não foi possível enviar o gabarito.')
+    } finally {
+      setEnviando(null)
+      if (entrada.current) entrada.current.value = ''
+    }
+  }
+
+  return (
+    <div className="gabarito-editor">
+      <div className="linha">
+        <label className="campo cresce">
+          <span>Gabarito próprio <em className="opcional">(opcional — sem isto, a ferramenta gera um)</em></span>
+          <input
+            type="url"
+            value={gabarito?.tipo === 'link' ? gabarito.url : ''}
+            disabled={gabarito?.tipo === 'arquivo'}
+            placeholder={gabarito?.tipo === 'arquivo' ? gabarito.nome : 'cole um link, ou envie um arquivo →'}
+            onChange={(e) => onMudar(e.target.value.trim() ? { tipo: 'link', url: e.target.value, nome: 'Gabarito do projeto' } : null)}
+          />
+        </label>
+        <div className="acoes">
+          <input
+            ref={entrada} type="file" hidden
+            accept={EXTENSOES_GABARITO.map((x) => `.${x}`).join(',')}
+            onChange={(e) => subir(e.target.files?.[0])}
+          />
+          <button className="btn btn-ghost" type="button" disabled={enviando !== null} onClick={() => entrada.current?.click()}>
+            {enviando !== null ? `Enviando… ${Math.round(enviando * 100)}%` : 'Enviar arquivo'}
+          </button>
+          {gabarito && (
+            <button className="btn btn-ghost perigo" type="button" onClick={() => onMudar(null)}>
+              Remover
+            </button>
+          )}
+        </div>
+      </div>
+      {gabarito?.tipo === 'arquivo' && (
+        <em className="dica-campo">
+          ✓ <a href={gabarito.url} target="_blank" rel="noreferrer">{gabarito.nome}</a> — é este que o cliente vai abrir.
+        </em>
+      )}
+      {gabarito?.tipo === 'link' && (
+        <em className="dica-campo">O cliente abre este link no lugar do gabarito gerado.</em>
+      )}
+      {erro && <em className="erro-campo">{erro}</em>}
+    </div>
+  )
+}
+
+function FormularioProjeto({ sessao, inicial, onSalvar, onCancelar }) {
   const [dados, setDados] = useState(() => projetoNovo(inicial))
   const [erros, setErros] = useState({})
   const [salvando, setSalvando] = useState(false)
@@ -766,6 +843,20 @@ function FormularioProjeto({ inicial, onSalvar, onCancelar }) {
         <input type="text" value={dados.localizacao} onChange={(e) => alterar('localizacao', e.target.value)} placeholder="rua, número, pavilhão" />
       </label>
 
+      <label className="campo">
+        <span>Link da pasta do projeto no Drive <em className="opcional">(opcional)</em></span>
+        <input
+          type="url" value={dados.linkDrive}
+          onChange={(e) => alterar('linkDrive', e.target.value)}
+          placeholder="https://drive.google.com/drive/folders/…"
+        />
+        <em className="dica-campo">
+          Aparece em destaque na tela do cliente. Confira se a pasta está
+          compartilhada — o cliente abre sem login na nossa ferramenta, mas o
+          Drive tem as permissões dele.
+        </em>
+      </label>
+
       <h3>Peças do stand</h3>
       {erros.pecas && <p className="erro-campo">{erros.pecas}</p>}
 
@@ -825,6 +916,13 @@ function FormularioProjeto({ inicial, onSalvar, onCancelar }) {
               Remover
             </button>
           </div>
+          <EditorGabarito
+            sessao={sessao}
+            feira={dados.feira}
+            stand={dados.stand}
+            peca={peca}
+            onMudar={(gabarito) => alterarPeca(i, { gabarito })}
+          />
           {erros.porPeca?.[i] && <em className="erro-campo">{erros.porPeca[i]}</em>}
         </div>
       ))}

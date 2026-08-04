@@ -510,3 +510,86 @@ textarea { width: 100%; font: inherit; font-size: 13px; padding: 9px 11px; borde
   .cartao { padding: 14px; }
   .acoes .btn, .acoes .link { flex: 1 1 auto; }
 }
+
+/* ==========================================================================
+   Tela do cliente — a diretoria achou "técnica demais".
+   Ela precisa continuar técnica: número de pixel, dpi e sangria são o motivo
+   de a ferramenta existir. O que muda é a HIERARQUIA — o cliente vê primeiro
+   o stand dele, quanto falta e onde clicar; o detalhe técnico continua ali,
+   um degrau abaixo, para quem for desenhar.
+   ========================================================================== */
+
+.capa {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 28px; align-items: center;
+  background:
+    radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--acento) 16%, transparent), transparent 60%),
+    var(--cartao);
+  border: 1px solid var(--borda); border-radius: 16px; padding: 26px 28px; margin-bottom: 16px;
+}
+.capa-etiqueta {
+  display: inline-block; font-size: 11.5px; font-weight: 700; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--acento);
+  background: color-mix(in srgb, var(--acento) 12%, transparent);
+  padding: 4px 10px; border-radius: 999px; margin-bottom: 10px;
+}
+.capa h2 { margin: 0; font-size: 30px; line-height: 1.15; letter-spacing: -.02em; }
+.capa-local { margin: 4px 0 0; color: var(--suave); font-size: 14px; }
+.capa-frase { margin: 12px 0 0; max-width: 62ch; font-size: 13.5px; line-height: 1.65; color: var(--suave); }
+
+.btn-drive {
+  margin-top: 16px; display: inline-flex; align-items: center; gap: 8px;
+  background: var(--texto); color: var(--cartao); font-weight: 600;
+}
+.btn-drive::before { content: '📁'; font-size: 15px; }
+.btn-drive:hover { filter: brightness(1.15); }
+
+.capa-medidor { text-align: center; }
+.capa-medidor-texto { margin: 8px 0 0; font-size: 13px; font-weight: 600; }
+.capa-medidor .dica-campo { display: block; margin-top: 2px; }
+
+.anel { width: 132px; height: 132px; transform: rotate(-90deg); }
+.anel-trilho { fill: none; stroke: var(--borda); stroke-width: 9; }
+.anel-marca {
+  fill: none; stroke: var(--acento); stroke-width: 9; stroke-linecap: round;
+  transition: stroke-dasharray .6s cubic-bezier(.4, 0, .2, 1);
+}
+.anel-marca.completo { stroke: var(--ok); }
+.anel-numero {
+  transform: rotate(90deg); transform-origin: 50px 50px;
+  font-size: 21px; font-weight: 700; fill: var(--texto);
+}
+@media (prefers-reduced-motion: reduce) { .anel-marca { transition: none; } }
+
+.titulo-secao { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.titulo-secao h3 { margin: 0; }
+
+/* Os cartões de peça ganham profundidade e um traço de estado na lateral —
+   dá para varrer a lista e saber o que está pendente sem ler nenhum rótulo. */
+.peca-cartao {
+  position: relative; overflow: hidden; border-radius: 12px;
+  background: var(--cartao); transition: border-color .15s ease, transform .15s ease;
+}
+.peca-cartao::before {
+  content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--borda);
+}
+.peca-cartao.estado-ok::before { background: var(--ok); }
+.peca-cartao.estado-alerta::before { background: var(--alerta); }
+.peca-cartao.estado-ruim::before { background: var(--ruim); }
+.peca-cartao:hover { border-color: color-mix(in srgb, var(--acento) 45%, var(--borda)); }
+.peca-cartao .peca-cartao-info { padding-left: 8px; }
+.peca-cartao-acao .btn { white-space: nowrap; }
+
+.projeto-cabecalho { display: block; }
+
+@media (max-width: 859px) {
+  .capa { grid-template-columns: minmax(0, 1fr); gap: 18px; padding: 20px; text-align: center; }
+  .capa h2 { font-size: 24px; }
+  .capa-frase { margin-left: auto; margin-right: auto; }
+  .btn-drive { width: 100%; justify-content: center; }
+  .anel { width: 108px; height: 108px; }
+}
+
+/* --------------------------------------------------- gabarito no cadastro */
+.gabarito-editor { border-top: 1px dashed var(--borda); margin-top: 10px; padding-top: 10px; }
+.gabarito-editor .linha { align-items: flex-end; margin-bottom: 4px; }
+.gabarito-editor .acoes { margin: 0 0 4px; }
