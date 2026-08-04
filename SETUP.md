@@ -91,7 +91,16 @@ a própria prova de aprovação e o documento perderia o valor.
 
 ## Como usar, na ordem da operação
 
-### 1. Cadastrar os projetos da feira (`#/projetos`)
+### 1. Cadastrar a feira e o prazo (`#/projetos`)
+
+**Nova feira** → nome + **prazo final de envio das artes**. Faça isto antes de
+cadastrar os clientes.
+
+O prazo é da feira, e todos os stands leem dele — inclusive os cadastrados
+depois. Não existe "aplicar a todos" e não há ordem certa a decorar: mudou a
+data da feira, mudou para todo mundo na hora.
+
+### 2. Cadastrar os projetos da feira (`#/projetos`)
 
 **Importar planilha** é o caminho que se paga. Aceita os dois formatos que as
 planilhas de produção têm na prática:
@@ -127,24 +136,24 @@ Uma coisa ela **não** faz de propósito: adivinhar unidade. `10 x 10` tanto pod
 ser adesivo de 10 cm quanto lona de 10 m — chutar recriaria o erro silencioso
 que o cadastro veio eliminar. Vira aviso para conferência.
 
-### 2. Mandar o link para o cliente
+### 3. Mandar o link para o cliente
 
 Cada projeto tem **Copiar link do cliente**. O link não pede login nem senha —
 o cliente pode encaminhar direto para a agência que faz a arte, que é quem
 normalmente monta o arquivo.
 
-### 3. Cobrar o que falta
+### 4. Cobrar o que falta
 
 O painel mostra `3 de 5` por stand. **Cobrar por e-mail** abre o e-mail já
 escrito, com a lista das peças pendentes, as medidas e o link. Também dá para
 copiar de uma vez os e-mails de todos os stands com pendência.
 
-### 4. Baixar (`#/admin`)
+### 5. Baixar (`#/admin`)
 
 Com o nome da peça cadastrada em cada arquivo, e uma coluna
 **Prova de aprovação** para mandar o print direto da lista.
 
-### 5. Fechar o ciclo (`#/projetos` → **Abrir**)
+### 6. Fechar o ciclo (`#/projetos` → **Abrir**)
 
 É onde o analista trabalha depois que a arte chega:
 
@@ -166,8 +175,9 @@ não só na tela.
 
 ### Sobre o prazo
 
-O prazo é da feira e se aplica a todos os stands de uma vez. Depois dele, o
-envio de peça nova fica bloqueado e o cliente vê o aviso sobre taxa de urgência.
+O prazo é cadastrado **na feira** e vale para todos os stands dela, inclusive
+os que você cadastrar depois. Depois do prazo, o envio de peça nova fica
+bloqueado e o cliente vê o aviso sobre taxa de urgência.
 
 Uma exceção é automática e proposital: **quem está corrigindo porque nós
 reprovamos a prova não é bloqueado**. Barrar o cliente por uma volta que o time
@@ -239,6 +249,7 @@ deve ficar curta, e o campo *liberado por* registra quem liberou quem.
 | Planilha importa com acento quebrado | salve como *CSV UTF-8* no Excel (a ferramenta tenta os dois, mas o UTF-8 é o certo) |
 | Prova recusada ao enviar | regras do Storage sem a pasta `provas/` — republique (passo 2) |
 | Cliente não consegue pedir troca de arte | regras do Firestore desatualizadas (passo 1) |
+| Cliente não vê o prazo que você cadastrou | regras do Firestore desatualizadas — o expositor precisa poder ler a feira |
 | Cliente diz que não viu a prova | não existe e-mail automático — avise pelo botão de e-mail do painel |
 
 ---

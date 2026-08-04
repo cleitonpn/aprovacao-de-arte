@@ -102,8 +102,31 @@ export async function carregarProjetoPublico(token) {
   const limpo = String(token || '').trim().toLowerCase()
   if (!/^[a-z0-9]{6,40}$/.test(limpo)) return null
   const { app, firestore } = await sessaoAnonima()
-  const snap = await firestore.getDoc(firestore.doc(firestore.getFirestore(app), COLECAO, limpo))
-  return snap.exists() ? { token: snap.id, ...snap.data() } : null
+  const bd = firestore.getFirestore(app)
+  const snap = await firestore.getDoc(firestore.doc(bd, COLECAO, limpo))
+  if (!snap.exists()) return null
+
+  const projeto = { token: snap.id, ...snap.data() }
+
+  // O prazo é da FEIRA, então é lido dela. A versão anterior copiava a data
+  // para dentro de cada projeto no momento em que o time clicava em "aplicar"
+  // — e todo stand cadastrado depois disso nascia sem prazo, sem ninguém
+  // perceber, porque a tela continuava mostrando a data. Ler da origem elimina
+  // a classe inteira do problema: não há o que reaplicar nem ordem certa de
+  // cadastrar.
+  try {
+    const feira = await firestore.getDoc(firestore.doc(bd, 'feiras', projeto.feiraId))
+    const daFeira = feira.exists() ? feira.data() : null
+    if (daFeira && 'prazoEnvio' in daFeira) projeto.prazoEnvio = daFeira.prazoEnvio
+    if (daFeira?.nome) projeto.feira = daFeira.nome
+  } catch (e) {
+    // Feira ilegível (regras antigas, por exemplo) não pode derrubar a tela do
+    // cliente. Sem ela sobra a cópia guardada no projeto, que é o que existia
+    // antes — pior que o ideal, melhor que uma página de erro.
+    console.warn('não foi possível ler a feira; usando o prazo guardado no projeto', e)
+  }
+
+  return projeto
 }
 
 /**
@@ -240,11 +263,15 @@ export function definirStatusDaPeca(fb, token, pecaId, status, por) {
  * inteiro, e é isso que dá sentido a "reprovar em partes" — o cliente aprova a
  * lona e reprova a testeira dentro da mesma imagem.
  */
-export function registrarProva(fb, token, { id, arquivo, pecaIds, observacao, por }) {
+export function registrarProva(fb, token, { id, arquivo, pecaIds, versoes, observacao, por }) {
   return escreverComoTime(fb, token, {
     [`controle.provas.${id}`]: semIndefinidos({
       arquivo: arquivo ?? null,
       pecaIds: pecaIds || [],
+      // Qual versão da arte esta prova mostra, peça a peça. É o que faz a
+      // prova caducar sozinha quando chega arte nova — sem isso o cartão do
+      // cliente ficava preso em "reprovada" depois de ele já ter corrigido.
+      versoes: versoes || {},
       observacao: String(observacao || '').trim().slice(0, 800) || null,
       enviadaEm: new Date().toISOString(),
       enviadaPor: por ?? null,
@@ -274,30 +301,27 @@ export function prorrogarPrazo(fb, token, ate, por) {
   })
 }
 
-/**
- * Aplica o prazo a todos os projetos da feira.
- *
- * O prazo mora no projeto, e não na feira, por um motivo prático: o cliente já
- * lê o projeto dele: guardá-lo na feira exigiria uma segunda leitura e uma
- * regra a mais para liberar essa leitura ao expositor. O custo é reescrever os
- * projetos quando a data muda — que é raro, e cabe num lote.
- */
-export async function definirPrazoDaFeira(fb, feiraId, prazoIso, por, aoProgredir) {
-  const { getFirestore, doc, writeBatch } = fb.firestore
-  const bd = getFirestore(fb.app)
-  const projetos = await listarProjetos(fb, feiraId)
-  const carimbo = paraCarimbo(fb, prazoIso)
+// ------------------------------------------------------------------ feiras
 
-  for (let i = 0; i < projetos.length; i += POR_LOTE) {
-    const fatia = projetos.slice(i, i + POR_LOTE)
-    const lote = writeBatch(bd)
-    for (const p of fatia) {
-      lote.update(doc(bd, COLECAO, p.token), { prazoEnvio: carimbo, prazoPor: por ?? null })
-    }
-    await lote.commit()
-    aoProgredir?.(Math.min(i + POR_LOTE, projetos.length), projetos.length)
-  }
-  return projetos.length
+/**
+ * Cadastro da feira: nome e prazo final de envio das artes.
+ *
+ * A feira é a dona do prazo. Antes ele era copiado para cada projeto num
+ * clique de "aplicar a todos", e todo stand cadastrado depois nascia sem
+ * prazo — falha silenciosa, porque a tela continuava exibindo a data. Com o
+ * prazo aqui, cadastrar a feira antes dos clientes passa a ser o caminho
+ * natural, e não uma sequência que alguém precisa lembrar.
+ */
+export async function salvarFeira(fb, { id, nome, prazoEnvio }, por) {
+  const { getFirestore, doc, setDoc, serverTimestamp } = fb.firestore
+  const feiraId = id || idDeFeira(nome)
+  await setDoc(doc(getFirestore(fb.app), 'feiras', feiraId), semIndefinidos({
+    nome: String(nome || '').trim().slice(0, 160),
+    prazoEnvio: paraCarimbo(fb, prazoEnvio),
+    atualizadaEm: serverTimestamp(),
+    atualizadaPor: por ?? null,
+  }), { merge: true })
+  return feiraId
 }
 
 export { carregarFirebase }

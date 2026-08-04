@@ -21,8 +21,8 @@ const projeto = (extra = {}) => ({
   ...extra,
 })
 
-const entregue = (pecaId, versao = 1) => ({
-  [pecaId]: { protocolo: 'AP-1', veredicto: 'aprovado', versao, em: '2026-08-01T10:00:00Z' },
+const entregue = (pecaId, versao = 1, em = '2026-08-01T10:00:00Z') => ({
+  [pecaId]: { protocolo: 'AP-1', veredicto: 'aprovado', versao, em },
 })
 
 test('peça sem envio está aguardando e pode receber arte', () => {
@@ -168,8 +168,12 @@ test('o prazo vencido bloqueia peça nova', () => {
 test('o prazo NÃO bloqueia quem está corrigindo a pedido do time', () => {
   const p = projeto({
     prazoEnvio: '2026-08-01T23:59:00Z',
-    entregas: entregue('p_lona'),
-    controle: { provas: { pr1: { pecaIds: ['p_lona'], enviadaEm: '2026-07-20T10:00:00Z' } } },
+    // A ordem das datas importa e é real: a arte chega, depois sai a prova,
+    // depois vem a reprovação. Uma prova anterior à arte que ela mostra seria
+    // impossível — e o motor, com razão, leria isso como arte mais nova que a
+    // prova, dando a peça por resolvida.
+    entregas: entregue('p_lona', 1, '2026-07-15T10:00:00Z'),
+    controle: { provas: { pr1: { pecaIds: ['p_lona'], versoes: { p_lona: 1 }, enviadaEm: '2026-07-20T10:00:00Z' } } },
     respostasProva: { pr1: { decisao: 'reprovada', em: '2026-07-21T10:00:00Z' } },
   })
   const s = situacaoDaPeca(p, lona, AGORA)
@@ -234,4 +238,53 @@ test('o resumo conta o que o painel precisa mostrar', () => {
   assert.equal(r.pedidosEmAberto[0].peca.id, 'p_test')
   assert.equal(r.prazo.diasRestantes, 3)
   assert.equal(r.completo, true)
+})
+
+// Bug relatado na operação: o cliente mandava a arte corrigida e o cartão
+// continuava vermelho, escrito "Prova reprovada — refazer". A tela pedia o que
+// ele acabara de fazer. Uma prova fala de UMA versão da arte; chegando versão
+// nova, ela deixa de valer.
+test('arte nova encerra a reprovação daquela prova', () => {
+  const base = {
+    controle: { provas: { pr1: { pecaIds: ['p_lona'], versoes: { p_lona: 1 }, enviadaEm: '2026-08-05T10:00:00Z' } } },
+    respostasProva: { pr1: { decisao: 'reprovada', em: '2026-08-06T10:00:00Z' } },
+  }
+
+  const antes = situacaoDaPeca(projeto({ ...base, entregas: entregue('p_lona', 1) }), lona, AGORA)
+  assert.equal(antes.status, 'reprovada')
+
+  const depois = situacaoDaPeca(projeto({ ...base, entregas: entregue('p_lona', 2) }), lona, AGORA)
+  assert.equal(depois.status, 'recebida', 'v2 recebida: a reprovação da v1 não vale mais')
+  assert.equal(depois.provaAtual, null, 'a prova antiga sai de cena; o time manda uma nova')
+  assert.equal(depois.podeEnviar, false, 'para uma v3 ele volta a precisar pedir')
+})
+
+test('aprovação também caduca quando chega arte nova', () => {
+  const p = projeto({
+    entregas: entregue('p_lona', 2),
+    controle: { provas: { pr1: { pecaIds: ['p_lona'], versoes: { p_lona: 1 }, enviadaEm: '2026-08-05T10:00:00Z' } } },
+    respostasProva: { pr1: { decisao: 'aprovada', em: '2026-08-06T10:00:00Z' } },
+  })
+  assert.equal(situacaoDaPeca(p, lona, AGORA).status, 'recebida',
+    'aprovar a v1 não aprova a v2 — precisa de prova nova')
+})
+
+test('prova antiga, sem a versão gravada, cai para a comparação de datas', () => {
+  const semVersao = {
+    controle: { provas: { pr1: { pecaIds: ['p_lona'], enviadaEm: '2026-08-05T10:00:00Z' } } },
+    respostasProva: { pr1: { decisao: 'reprovada', em: '2026-08-06T10:00:00Z' } },
+  }
+  const antiga = { p_lona: { protocolo: 'AP-1', veredicto: 'aprovado', versao: 1, em: '2026-08-01T10:00:00Z' } }
+  const nova = { p_lona: { protocolo: 'AP-2', veredicto: 'aprovado', versao: 2, em: '2026-08-07T10:00:00Z' } }
+
+  assert.equal(situacaoDaPeca(projeto({ ...semVersao, entregas: antiga }), lona, AGORA).status, 'reprovada')
+  assert.equal(situacaoDaPeca(projeto({ ...semVersao, entregas: nova }), lona, AGORA).status, 'recebida')
+})
+
+test('a prova continua valendo enquanto a versão não muda', () => {
+  const p = projeto({
+    entregas: entregue('p_lona', 1),
+    controle: { provas: { pr1: { pecaIds: ['p_lona'], versoes: { p_lona: 1 }, enviadaEm: '2026-08-05T10:00:00Z' } } },
+  })
+  assert.equal(situacaoDaPeca(p, lona, AGORA).status, 'em_prova')
 })

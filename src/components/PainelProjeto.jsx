@@ -265,7 +265,12 @@ function NovaProva({ sessao, projeto, resumo, ocupado, onEnviar }) {
     setProgresso(0)
     try {
       const prova = await enviarProva(arquivo, { feiraId: projeto.feiraId, stand: projeto.stand }, setProgresso)
-      await onEnviar({ id: prova.id, arquivo: prova.arquivo, pecaIds: selecionadas, observacao })
+      const versoes = Object.fromEntries(
+        resumo.pecas
+          .filter((s) => selecionadas.includes(s.peca.id))
+          .map((s) => [s.peca.id, s.versaoRecebida || 1]),
+      )
+      await onEnviar({ id: prova.id, arquivo: prova.arquivo, pecaIds: selecionadas, versoes, observacao })
       setAberto(false)
       setArquivo(null)
       setSelecionadas([])

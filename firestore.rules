@@ -136,13 +136,38 @@ service cloud.firestore {
                  .hasOnly(['entregas', 'pedidos', 'respostasProva']));
     }
 
-    // Alimenta o seletor de feiras. O expositor só pode gravar o nome e a data
-    // — nada além disso, para a coleção não virar depósito.
+    // A feira: nome e PRAZO FINAL de envio das artes.
+    //
+    // O prazo mora aqui, e não copiado dentro de cada projeto, porque projeto
+    // novo tem que nascer já com o prazo da feira — sem depender de alguém
+    // lembrar de reaplicar. Por isso o expositor precisa conseguir LER a feira
+    // dele: é de onde a tela dele tira a data. Ler pelo ID não expõe nada (o
+    // nome da feira ele já sabe), e listar continua restrito ao time.
     match /feiras/{feiraId} {
-      allow read: if ehAdmin();
-      allow create, update: if request.auth != null
-        && request.resource.data.keys().hasOnly(['nome', 'atualizadaEm'])
-        && textoValido(request.resource.data.nome, 160);
+      allow get: if request.auth != null;
+      allow list: if ehAdmin();
+
+      // O expositor também ESCREVE aqui, de raspão: ao enviar arte, a
+      // ferramenta carimba nome e data de atualização da feira.
+      //
+      // Cuidado com o `hasOnly` na alteração. Um `setDoc(..., {merge:true})`
+      // faz `request.resource.data` ser o documento JÁ MESCLADO — ou seja, com
+      // o `prazoEnvio` que estava lá. Checar `keys().hasOnly([...])` numa
+      // atualização passaria a recusar todo envio a partir do dia em que a
+      // feira ganhasse um prazo, e o erro apareceria como "registro do envio
+      // recusado", longe da causa. Na alteração é `diff().affectedKeys()` que
+      // vale: o que importa é o que ele MUDOU, não o que sobrou no documento.
+      allow create: if ehAdmin()
+        || (request.auth != null
+            && request.resource.data.keys().hasOnly(['nome', 'atualizadaEm'])
+            && textoValido(request.resource.data.nome, 160));
+
+      allow update: if ehAdmin()
+        || (request.auth != null
+            && request.resource.data.diff(resource.data).affectedKeys()
+                 .hasOnly(['nome', 'atualizadaEm'])
+            && textoValido(request.resource.data.nome, 160));
+
       allow delete: if ehAdmin();
     }
 

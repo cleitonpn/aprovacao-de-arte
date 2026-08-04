@@ -62,21 +62,25 @@ export function usarFeiras(fb) {
   const [feiraId, setFeiraId] = useState('')
   const [erro, setErro] = useState(null)
 
-  useEffect(() => {
+  const recarregar = useCallback(async (selecionar) => {
     if (!fb) return
-    const { getFirestore, collection, getDocs } = fb.firestore
-    getDocs(collection(getFirestore(fb.app), 'feiras'))
-      .then((snap) => {
-        const lista = snap.docs
-          .map((d) => ({ id: d.id, ...d.data() }))
-          .sort((a, b) => (b.atualizadaEm?.seconds || 0) - (a.atualizadaEm?.seconds || 0))
-        setFeiras(lista)
-        setFeiraId((atual) => atual || lista[0]?.id || '')
-      })
-      .catch((e) => setErro(traduzirErroAuth(e)))
+    try {
+      const { getFirestore, collection, getDocs } = fb.firestore
+      const snap = await getDocs(collection(getFirestore(fb.app), 'feiras'))
+      const lista = snap.docs
+        .map((d) => ({ id: d.id, ...d.data() }))
+        .sort((a, b) => (b.atualizadaEm?.seconds || 0) - (a.atualizadaEm?.seconds || 0))
+      setFeiras(lista)
+      setFeiraId((atual) => selecionar || atual || lista[0]?.id || '')
+    } catch (e) {
+      setErro(traduzirErroAuth(e))
+    }
   }, [fb])
 
-  return { feiras, feiraId, setFeiraId, erro }
+  useEffect(() => { recarregar() }, [recarregar])
+
+  const feira = feiras.find((f) => f.id === feiraId) || null
+  return { feiras, feira, feiraId, setFeiraId, recarregar, erro }
 }
 
 /**
@@ -111,6 +115,7 @@ function BotaoProva({ envio, sessao }) {
         id: prova.id,
         arquivo: prova.arquivo,
         pecaIds: [envio.pecaId],
+        versoes: { [envio.pecaId]: envio.versao || 1 },
         observacao: '',
         por: sessao.usuario?.email,
       })

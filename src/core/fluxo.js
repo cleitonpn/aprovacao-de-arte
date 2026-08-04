@@ -82,11 +82,20 @@ export function situacaoDaPeca(projeto, peca, agora = Date.now()) {
   const entrega = mapa(projeto?.entregas)[peca.id] || null
   const pedido = mapa(projeto?.pedidos)[peca.id] || null
   const controle = mapa(mapa(projeto?.controle).pecas)[peca.id] || null
-  const provas = provasDaPeca(projeto, peca.id)
-  const provaAtual = provas[provas.length - 1] || null
-  const resposta = provaAtual ? mapa(projeto?.respostasProva)[provaAtual.id] || null : null
-
   const versaoRecebida = Number(entrega?.versao) || (entrega ? 1 : 0)
+
+  const provas = provasDaPeca(projeto, peca.id)
+  const ultimaProva = provas[provas.length - 1] || null
+
+  // Uma prova fala de UMA versão da arte. Quando chega uma versão mais nova,
+  // ela deixa de valer — tanto a prova quanto a resposta que o cliente deu.
+  //
+  // Sem isso, a peça reprovada continuava vermelha e escrita "refazer" depois
+  // de o cliente ter mandado justamente a arte corrigida: a tela dizia que
+  // faltava fazer o que ele acabara de fazer.
+  const vencida = provaVencida(ultimaProva, peca.id, versaoRecebida, entrega, projeto)
+  const provaAtual = vencida ? null : ultimaProva
+  const resposta = provaAtual ? mapa(projeto?.respostasProva)[provaAtual.id] || null : null
   const proximaVersao = versaoRecebida + 1
   const liberadoAte = Number(controle?.liberadoAte) || 0
   const statusDoTime = controle?.status
@@ -133,6 +142,27 @@ export function situacaoDaPeca(projeto, peca, agora = Date.now()) {
     pedidoEmAberto: Boolean(pedidoVigente && liberadoAte < proximaVersao && !controle?.recusa),
     recusaEmAberto: Boolean(controle?.recusa && liberadoAte < proximaVersao),
   }
+}
+
+/**
+ * A prova ficou para trás? (isto é: já existe arte mais nova que ela).
+ *
+ * O caminho preciso é a versão que a prova cobria, gravada no momento em que o
+ * analista a enviou. Provas criadas antes desse campo existir caem para a
+ * comparação de datas — pior, mas melhor do que deixar o cartão preso no
+ * estado errado para sempre.
+ */
+function provaVencida(prova, pecaId, versaoRecebida, entrega, projeto) {
+  if (!prova) return false
+
+  const versaoNaProva = Number(mapa(prova.versoes)[pecaId])
+  if (Number.isFinite(versaoNaProva)) return versaoRecebida > versaoNaProva
+
+  const entregaEm = emMs(entrega?.em)
+  if (!entregaEm) return false
+  const resposta = mapa(projeto?.respostasProva)[prova.id]
+  const referencia = emMs(resposta?.em) || emMs(prova.enviadaEm)
+  return Boolean(referencia && entregaEm > referencia)
 }
 
 function ehReprovada(resposta, pecaId) {

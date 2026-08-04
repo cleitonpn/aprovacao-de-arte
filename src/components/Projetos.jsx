@@ -6,7 +6,7 @@ import {
 import { importarProjetos, MODELO_CSV } from '../core/importacao.js'
 import { resumoDoProjeto } from '../core/fluxo.js'
 import {
-  salvarProjeto, salvarProjetos, listarProjetos, apagarProjeto, definirPrazoDaFeira,
+  salvarProjeto, salvarProjetos, listarProjetos, apagarProjeto, salvarFeira,
 } from '../services/projetos.js'
 import { traduzirErroAuth } from '../services/sessao.js'
 import { usarFeiras, baixarTexto } from './Admin.jsx'
@@ -104,7 +104,8 @@ function textoDeCobranca(projeto, sit) {
 
 export default function Projetos({ sessao }) {
   const { fb, usuario } = sessao
-  const { feiras, feiraId, setFeiraId, erro: erroFeiras } = usarFeiras(fb)
+  const { feiras, feira, feiraId, setFeiraId, recarregar: recarregarFeiras, erro: erroFeiras } = usarFeiras(fb)
+  const [editandoFeira, setEditandoFeira] = useState(null) // null | 'editar' | 'nova'
   const [projetos, setProjetos] = useState([])
   const [envios, setEnvios] = useState([])
   const [carregando, setCarregando] = useState(false)
@@ -145,11 +146,15 @@ export default function Projetos({ sessao }) {
 
   const linhas = useMemo(() => {
     const t = filtro.trim().toLowerCase()
+    // O prazo vem da feira, não da cópia guardada no projeto. É a mesma leitura
+    // que a tela do cliente faz — se as duas divergissem, o time veria um prazo
+    // e o cliente outro.
+    const comPrazo = (p) => (feira && 'prazoEnvio' in feira ? { ...p, prazoEnvio: feira.prazoEnvio } : p)
     return projetos
-      .map((p) => ({ projeto: p, sit: situacao(p, enviosPorProjeto) }))
+      .map((p) => ({ projeto: p, sit: situacao(comPrazo(p), enviosPorProjeto) }))
       .filter(({ projeto }) => !t || [projeto.stand, projeto.expositor, projeto.email]
         .some((v) => String(v || '').toLowerCase().includes(t)))
-  }, [projetos, enviosPorProjeto, filtro])
+  }, [projetos, enviosPorProjeto, filtro, feira])
 
   const resumo = useMemo(() => {
     const total = linhas.reduce((s, l) => s + l.sit.total, 0)
@@ -187,7 +192,10 @@ export default function Projetos({ sessao }) {
     return <FormularioProjeto inicial={painel.projeto} onSalvar={guardar} onCancelar={() => setPainel(null)} />
   }
   if (painel?.detalhe) {
-    const atual = projetos.find((p) => p.token === painel.detalhe) 
+    const bruto = projetos.find((p) => p.token === painel.detalhe)
+    const atual = bruto && feira && 'prazoEnvio' in feira
+      ? { ...bruto, prazoEnvio: feira.prazoEnvio }
+      : bruto
     if (atual) {
       const sit = situacao(atual, enviosPorProjeto)
       return (
@@ -239,14 +247,28 @@ export default function Projetos({ sessao }) {
 
         {(erro || erroFeiras) && <p className="erro-envio">{erro || erroFeiras}</p>}
 
-        {linhas.length > 0 && (
-          <PrazoDaFeira
-            sessao={sessao}
-            feiraId={feiraId}
-            projetos={projetos}
-            onMudou={recarregar}
-          />
-        )}
+        {editandoFeira
+          ? (
+            <FeiraEmEdicao
+              sessao={sessao}
+              feira={feira}
+              feiraId={feiraId}
+              novaFeira={editandoFeira === 'nova'}
+              onPronto={async (id) => {
+                setEditandoFeira(null)
+                await recarregarFeiras(id)
+                await recarregar()
+              }}
+              onCancelar={() => setEditandoFeira(null)}
+            />
+          )
+          : (
+            <ResumoDaFeira
+              feira={feira}
+              onEditar={() => setEditandoFeira('editar')}
+              onNova={() => setEditandoFeira('nova')}
+            />
+          )}
 
         {linhas.length > 0 && (
           <>
@@ -316,34 +338,33 @@ export default function Projetos({ sessao }) {
 }
 
 /**
- * Prazo de envio da feira.
+ * Cadastro da feira: nome e prazo final de envio.
  *
- * O prazo é gravado em CADA projeto, não na feira. Parece redundante, mas o
- * cliente já lê o projeto dele — guardar na feira exigiria uma segunda leitura
- * e mais uma regra liberando essa leitura ao expositor. O custo é reescrever os
- * projetos quando a data muda, o que é raro e cabe num lote.
+ * A feira é a dona do prazo, e os projetos leem dela. A versão anterior
+ * copiava a data para dentro de cada projeto num clique de "aplicar a todos" —
+ * e todo stand cadastrado DEPOIS nascia sem prazo nenhum, sem ninguém
+ * perceber, porque a tela continuava mostrando a data. Lendo da origem, a
+ * ordem de cadastro deixa de importar e não há o que reaplicar.
  */
-function PrazoDaFeira({ sessao, feiraId, projetos, onMudou }) {
-  const atual = projetos.find((p) => p.prazoEnvio)?.prazoEnvio || null
-  const [data, setData] = useState(() => paraInputData(atual))
-  const [gravando, setGravando] = useState(null)
+function FeiraEmEdicao({ sessao, feira, feiraId, novaFeira, onPronto, onCancelar }) {
+  const [nome, setNome] = useState(novaFeira ? '' : (feira?.nome || ''))
+  const [data, setData] = useState(() => paraInputData(feira?.prazoEnvio))
+  const [gravando, setGravando] = useState(false)
   const [erro, setErro] = useState(null)
 
-  useEffect(() => { setData(paraInputData(atual)) }, [atual])
-
-  const divergentes = projetos.filter((p) => paraInputData(p.prazoEnvio) !== paraInputData(atual)).length
-
-  const aplicar = async (iso) => {
+  const salvar = async () => {
     setErro(null)
-    setGravando({ feito: 0, total: projetos.length })
+    setGravando(true)
     try {
-      await definirPrazoDaFeira(sessao.fb, feiraId, iso, sessao.usuario?.email,
-        (feito, total) => setGravando({ feito, total }))
-      await onMudou()
+      const id = await salvarFeira(sessao.fb, {
+        id: novaFeira ? null : feiraId,
+        nome,
+        prazoEnvio: fimDoDia(data),
+      }, sessao.usuario?.email)
+      await onPronto(id)
     } catch (e) {
       setErro(traduzirErroAuth(e))
-    } finally {
-      setGravando(null)
+      setGravando(false)
     }
   }
 
@@ -351,29 +372,62 @@ function PrazoDaFeira({ sessao, feiraId, projetos, onMudou }) {
     <div className="bloco-prazo">
       <div className="linha">
         <label className="campo">
-          <span>Prazo final de envio das artes desta feira</span>
+          <span>Nome da feira</span>
+          <input type="text" value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Expo Sul 2026" />
+        </label>
+        <label className="campo">
+          <span>Prazo final de envio das artes</span>
           <input type="date" value={data} onChange={(e) => setData(e.target.value)} />
         </label>
-        <div className="acoes">
-          <button className="btn btn-ghost" disabled={!data || Boolean(gravando)} onClick={() => aplicar(fimDoDia(data))}>
-            {gravando ? `Aplicando ${gravando.feito}/${gravando.total}…` : 'Aplicar a todos os stands'}
-          </button>
-          {atual && (
-            <button className="btn btn-ghost perigo" disabled={Boolean(gravando)} onClick={() => aplicar(null)}>
-              Remover prazo
-            </button>
-          )}
-        </div>
       </div>
       {erro && <p className="erro-envio">{erro}</p>}
+      <div className="acoes">
+        <button className="btn" disabled={nome.trim().length < 2 || gravando} onClick={salvar}>
+          {gravando ? 'Salvando…' : novaFeira ? 'Criar feira' : 'Salvar'}
+        </button>
+        {data && !novaFeira && (
+          <button
+            className="btn btn-ghost perigo"
+            disabled={gravando}
+            onClick={() => { setData(''); }}
+          >
+            Limpar prazo
+          </button>
+        )}
+        <button className="btn btn-ghost" disabled={gravando} onClick={onCancelar}>Cancelar</button>
+      </div>
       <p className="nota">
-        Depois do prazo, o envio de peça nova fica bloqueado e o cliente vê o
-        aviso sobre taxa de urgência. Correções que o time pediu continuam
-        liberadas — quem foi reprovado numa prova não é punido pela nossa volta.
-        Para abrir exceção a um stand, use <strong>Abrir</strong> e prorrogue só
-        para ele.
-        {divergentes > 0 && ` ${divergentes} stand(s) estão com prazo diferente do exibido.`}
+        O prazo vale para todos os stands desta feira, inclusive os que você
+        cadastrar depois — não é preciso reaplicar. Vencido o prazo, o envio de
+        peça nova fica bloqueado e o cliente vê o aviso sobre taxa de urgência.
+        Correções que o time pediu continuam liberadas: quem foi reprovado numa
+        prova não é punido pela nossa volta. Para abrir exceção a um stand, use{' '}
+        <strong>Abrir</strong> e prorrogue só para ele.
       </p>
+    </div>
+  )
+}
+
+function ResumoDaFeira({ feira, onEditar, onNova }) {
+  const prazo = fmtData(feira?.prazoEnvio)
+  return (
+    <div className="bloco-prazo">
+      <div className="linha">
+        <div>
+          <strong>Prazo final de envio: </strong>
+          {prazo
+            ? <span className="tag alerta">{prazo}</span>
+            : <em className="dica-campo">não cadastrado — nenhum envio será bloqueado</em>}
+          <p className="nota">
+            Vale para todos os stands desta feira, inclusive os cadastrados
+            depois. Exceção individual: <strong>Abrir</strong> → prorrogar.
+          </p>
+        </div>
+        <div className="acoes">
+          <button className="btn btn-ghost" onClick={onEditar}>Editar feira</button>
+          <button className="btn btn-ghost" onClick={onNova}>Nova feira</button>
+        </div>
+      </div>
     </div>
   )
 }
