@@ -167,6 +167,10 @@ Com o nome da peça cadastrada em cada arquivo, e uma coluna
 - **Em impressão / impressa** — o cliente passa a ver esse status. Peça em
   produção trava o reenvio automaticamente, e a recusa já vem com o texto
   preenchido.
+- **Liberar reimpressão** — quando o atendimento acerta o custo extra por
+  telefone, é aqui que isso vira ação: o botão libera arte nova mesmo com a
+  peça na impressora e tira o status de produção. A liberação do time vence
+  qualquer bloqueio, porque quem sabe que a reimpressão foi combinada é o time.
 - **Prorrogar prazo** — exceção só para aquele stand, com data de validade.
 
 O que o time decide (liberar, recusar, prova, status, prazo) o cliente não
@@ -232,7 +236,10 @@ deve ficar curta, e o campo *liberado por* registra quem liberou quem.
 7. Ainda em **Abrir**, mande uma prova cobrindo a peça. Na aba anônima ela
    aparece com os três botões de resposta.
 8. Marque a peça como **em impressão** e confirme que o cliente vê o status e
-   perde o botão de enviar.
+   perde o botão de enviar — mas continua com *Pedir troca mesmo assim*.
+9. Em **Abrir**, clique em **Liberar reimpressão**. A peça sai de "em
+   impressão" e o cliente volta a poder enviar. É o caminho de quando o
+   atendimento já acertou o custo por telefone.
 
 ### Se der errado
 

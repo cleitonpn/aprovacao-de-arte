@@ -82,7 +82,13 @@ export default function PainelProjeto({ sessao, projeto, resumo, envios, onFecha
               situacao={s}
               ocupado={ocupado}
               onLiberar={(observacao) => rodar(() => liberarNovaVersao(sessao.fb, projeto.token, s.peca.id, {
-                ate: s.proximaVersao, observacao, por: sessao.usuario?.email,
+                ate: s.proximaVersao,
+                observacao,
+                por: sessao.usuario?.email,
+                // Liberar arte nova numa peça que está na impressora é liberar
+                // reimpressão: deixar o status como estava faria a tela dizer
+                // que imprime a arte antiga e aceita a nova ao mesmo tempo.
+                limparStatus: s.status === 'em_impressao' || s.status === 'impressa',
               }))}
               onRecusar={(motivo, exigeExtra) => rodar(() => recusarNovaVersao(sessao.fb, projeto.token, s.peca.id, {
                 motivo, exigeExtra, por: sessao.usuario?.email,
@@ -113,8 +119,13 @@ export default function PainelProjeto({ sessao, projeto, resumo, envios, onFecha
             onStatus={(status) => rodar(
               () => definirStatusDaPeca(sessao.fb, projeto.token, s.peca.id, status, sessao.usuario?.email),
             )}
-            onLiberar={() => rodar(() => liberarNovaVersao(sessao.fb, projeto.token, s.peca.id, {
-              ate: s.proximaVersao, observacao: 'Liberado pelo time sem pedido do cliente.', por: sessao.usuario?.email,
+            onLiberar={(limparStatus) => rodar(() => liberarNovaVersao(sessao.fb, projeto.token, s.peca.id, {
+              ate: s.proximaVersao,
+              observacao: limparStatus
+                ? 'Reimpressão liberada pelo time — custo extra acertado com o atendimento.'
+                : 'Liberado pelo time sem pedido do cliente.',
+              por: sessao.usuario?.email,
+              limparStatus,
             }))}
           />
         ))}
@@ -442,6 +453,7 @@ function ArquivosDeApoio({ apoio }) {
 
 function PecaDoTime({ situacao, envios, ocupado, onStatus, onLiberar }) {
   const { peca, status, rotulo, cor, controle } = situacao
+  const emProducao = status === 'em_impressao' || status === 'impressa'
 
   return (
     <div className="peca-time">
@@ -489,12 +501,26 @@ function PecaDoTime({ situacao, envios, ocupado, onStatus, onLiberar }) {
             Desfazer status
           </button>
         )}
-        {!situacao.podeEnviar && situacao.bloqueio?.tipo !== 'em_producao' && (
-          <button className="btn btn-ghost" disabled={ocupado} onClick={onLiberar}>
-            Liberar envio de nova versão
+        {/*
+          Liberar vale em QUALQUER bloqueio, inclusive com a peça na impressora.
+          Antes eu excluía a produção daqui, e o resultado era um beco sem
+          saída: o acerto do custo extra acontece por telefone com o
+          atendimento, e não havia como isso virar ação na ferramenta — o
+          cliente não conseguia pedir e o analista não conseguia liberar.
+        */}
+        {!situacao.podeEnviar && (
+          <button className="btn btn-ghost" disabled={ocupado} onClick={() => onLiberar(emProducao)}>
+            {emProducao ? 'Liberar reimpressão (custo extra combinado)' : 'Liberar envio de nova versão'}
           </button>
         )}
       </div>
+      {emProducao && (
+        <p className="nota">
+          Liberar aqui é para quando a reimpressão já foi acertada com o cliente
+          pelo atendimento. A peça sai de “em impressão” e volta a aceitar arte
+          nova — o combinado de valor segue fora do sistema.
+        </p>
+      )}
       {STATUS[status] && status !== 'aguardando' && controle?.statusEm && (
         <p className="dica-campo">Status alterado em {fmtDataHora(controle.statusEm)} por {controle.statusPor || '—'}.</p>
       )}

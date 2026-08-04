@@ -413,8 +413,12 @@ function CartaoPeca({ situacao, perfis, politica, projeto, onEscolher, onAtualiz
             {status === 'reprovada' ? 'Enviar arte corrigida' : entrega ? 'Enviar versão nova' : 'Enviar arte'}
           </button>
         )}
-        {!situacao.podeEnviar && bloqueio?.tipo === 'precisa_pedir' && !painel && (
-          <button className="btn btn-ghost" onClick={() => setPainel('pedido')}>Pedir para trocar a arte</button>
+        {!situacao.podeEnviar && bloqueio?.podePedir && !painel && (
+          <button className="btn btn-ghost" onClick={() => setPainel('pedido')}>
+            {bloqueio.tipo === 'em_producao' ? 'Pedir troca mesmo assim'
+              : bloqueio.tipo === 'prazo' ? 'Pedir liberação'
+                : 'Pedir para trocar a arte'}
+          </button>
         )}
         {!situacao.podeEnviar && bloqueio?.podeAceitarExtra && !painel && (
           <button className="btn btn-ghost" onClick={() => setPainel('extra')}>Aceitar o custo extra</button>

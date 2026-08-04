@@ -105,15 +105,75 @@ test('aceite do extra não libera sozinho — quem libera é o time', () => {
   assert.equal(s.bloqueio.podeAceitarExtra, false, 'já aceitou: não oferece de novo')
 })
 
-test('peça em impressão trava o envio acima de qualquer outra condição', () => {
+test('peça em impressão trava o envio, mas deixa pedir', () => {
   const p = projeto({
     entregas: entregue('p_lona'),
-    controle: { pecas: { p_lona: { status: 'em_impressao', liberadoAte: 2 } } },
+    controle: { pecas: { p_lona: { status: 'em_impressao' } } },
   })
   const s = situacaoDaPeca(p, lona, AGORA)
   assert.equal(s.status, 'em_impressao')
   assert.equal(s.podeEnviar, false)
   assert.equal(s.bloqueio.tipo, 'em_producao')
+  assert.equal(s.bloqueio.podePedir, true, 'sem esta saída o cliente fica sem nenhuma ação possível')
+})
+
+// O caso que travou a operação: o atendimento combinou a reimpressão por
+// telefone, o cliente aceitou o custo — e não havia como isso virar ação na
+// ferramenta. O cliente não conseguia pedir e o analista não conseguia
+// liberar. Quem sabe que a reimpressão foi acertada é o time, então é o time
+// que destrava, e a liberação dele vence até o bloqueio de produção.
+test('a liberação do time vence o bloqueio de produção', () => {
+  const p = projeto({
+    entregas: entregue('p_lona'),
+    controle: { pecas: { p_lona: { status: 'em_impressao', liberadoAte: 2 } } },
+  })
+  const s = situacaoDaPeca(p, lona, AGORA)
+  assert.equal(s.podeEnviar, true)
+  assert.equal(s.bloqueio, null)
+})
+
+test('nenhum bloqueio deixa o cliente sem saída nenhuma', () => {
+  // Todo estado bloqueado precisa oferecer um caminho: pedir, aceitar o custo
+  // extra, ou esperar uma resposta que já está a caminho. Um bloqueio sem
+  // nenhuma das três é um beco sem saída — e a operação para.
+  const cenarios = {
+    'já entregue': { entregas: entregue('p_lona') },
+    'em impressão': { entregas: entregue('p_lona'), controle: { pecas: { p_lona: { status: 'em_impressao' } } } },
+    impressa: { entregas: entregue('p_lona'), controle: { pecas: { p_lona: { status: 'impressa' } } } },
+    'prazo vencido': { prazoEnvio: '2026-08-01T00:00:00Z' },
+    'recusado com custo extra': {
+      entregas: entregue('p_lona'),
+      pedidos: { p_lona: { motivo: 'trocar foto', paraVersao: 2, em: '2026-08-02T10:00:00Z' } },
+      controle: { pecas: { p_lona: { recusa: { motivo: 'já impressa', exigeExtra: true, em: '2026-08-03T10:00:00Z' } } } },
+    },
+    'recusado sem custo extra': {
+      entregas: entregue('p_lona'),
+      pedidos: { p_lona: { motivo: 'trocar foto', paraVersao: 2, em: '2026-08-02T10:00:00Z' } },
+      controle: { pecas: { p_lona: { recusa: { motivo: 'não dá', exigeExtra: false, em: '2026-08-03T10:00:00Z' } } } },
+    },
+    'pedido em análise': {
+      entregas: entregue('p_lona'),
+      pedidos: { p_lona: { motivo: 'trocar foto', paraVersao: 2, em: '2026-08-02T10:00:00Z' } },
+    },
+  }
+
+  for (const [nome, dados] of Object.entries(cenarios)) {
+    const s = situacaoDaPeca(projeto(dados), lona, AGORA)
+    assert.equal(s.podeEnviar, false, `${nome}: deveria estar bloqueado`)
+    const temSaida = s.bloqueio.podePedir || s.bloqueio.podeAceitarExtra || s.bloqueio.tipo === 'em_analise'
+    assert.ok(temSaida, `${nome}: bloqueio sem saída — o cliente trava e liga para o time`)
+  }
+})
+
+test('pedido novo depois de uma recusa supera a recusa', () => {
+  const p = projeto({
+    entregas: entregue('p_lona'),
+    controle: { pecas: { p_lona: { recusa: { motivo: 'não dá', exigeExtra: false, em: '2026-08-03T10:00:00Z' } } } },
+    pedidos: { p_lona: { motivo: 'agora com outro motivo', paraVersao: 2, em: '2026-08-04T10:00:00Z' } },
+  })
+  const s = situacaoDaPeca(p, lona, AGORA)
+  assert.equal(s.bloqueio.tipo, 'em_analise', 'a resposta antiga não vale para a pergunta nova')
+  assert.equal(s.pedidoEmAberto, true, 'e o analista precisa ver o pedido de novo')
 })
 
 // --------------------------------------------------------------- provas

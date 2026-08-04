@@ -105,6 +105,15 @@ export function situacaoDaPeca(projeto, peca, agora = Date.now()) {
   // eternamente "em análise" — bloqueada por um pedido que já foi atendido.
   const pedidoVigente = pedido && (Number(pedido.paraVersao) || 2) === proximaVersao ? pedido : null
 
+  // Um pedido feito DEPOIS da recusa a supera: o cliente voltou com outro
+  // motivo, e a resposta antiga não vale para a pergunta nova. Isto precisa
+  // valer para a tela do analista também — senão o cliente pede de novo e o
+  // pedido não aparece para ninguém.
+  const recusaVigente = controle?.recusa
+    && !(pedidoVigente && emMs(pedidoVigente.em) > emMs(controle.recusa.em))
+    ? controle.recusa
+    : null
+
   // O status do time vence: se a peça já está na impressora, nada do que o
   // cliente faça na tela dele muda isso.
   let status
@@ -118,7 +127,7 @@ export function situacaoDaPeca(projeto, peca, agora = Date.now()) {
 
   const prazo = situacaoDoPrazo(projeto, agora)
   const bloqueio = motivoDeBloqueio({
-    status, pedido: pedidoVigente, controle, prazo, versaoRecebida, liberadoAte, proximaVersao,
+    status, pedido: pedidoVigente, recusa: recusaVigente, prazo, versaoRecebida, liberadoAte, proximaVersao,
   })
 
   return {
@@ -139,8 +148,8 @@ export function situacaoDaPeca(projeto, peca, agora = Date.now()) {
     podeEnviar: !bloqueio,
     bloqueio,
     // Um pedido em aberto é o que a tela do time precisa ver em destaque.
-    pedidoEmAberto: Boolean(pedidoVigente && liberadoAte < proximaVersao && !controle?.recusa),
-    recusaEmAberto: Boolean(controle?.recusa && liberadoAte < proximaVersao),
+    pedidoEmAberto: Boolean(pedidoVigente && liberadoAte < proximaVersao && !recusaVigente),
+    recusaEmAberto: Boolean(recusaVigente && liberadoAte < proximaVersao),
   }
 }
 
@@ -178,12 +187,22 @@ function ehReprovada(resposta, pecaId) {
  * que ele não pode mudar (já está na impressora), depois o que depende do time
  * (pedido em análise), e só então o prazo.
  */
-function motivoDeBloqueio({ status, pedido, controle, prazo, versaoRecebida, liberadoAte, proximaVersao }) {
-  if (STATUS_DO_TIME.includes(status)) {
+function motivoDeBloqueio({ status, pedido, recusa, prazo, versaoRecebida, liberadoAte, proximaVersao }) {
+  // A liberação do time vence QUALQUER bloqueio, inclusive o de produção.
+  //
+  // Sem isto havia um beco sem saída real: com a peça na impressora, o cliente
+  // não conseguia nem pedir e o analista não conseguia liberar — e o acerto do
+  // custo extra, que acontece por telefone com o atendimento, não tinha como
+  // virar ação nenhuma na ferramenta. Quem sabe que a reimpressão foi combinada
+  // é o time; então é o time que destrava.
+  const liberado = liberadoAte >= proximaVersao
+
+  if (STATUS_DO_TIME.includes(status) && !liberado) {
     return {
       tipo: 'em_producao',
       titulo: status === 'impressa' ? 'Esta peça já foi impressa' : 'Esta peça já entrou em impressão',
-      texto: 'Uma arte nova a esta altura significa reimprimir a peça, com custo extra. Fale com o atendimento antes de qualquer coisa.',
+      texto: 'Uma arte nova a esta altura significa reimprimir a peça, com custo extra. Peça a troca por aqui explicando o motivo, ou fale com o atendimento.',
+      podePedir: true,
     }
   }
 
@@ -193,15 +212,19 @@ function motivoDeBloqueio({ status, pedido, controle, prazo, versaoRecebida, lib
   // volta, não por ter se atrasado.
   if (status === 'reprovada') return null
 
-  const precisaDeLiberacao = versaoRecebida >= 1 && liberadoAte < proximaVersao
+  const precisaDeLiberacao = versaoRecebida >= 1 && !liberado
 
-  if (precisaDeLiberacao && controle?.recusa) {
+  if (precisaDeLiberacao && recusa) {
+    const podeAceitarExtra = Boolean(recusa.exigeExtra) && !pedido?.aceiteExtra
     return {
       tipo: 'recusado',
       titulo: 'Pedido de nova versão recusado',
-      texto: controle.recusa.motivo,
-      exigeExtra: Boolean(controle.recusa.exigeExtra),
-      podeAceitarExtra: Boolean(controle.recusa.exigeExtra) && !pedido?.aceiteExtra,
+      texto: recusa.motivo,
+      exigeExtra: Boolean(recusa.exigeExtra),
+      podeAceitarExtra,
+      // Se não há custo extra a aceitar, a única saída seria o telefone.
+      // Deixar pedir de novo, com outro motivo, evita mais um beco sem saída.
+      podePedir: !podeAceitarExtra,
     }
   }
 
@@ -218,6 +241,7 @@ function motivoDeBloqueio({ status, pedido, controle, prazo, versaoRecebida, lib
       tipo: 'precisa_pedir',
       titulo: 'Esta arte já foi enviada',
       texto: 'Para trocar por uma versão nova, faça o pedido explicando o que mudou. O time precisa saber — a peça pode já estar na fila de produção.',
+      podePedir: true,
     }
   }
 
@@ -225,11 +249,12 @@ function motivoDeBloqueio({ status, pedido, controle, prazo, versaoRecebida, lib
   // abriu — a reprovação de prova já saiu acima, e uma versão liberada pelo
   // analista também não pode ser barrada por um prazo que ele conhecia ao
   // liberar.
-  if (prazo.vencido && liberadoAte < proximaVersao) {
+  if (prazo.vencido && !liberado) {
     return {
       tipo: 'prazo',
       titulo: 'Prazo de envio encerrado',
-      texto: 'O prazo para envio de artes desta feira terminou. Fale com o atendimento para pedir uma liberação.',
+      texto: 'O prazo para envio de artes desta feira terminou. Peça a liberação por aqui explicando a situação, ou fale com o atendimento.',
+      podePedir: true,
     }
   }
 

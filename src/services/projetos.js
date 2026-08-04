@@ -224,9 +224,16 @@ function escreverComoTime(fb, token, mudanca) {
   return updateDoc(doc(getFirestore(fb.app), COLECAO, token), mudanca)
 }
 
-/** Libera exatamente uma versão nova daquela peça. */
-export function liberarNovaVersao(fb, token, pecaId, { ate, observacao, por }) {
-  return escreverComoTime(fb, token, {
+/**
+ * Libera exatamente uma versão nova daquela peça.
+ *
+ * `limparStatus` existe para o caso da reimpressão: liberar arte nova numa peça
+ * que está "em impressão" e deixar o status como estava faria a tela mentir
+ * duas vezes — diria que está imprimindo a arte antiga e que a nova pode
+ * chegar. Liberou reimpressão, a peça volta para a esteira.
+ */
+export function liberarNovaVersao(fb, token, pecaId, { ate, observacao, por, limparStatus }) {
+  const mudanca = {
     [`controle.pecas.${pecaId}.liberadoAte`]: Number(ate) || 2,
     [`controle.pecas.${pecaId}.liberacao`]: semIndefinidos({
       em: new Date().toISOString(),
@@ -234,7 +241,13 @@ export function liberarNovaVersao(fb, token, pecaId, { ate, observacao, por }) {
       observacao: String(observacao || '').trim().slice(0, 600) || null,
     }),
     [`controle.pecas.${pecaId}.recusa`]: null,
-  })
+  }
+  if (limparStatus) {
+    mudanca[`controle.pecas.${pecaId}.status`] = null
+    mudanca[`controle.pecas.${pecaId}.statusEm`] = new Date().toISOString()
+    mudanca[`controle.pecas.${pecaId}.statusPor`] = por ?? null
+  }
+  return escreverComoTime(fb, token, mudanca)
 }
 
 export function recusarNovaVersao(fb, token, pecaId, { motivo, exigeExtra, por }) {
