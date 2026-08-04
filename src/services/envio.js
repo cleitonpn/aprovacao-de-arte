@@ -267,6 +267,15 @@ export async function enviarAvulso(arquivo, dados, aoProgredir) {
       criadoEm: firestore.serverTimestamp(),
     }))
 
+    // Mesma gravação que o envio de arte faz. Sem ela, uma feira que só tivesse
+    // recebido arquivos de apoio não apareceria no seletor do painel — e o
+    // arquivo existiria sem nenhuma tela por onde chegar até ele.
+    await firestore.setDoc(
+      firestore.doc(bd, 'feiras', feiraId),
+      { nome: cadastro.feira, atualizadaEm: firestore.serverTimestamp() },
+      { merge: true },
+    )
+
     aoProgredir?.(1)
     return { protocolo, link, nomeNoStorage }
   } catch (e) {

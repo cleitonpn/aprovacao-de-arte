@@ -436,6 +436,19 @@ function LinhaProjeto({ projeto, sit, onAbrir, onEditar, onRemover }) {
 
       {aberto && (
         <ul className="pecas-lista">
+          {sit.apoio.map((e) => (
+            <li key={e.protocolo} className="entregue">
+              <span className="marca" aria-hidden>↓</span>
+              <div>
+                <strong>{e.pecaRotulo || e.arquivo?.nome || 'Arquivo de apoio'}</strong>
+                <em className="dica-campo"> · logo, fonte ou referência</em>
+                <p className="dica-campo">
+                  {e.arquivo?.nome} · {e.protocolo}
+                  {e.link && <> · <a href={e.link} download={e.arquivo?.nome} target="_blank" rel="noreferrer">baixar</a></>}
+                </p>
+              </div>
+            </li>
+          ))}
           {sit.extras.map((e) => (
             <li key={e.id} className="entregue">
               <span className="marca" aria-hidden>+</span>

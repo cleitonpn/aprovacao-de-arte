@@ -100,6 +100,8 @@ export default function PainelProjeto({ sessao, projeto, resumo, envios, onFecha
         onEnviar={(dados) => rodar(() => registrarProva(sessao.fb, projeto.token, { ...dados, por: sessao.usuario?.email }))}
       />
 
+      <ArquivosDeApoio apoio={resumo.apoio} />
+
       <div className="cartao">
         <h3>Peças</h3>
         {resumo.pecas.map((s) => (
@@ -393,6 +395,43 @@ function HistoricoProvas({ projeto }) {
         )
       })}
     </ul>
+  )
+}
+
+/**
+ * Logo, fontes, manual de marca.
+ *
+ * Estes arquivos ficavam invisíveis para o analista: não são peça, então não
+ * apareciam na lista de peças; e como não têm veredicto, passavam despercebidos
+ * no meio das artes. O cliente mandava o logo e o time nunca ficava sabendo —
+ * exatamente o ruído de comunicação que a ferramenta existe para cortar.
+ */
+function ArquivosDeApoio({ apoio }) {
+  if (!apoio.length) return null
+  const fmtMb = (n) => (Number.isFinite(n) ? `${(n / 1048576).toFixed(1)} MB` : '—')
+
+  return (
+    <div className="cartao">
+      <h3>Arquivos de apoio ({apoio.length})</h3>
+      <p className="ajuda">
+        Logo, fontes, manual de marca e referências enviados pelo cliente. Não
+        passam pela análise — não são peça impressa.
+      </p>
+      <ul className="pecas-lista">
+        {apoio.map((e) => (
+          <li key={e.protocolo} className="entregue">
+            <span className="marca" aria-hidden>↓</span>
+            <div>
+              <strong>{e.pecaRotulo || e.arquivo?.nome || 'Arquivo de apoio'}</strong>
+              <p className="dica-campo">
+                {e.arquivo?.nome} · {fmtMb(e.arquivo?.tamanho)} · {fmtDataHora(e.criadoEm)} · {e.protocolo}
+                {e.link && <> · <a href={e.link} download={e.arquivo?.nome} target="_blank" rel="noreferrer">baixar</a></>}
+              </p>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
   )
 }
 

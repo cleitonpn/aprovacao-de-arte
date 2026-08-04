@@ -149,6 +149,7 @@ export default function Admin({ sessao }) {
   const [envios, setEnvios] = useState([])
   const [buscando, setBuscando] = useState(false)
   const [filtro, setFiltro] = useState('')
+  const [tipo, setTipo] = useState('todos') // todos | arte | avulso
   const [baixando, setBaixando] = useState(null)
   const [erro, setErro] = useState(null)
 
@@ -184,12 +185,18 @@ export default function Admin({ sessao }) {
 
   const visiveis = useMemo(() => {
     const t = filtro.trim().toLowerCase()
-    if (!t) return envios
-    return envios.filter((e) => [
-      e.cadastro?.nome, e.cadastro?.email, e.cadastro?.stand, e.cadastro?.localizacao,
-      e.pecaRotulo, e.perfil?.nome, e.protocolo,
-    ].some((v) => String(v || '').toLowerCase().includes(t)))
-  }, [envios, filtro])
+    // `tipoEnvio` só existe nos registros novos: envio antigo sem o campo é
+    // arte, que é tudo o que existia antes de os arquivos de apoio nascerem.
+    const ehApoio = (e) => e.tipoEnvio === 'avulso'
+    return envios
+      .filter((e) => tipo === 'todos' || (tipo === 'avulso' ? ehApoio(e) : !ehApoio(e)))
+      .filter((e) => !t || [
+        e.cadastro?.nome, e.cadastro?.email, e.cadastro?.stand, e.cadastro?.localizacao,
+        e.pecaRotulo, e.perfil?.nome, e.protocolo, e.arquivo?.nome,
+      ].some((v) => String(v || '').toLowerCase().includes(t)))
+  }, [envios, filtro, tipo])
+
+  const totalApoio = useMemo(() => envios.filter((e) => e.tipoEnvio === 'avulso').length, [envios])
 
   const nomeDaFeira = feiras.find((f) => f.id === feiraId)?.nome || feiraId
 
@@ -222,8 +229,16 @@ export default function Admin({ sessao }) {
             </select>
           </label>
           <label className="campo">
-            <span>Filtrar por expositor, stand ou peça</span>
+            <span>Filtrar por expositor, stand, peça ou arquivo</span>
             <input type="text" value={filtro} onChange={(e) => setFiltro(e.target.value)} placeholder="digite para filtrar" />
+          </label>
+          <label className="campo">
+            <span>Tipo</span>
+            <select value={tipo} onChange={(e) => setTipo(e.target.value)}>
+              <option value="todos">Tudo</option>
+              <option value="arte">Só artes de peça</option>
+              <option value="avulso">Só arquivos de apoio{totalApoio ? ` (${totalApoio})` : ''}</option>
+            </select>
           </label>
         </div>
 
