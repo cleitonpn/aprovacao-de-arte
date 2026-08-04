@@ -79,7 +79,10 @@ export function detectarSeparador(texto) {
 const SINONIMOS = {
   feira: ['feira', 'evento', 'nome da feira', 'nome do evento', 'nome feira'],
   expositor: ['cliente', 'expositor', 'empresa', 'nome do cliente', 'razao social', 'nome'],
-  email: ['email', 'e mail', 'email do cliente', 'email do contato', 'contato'],
+  // Vários endereços na mesma célula, separados por ; ou vírgula: é como a
+  // planilha da operação já traz quando há mais de um decisor.
+  email: ['email', 'e mail', 'emails', 'e mails', 'email do cliente',
+    'email do contato', 'contato', 'emails do cliente'],
   stand: ['stand', 'estande', 'nome do stand', 'nome stand'],
   localizacao: ['localizacao', 'local', 'rua', 'endereco', 'pavilhao', 'localizacao do stand'],
   rotulo: ['peca', 'arte', 'descricao', 'item', 'nome da peca', 'nome da arte'],

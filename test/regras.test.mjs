@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   avaliar, pxNecessarios, dpiEfetivo, especificacao, veredictoDe, exigencia,
-  DPI_MINIMO_GLOBAL, SANGRIA_MINIMA_MM,
+  DPI_PISO_ABSOLUTO, DPI_MINIMO_GLOBAL, SANGRIA_MINIMA_MM,
 } from '../src/core/regras.js'
 import { PERFIS_PADRAO } from '../src/data/perfis.js'
 
@@ -32,28 +32,37 @@ function medidasRaster(extra = {}) {
   }
 }
 
-test('os pisos da empresa se sobrepõem aos valores do perfil', () => {
+test('a densidade tem dois patamares: o que reprova e o que é padrão da casa', () => {
+  assert.equal(DPI_PISO_ABSOLUTO, 100)
   assert.equal(DPI_MINIMO_GLOBAL, 150)
   assert.equal(SANGRIA_MINIMA_MM, 100)
 
-  // lona tem dpiMin 50 no perfil, mas o piso manda
+  // Lona pede 50 dpi no perfil. O piso da empresa levanta os dois números:
+  // abaixo de 100 não imprime, abaixo de 150 imprime fora do padrão.
+  assert.equal(exigencia(lona).dpiPiso, 100)
   assert.equal(exigencia(lona).dpiMin, 150)
-  // e o ideal nunca fica abaixo do mínimo aplicável
   assert.equal(exigencia(lona).dpiIdeal, 150)
-  // o balcão é mais exigente que o piso no ideal, então mantém o dele
-  assert.equal(exigencia(balcao).dpiIdeal, 300)
 
-  // sangria: 10 cm de cada lado em toda peça, inclusive nas pequenas, onde o
-  // perfil pedia 3 mm
-  assert.equal(exigencia(lona).sangriaMm, 100)
-  assert.equal(exigencia(balcao).sangriaMm, 100)
+  // O balcão já pede 150 no perfil, porque é visto a 50 cm. Nenhuma política
+  // de empresa afrouxa isso: o piso dele continua 150, não 100.
+  assert.equal(exigencia(balcao).dpiPiso, 150)
+  assert.equal(exigencia(balcao).dpiIdeal, 300)
 
   // os pisos são configuráveis pelo time de CV
   assert.equal(exigencia(lona, { dpiMinimoGlobal: 200 }).dpiMin, 200)
+  assert.equal(exigencia(lona, { dpiPisoAbsoluto: 120 }).dpiPiso, 120)
   assert.equal(exigencia(lona, { sangriaMinimaMm: 150 }).sangriaMm, 150)
   // e um piso mais frouxo nunca afrouxa um perfil mais exigente
   assert.equal(exigencia(lona, { dpiMinimoGlobal: 30 }).dpiMin, 50)
-  assert.equal(exigencia(balcao, { sangriaMinimaMm: 0 }).sangriaMm, 3)
+})
+
+test('a sangria de 10 cm é da lona; o adesivo tem a dele', () => {
+  // Os 10 cm existem para lona tensionada, que precisa de material para
+  // grampear. Num adesivo isso seria 10 cm de vinil no lixo em cada lado.
+  assert.equal(exigencia(lona).sangriaMm, 100)
+  assert.equal(exigencia(balcao).sangriaMm, 50)
+  // e a sangria própria não se deixa levantar pelo piso da empresa
+  assert.equal(exigencia(balcao, { sangriaMinimaMm: 300 }).sangriaMm, 50)
 })
 
 test('conversões de resolução', () => {
@@ -101,12 +110,38 @@ test('acima do piso, a mesma arte passa na lona e fica em ressalva no balcão', 
   assert.equal(avaliar({ peca, perfil: balcao, medidas }).veredicto, 'ressalva')
 })
 
-test('abaixo do piso, reprova em qualquer peça', () => {
-  const medidas = medidasRaster({ larguraPx: pxNecessarios(100, 120), alturaPx: pxNecessarios(100, 120) })
+// A ferramenta estava reprovando arte que o time de CV aprovaria sem
+// pestanejar — e ferramenta que reprova o que a pessoa aprova não é rigorosa,
+// é ignorada. Daí os dois patamares.
+test('entre o piso e o padrão da casa, passa com ressalva', () => {
   const peca = { larguraCm: 100, alturaCm: 100 }
-  for (const p of [lona, balcao, perfil('testeira')]) {
-    assert.equal(avaliar({ peca, perfil: p, medidas }).veredicto, 'reprovado', p.nome)
-  }
+  const em = (dpi) => medidasRaster({
+    larguraPx: pxNecessarios(100, dpi), alturaPx: pxNecessarios(100, dpi),
+  })
+
+  const a90 = avaliar({ peca, perfil: lona, medidas: em(90) })
+  assert.equal(a90.veredicto, 'reprovado', 'abaixo de 100 dpi não imprime')
+
+  const a120 = avaliar({ peca, perfil: lona, medidas: em(120) })
+  assert.equal(a120.veredicto, 'ressalva', '120 dpi imprime, mas fora do padrão')
+  assert.match(achado(a120, 'resolucao').titulo, /abaixo do padr/i)
+  // A ação precisa dizer que dá para seguir assim — senão a ressalva é lida
+  // como reprovação e o cliente volta ao designer à toa.
+  assert.match(achado(a120, 'resolucao').acao, /poss[ií]vel seguir/i)
+
+  const a160 = avaliar({ peca, perfil: lona, medidas: em(160) })
+  assert.equal(a160.veredicto, 'aprovado', 'acima de 150 está no padrão')
+})
+
+test('a peça vista de perto mantém o piso alto dela', () => {
+  const peca = { larguraCm: 100, alturaCm: 100 }
+  const medidas = medidasRaster({
+    larguraPx: pxNecessarios(100, 120), alturaPx: pxNecessarios(100, 120),
+  })
+  // 120 dpi passa com ressalva numa lona a 2,5 m e reprova num adesivo de
+  // balcão, que o cliente lê a 50 cm. É a mesma arte; muda a distância.
+  assert.equal(avaliar({ peca, perfil: lona, medidas }).veredicto, 'ressalva')
+  assert.equal(avaliar({ peca, perfil: balcao, medidas }).veredicto, 'reprovado')
 })
 
 test('PDF vetorial não sofre restrição de resolução', () => {
@@ -244,10 +279,11 @@ test('especificação da peça inclui a sangria e respeita os pisos', () => {
   assert.equal(e.ideal.dpi, 150)
   assert.equal(especificacao(pecaLona, balcao).ideal.dpi, 300)
 
-  // a sangria da peça pequena também sobe para o piso de 10 cm
+  // o adesivo tem sangria própria de 5 cm por lado
   const balcaoSpec = especificacao({ larguraCm: 100, alturaCm: 50 }, balcao)
-  assert.equal(balcaoSpec.comSangria.larguraCm, 120)
-  assert.equal(balcaoSpec.comSangria.alturaCm, 70)
+  assert.equal(balcaoSpec.sangriaMm, 50)
+  assert.equal(balcaoSpec.comSangria.larguraCm, 110)
+  assert.equal(balcaoSpec.comSangria.alturaCm, 60)
 })
 
 test('a margem de segurança nunca reprova nem vira ressalva', () => {

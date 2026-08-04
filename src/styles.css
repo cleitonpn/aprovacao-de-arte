@@ -609,3 +609,36 @@ textarea { width: 100%; font: inherit; font-size: 13px; padding: 9px 11px; borde
 
 .lista-permissoes { margin: 10px 0 0; padding-left: 18px; font-size: 12.5px; color: var(--suave); }
 .lista-permissoes li { margin-bottom: 2px; }
+
+/* ------------------------------------------------------------- conversa */
+.conversa-linha {
+  display: grid; gap: 10px; max-height: 380px; overflow-y: auto;
+  padding: 12px; margin: 10px 0 14px;
+  background: var(--fundo); border-radius: 10px;
+}
+.balao { max-width: 82%; padding: 9px 12px; border-radius: 12px; background: var(--cartao); border: 1px solid var(--borda); }
+.balao.cliente { justify-self: start; border-bottom-left-radius: 4px; }
+.balao.time {
+  justify-self: end; border-bottom-right-radius: 4px;
+  background: color-mix(in srgb, var(--acento) 12%, var(--cartao));
+  border-color: color-mix(in srgb, var(--acento) 35%, var(--borda));
+}
+.balao-topo { display: flex; align-items: baseline; gap: 8px; margin-bottom: 3px; }
+.balao-topo strong { font-size: 12.5px; }
+.balao p { margin: 0; font-size: 13.5px; line-height: 1.55; white-space: pre-wrap; }
+
+.apoio-destaque { border-left: 4px solid var(--acento); }
+
+/* Simulador: era o último bloco da página e sumia atrás dos botões. Agora
+   tem título e moldura própria — é a resposta mais convincente que a
+   ferramenta dá ao cliente. */
+.bloco-simulador {
+  border: 1px solid var(--borda); border-radius: 12px;
+  padding: 16px; margin: 16px 0;
+  background: color-mix(in srgb, var(--acento) 5%, transparent);
+}
+.bloco-simulador h3 { margin: 0 0 4px; }
+.bloco-simulador .ajuda { margin: 0 0 12px; }
+.bloco-simulador .simulador { margin: 0; }
+
+.risco .linha { margin: 10px 0; }

@@ -32,9 +32,13 @@ export const PERFIS_PADRAO = [
     distanciaM: 0.5,
     dpiMin: 150,
     dpiIdeal: 300,
-    sangriaMm: 3,
+    sangriaMm: 50,
+    // Sangria própria: os 10 cm da política existem para lona tensionada, que
+    // precisa de material para grampear. Num adesivo isso seria 10 cm de vinil
+    // no lixo em cada lado, e o designer ignoraria o gabarito — com razão.
+    sangriaPropria: true,
     margemMm: 10,
-    obs: 'Peça vista de perto e por muito tempo. É a mais exigente do stand.',
+    obs: 'Peça vista de perto e por muito tempo. É a mais exigente do stand. Sangria de 5 cm por lado.',
   },
   {
     id: 'vinil-piso',

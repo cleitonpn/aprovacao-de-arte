@@ -45,10 +45,13 @@ export function registrar(entrada) {
   return registro
 }
 
-export function marcarRiscoAceito(id, por = '') {
-  const lista = ler().map((r) =>
-    r.id === id ? { ...r, riscoAceito: { em: new Date().toISOString(), por } } : r,
-  )
+export function marcarRiscoAceito(id, quem = {}) {
+  const riscoAceito = {
+    em: new Date().toISOString(),
+    nome: String(quem.nome || '').trim(),
+    email: String(quem.email || '').trim().toLowerCase(),
+  }
+  const lista = ler().map((r) => (r.id === id ? { ...r, riscoAceito } : r))
   gravar(lista)
   return lista
 }

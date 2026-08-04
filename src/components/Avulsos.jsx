@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import { enviarAvulso, EXTENSOES_AVULSAS } from '../services/envio.js'
+import { conferirApoio, APOIO } from '../core/apoio.js'
 import { ENVIO, envioConfigurado } from '../config.js'
 
 // Arquivos de apoio: logo, fontes, manual de marca.
@@ -25,13 +26,20 @@ export default function Avulsos({ projeto, cadastro }) {
     setErro(null)
     for (const arquivo of lista) {
       setEnviando({ nome: arquivo.name, fracao: 0 })
+      // A conferência acontece ANTES do envio e não bloqueia nada: o arquivo
+      // sobe de qualquer jeito. O objetivo é o cliente descobrir agora que o
+      // logo não está vetorizado, e não o time descobrir na véspera da feira.
+      let conferencia = null
+      try {
+        conferencia = await conferirApoio(arquivo)
+      } catch { /* conferência é bônus; nunca impede o envio */ }
       try {
         const recibo = await enviarAvulso(
           arquivo,
           { cadastro, projeto, descricao: descricao.trim() || arquivo.name },
           (fracao) => setEnviando({ nome: arquivo.name, fracao }),
         )
-        setFila((f) => [...f, { nome: arquivo.name, protocolo: recibo.protocolo }])
+        setFila((f) => [...f, { nome: arquivo.name, protocolo: recibo.protocolo, conferencia }])
       } catch (e) {
         setErro(`${arquivo.name}: ${e.message}`)
         break
@@ -43,12 +51,16 @@ export default function Avulsos({ projeto, cadastro }) {
   }
 
   return (
-    <div className="cartao">
-      <h3>Arquivos de apoio</h3>
+    <div className="cartao apoio-destaque">
+      <div className="titulo-secao">
+        <h3>Arquivos de apoio</h3>
+        <span className="dica-campo">logo, fontes, manual de marca</span>
+      </div>
       <p className="ajuda">
-        Logo, fontes, manual de marca, referências. Estes arquivos{' '}
-        <strong>não passam pela análise</strong> — eles não são peça impressa,
-        não têm tamanho final nem resolução a conferir. Vão direto para o time.
+        Estes arquivos <strong>não passam pela análise de arte</strong> — não
+        são peça impressa e não têm resolução a conferir. Mas a ferramenta
+        confere <strong>se o logo está vetorizado</strong>, que é o que decide
+        se ele pode ser ampliado para uma testeira de 6 metros.
       </p>
 
       <label className="campo">
@@ -82,12 +94,22 @@ export default function Avulsos({ projeto, cadastro }) {
 
       {fila.length > 0 && (
         <ul className="pecas-lista">
-          {fila.map((f) => (
-            <li key={f.protocolo} className="entregue">
-              <span className="marca" aria-hidden>✓</span>
-              <div><strong>{f.nome}</strong><p className="dica-campo">protocolo {f.protocolo}</p></div>
-            </li>
-          ))}
+          {fila.map((f) => {
+            const c = f.conferencia
+            const marca = c ? APOIO[c.situacao] : null
+            return (
+              <li key={f.protocolo} className="entregue">
+                <span className="marca" aria-hidden>✓</span>
+                <div>
+                  <strong>{f.nome}</strong>
+                  {marca && <span className={`tag ${marca.cor}`}> {marca.rotulo}</span>}
+                  {c?.detalhe && <p className="dica-campo">{c.detalhe}</p>}
+                  {c?.acao && <p className="acao">→ {c.acao}</p>}
+                  <p className="dica-campo">Recebido · protocolo {f.protocolo}</p>
+                </div>
+              </li>
+            )
+          })}
         </ul>
       )}
 

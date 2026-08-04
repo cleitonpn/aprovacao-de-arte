@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   projetoNovo, pecaNova, validarProjeto, normalizarProjeto, cadastroDoProjeto,
-  tokenNovo, chave, MAXIMO_PECAS,
+  tokenNovo, chave, listaDeEmails, MAXIMO_PECAS,
 } from '../src/data/projeto.js'
 import { avaliar } from '../src/core/regras.js'
 import { PERFIS_PADRAO } from '../src/data/perfis.js'
@@ -62,10 +62,31 @@ test('o cadastro gravado no envio sai do projeto, não do cliente', () => {
   assert.deepEqual(cadastroDoProjeto(projetoBom()), {
     nome: 'Buddy Nutrition',
     email: 'ana@buddy.com.br',
+    emails: ['ana@buddy.com.br'],
     feira: 'Expo Sul 2026',
     stand: 'Buddy',
     localizacao: 'Rua 3',
   })
+})
+
+// Decisão de arte raramente cai numa pessoa só: tem o marketing, tem a
+// agência, tem quem assina. Cobrar um endereço só é quase o mesmo que não
+// cobrar — alguém responde "não sou eu que vejo isso".
+test('o cliente pode ter vários e-mails, e o primeiro continua sendo o principal', () => {
+  const p = normalizarProjeto({
+    ...projetoBom(),
+    emails: ['ANA@buddy.com.br', 'jo@agencia.com', 'ana@buddy.com.br', 'invalido'],
+  })
+  assert.deepEqual(p.emails, ['ana@buddy.com.br', 'jo@agencia.com'],
+    'baixa a caixa, tira duplicado e descarta o que não é e-mail')
+  assert.equal(p.email, 'ana@buddy.com.br', 'o primeiro é o que as regras validam')
+})
+
+test('lista de e-mails aceita o formato que vem da planilha', () => {
+  assert.deepEqual(listaDeEmails('ana@buddy.com; jo@agencia.com'), ['ana@buddy.com', 'jo@agencia.com'])
+  assert.deepEqual(listaDeEmails('ana@buddy.com, jo@agencia.com'), ['ana@buddy.com', 'jo@agencia.com'])
+  assert.deepEqual(listaDeEmails('so-um@buddy.com'), ['so-um@buddy.com'])
+  assert.deepEqual(listaDeEmails(''), [])
 })
 
 test('chave() compara textos ignorando acento, caixa e pontuação', () => {

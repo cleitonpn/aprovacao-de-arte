@@ -11,6 +11,7 @@ import Upload from './Upload.jsx'
 import Resultado from './Resultado.jsx'
 import Gabarito, { BotaoGabarito } from './Gabarito.jsx'
 import Avulsos from './Avulsos.jsx'
+import Conversa from './Conversa.jsx'
 
 // A tela do cliente quando o projeto está cadastrado.
 //
@@ -195,6 +196,8 @@ export default function Projeto({ token }) {
       </div>
 
       {projeto.aceitaAvulsos !== false && <Avulsos projeto={projeto} cadastro={cadastro} />}
+
+      <Conversa token={projeto.token} identidade={{ nome: '', email: '' }} />
     </>
   )
 }

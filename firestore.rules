@@ -148,6 +148,31 @@ service cloud.firestore {
                  .hasOnly(['entregas', 'pedidos', 'respostasProva']));
     }
 
+    // A conversa entre o cliente e o time.
+    //
+    // Documentos separados, e não um campo do projeto, porque o objetivo é
+    // servir de registro. Num campo, o cliente precisaria de permissão para
+    // regravá-lo inteiro — e com isso poderia reescrever a resposta do
+    // analista. Histórico que uma das partes edita não resolve discussão
+    // nenhuma. Aqui cada mensagem nasce uma vez, com autor declarado, e
+    // ninguém altera nem apaga: nem o cliente, nem o time.
+    match /projetos/{token}/mensagens/{id} {
+      // Ler exige a mesma credencial de sempre: conhecer o token do link.
+      allow read: if request.auth != null;
+
+      allow create: if request.auth != null
+        && request.resource.data.texto is string
+        && request.resource.data.texto.size() > 0
+        && request.resource.data.texto.size() <= 2000
+        // Ninguém assina como o outro lado: só quem é do time escreve como
+        // time. Sem isto, quem tivesse o link poderia forjar uma autorização
+        // "do analista" dentro do próprio histórico.
+        && (request.resource.data.autor == 'cliente'
+            || (request.resource.data.autor == 'time' && ehAdmin()));
+
+      allow update, delete: if false;
+    }
+
     // A feira: nome e PRAZO FINAL de envio das artes.
     //
     // O prazo mora aqui, e não copiado dentro de cada projeto, porque projeto

@@ -60,10 +60,25 @@ export function usarAnalise({ peca, perfil, escalaFator = 1, politica, detectorN
     rodar(arq)
   }, [rodar])
 
-  const aceitarRisco = useCallback(() => {
+  /**
+   * O aceite da ressalva precisa dizer QUEM aceitou.
+   *
+   * Uma data sozinha não resolve nada na hora da discussão: o link do stand
+   * circula entre marketing, agência e diretoria, e "alguém com o link
+   * aceitou" não é assinatura de ninguém. Nome e e-mail transformam o registro
+   * em prova de quem autorizou imprimir daquele jeito.
+   */
+  const aceitarRisco = useCallback((quem) => {
     if (!registroAtual) return
-    setRegistros(marcarRiscoAceito(registroAtual.id))
-    setRegistroAtual((r) => ({ ...r, riscoAceito: { em: new Date().toISOString() } }))
+    setRegistros(marcarRiscoAceito(registroAtual.id, quem))
+    setRegistroAtual((r) => ({
+      ...r,
+      riscoAceito: {
+        em: new Date().toISOString(),
+        nome: quem?.nome || '',
+        email: quem?.email || '',
+      },
+    }))
   }, [registroAtual])
 
   const limpar = useCallback(() => {

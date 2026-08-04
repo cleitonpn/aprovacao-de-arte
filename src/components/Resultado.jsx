@@ -89,20 +89,31 @@ export default function Resultado({ resultado, modoTecnico, onAceitarRisco, risc
         <div className="risco">
           {riscoAceito ? (
             <p className="risco-ok">
-              ✓ Risco aceito e registrado em {new Date(riscoAceito.em).toLocaleString('pt-BR')}.
-              A peça segue para produção como está.
+              ✓ Risco aceito por <strong>{riscoAceito.nome || '—'}</strong>
+              {riscoAceito.email && ` (${riscoAceito.email})`} em{' '}
+              {new Date(riscoAceito.em).toLocaleString('pt-BR')}. A peça segue
+              para produção como está.
             </p>
           ) : (
-            <>
-              <p>
-                Nada aqui impede a impressão. Se o resultado descrito acima é aceitável
-                para você, registre a decisão e a peça segue para produção.
-              </p>
-              <button className="btn btn-risco" onClick={onAceitarRisco}>
-                Aceito o risco e autorizo a impressão
-              </button>
-            </>
+            <AceiteDeRisco onAceitar={onAceitarRisco} />
           )}
+        </div>
+      )}
+
+      {medidas.bitmap && !medidas.puroVetor && (
+        <div className="bloco-simulador">
+          <h3>Como esta arte vai ser vista</h3>
+          <p className="ajuda">
+            Arraste a distância e compare. É a pergunta que importa de verdade:
+            não "quantos pixels tem", e sim se alguém enxerga a diferença de
+            onde vai olhar.
+          </p>
+          <Simulador
+            medidas={medidas}
+            peca={peca}
+            perfil={perfil}
+            dpiMin={resultado.resolucao?.minimo?.dpi ?? perfil.dpiMin}
+          />
         </div>
       )}
 
@@ -134,12 +145,52 @@ export default function Resultado({ resultado, modoTecnico, onAceitarRisco, risc
         <button className="btn btn-ghost" onClick={() => window.print()}>Imprimir / PDF</button>
       </div>
 
-      {medidas.bitmap && !medidas.puroVetor && (
-        <Simulador medidas={medidas} peca={peca} perfil={perfil} dpiMin={resultado.resolucao?.minimo?.dpi ?? perfil.dpiMin} />
-      )}
-
       {modoTecnico && <PainelTecnico resultado={resultado} />}
     </section>
+  )
+}
+
+/**
+ * Aceite da ressalva, com identificação obrigatória.
+ *
+ * A data sozinha não resolve nada na hora da discussão: o link do stand circula
+ * entre marketing, agência e diretoria, e "alguém com o link aceitou" não é
+ * assinatura de ninguém. Nome e e-mail transformam o registro em prova de quem
+ * autorizou imprimir daquele jeito — que é o motivo de a ressalva existir.
+ */
+function AceiteDeRisco({ onAceitar }) {
+  const [nome, setNome] = useState('')
+  const [email, setEmail] = useState('')
+  const valido = nome.trim().length > 2 && /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim())
+
+  return (
+    <>
+      <p>
+        Nada aqui impede a impressão. Se o resultado descrito acima é aceitável
+        para você, identifique-se e a peça segue para produção.
+      </p>
+      <div className="linha">
+        <label className="campo">
+          <span>Seu nome</span>
+          <input type="text" value={nome} onChange={(e) => setNome(e.target.value)} autoComplete="name" />
+        </label>
+        <label className="campo">
+          <span>Seu e-mail</span>
+          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
+        </label>
+      </div>
+      <button
+        className="btn btn-risco"
+        disabled={!valido}
+        onClick={() => onAceitar({ nome: nome.trim(), email: email.trim().toLowerCase() })}
+      >
+        Aceito o risco e autorizo a impressão
+      </button>
+      <p className="nota">
+        Fica registrado com data e hora. Como mais de uma pessoa pode ter este
+        link, o registro precisa dizer quem autorizou.
+      </p>
+    </>
   )
 }
 

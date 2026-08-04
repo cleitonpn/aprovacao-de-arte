@@ -338,3 +338,59 @@ export async function salvarFeira(fb, { id, nome, prazoEnvio }, por) {
 }
 
 export { carregarFirebase }
+
+// ------------------------------------------------------------- conversa
+//
+// O chat entre cliente e analista mora numa SUBCOLEÇÃO, e não num campo do
+// projeto, por um motivo que é o próprio objetivo dele: servir de registro.
+//
+// Num campo do documento, o cliente — que precisa poder escrever — teria de
+// receber permissão para regravar o campo inteiro, e com isso poderia reescrever
+// a resposta do analista. Um histórico que uma das partes pode editar não
+// resolve discussão nenhuma. Como documentos separados, cada mensagem é criada
+// uma vez, por um autor, e ninguém altera nem apaga: nem o cliente, nem o time.
+
+const MENSAGENS = 'mensagens'
+
+export async function enviarMensagemDoCliente(token, { texto, nome, email }) {
+  const { app, firestore } = await sessaoAnonima()
+  const bd = firestore.getFirestore(app)
+  await firestore.addDoc(firestore.collection(bd, COLECAO, token, MENSAGENS), semIndefinidos({
+    autor: 'cliente',
+    nome: String(nome || '').trim().slice(0, 120),
+    email: String(email || '').trim().toLowerCase().slice(0, 160) || null,
+    texto: String(texto || '').trim().slice(0, 2000),
+    em: new Date().toISOString(),
+  }))
+}
+
+export async function enviarMensagemDoTime(fb, token, { texto, autorEmail, autorNome }) {
+  const bd = fb.firestore.getFirestore(fb.app)
+  await fb.firestore.addDoc(fb.firestore.collection(bd, COLECAO, token, MENSAGENS), semIndefinidos({
+    autor: 'time',
+    nome: String(autorNome || autorEmail || 'Comunicação visual').trim().slice(0, 120),
+    email: autorEmail || null,
+    texto: String(texto || '').trim().slice(0, 2000),
+    em: new Date().toISOString(),
+  }))
+}
+
+/** Ordena aqui, e não na consulta, para não exigir índice: são poucas dezenas. */
+function ordenar(docs) {
+  return docs
+    .map((d) => ({ id: d.id, ...d.data() }))
+    .sort((a, b) => Date.parse(a.em || 0) - Date.parse(b.em || 0))
+}
+
+export async function lerConversaComoCliente(token) {
+  const { app, firestore } = await sessaoAnonima()
+  const bd = firestore.getFirestore(app)
+  const snap = await firestore.getDocs(firestore.collection(bd, COLECAO, token, MENSAGENS))
+  return ordenar(snap.docs)
+}
+
+export async function lerConversaComoTime(fb, token) {
+  const bd = fb.firestore.getFirestore(fb.app)
+  const snap = await fb.firestore.getDocs(fb.firestore.collection(bd, COLECAO, token, MENSAGENS))
+  return ordenar(snap.docs)
+}

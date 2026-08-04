@@ -137,6 +137,10 @@ Detalhes que a importação resolve sozinha:
 - ignora gabarito que não seja endereço ("sim", "ver com o projetista"): botão
   que abre nada é pior que botão nenhum.
 
+**E-mails:** a coluna `email` aceita vários endereços separados por `;` ou
+vírgula. A cobrança vai para todos — mandar só para o primeiro é quase o mesmo
+que não mandar, porque decisão de arte raramente é de uma pessoa só.
+
 **Duas colunas novas:** `link drive` (a pasta do projeto, por stand — vira botão
 em destaque na tela do cliente) e `gabarito` (por peça, só link; arquivo se
 envia na tela de cadastro).
@@ -161,6 +165,15 @@ copiar de uma vez os e-mails de todos os stands com pendência.
 
 Com o nome da peça cadastrada em cada arquivo, e uma coluna
 **Prova de aprovação** para mandar o print direto da lista.
+
+### Conversa com o cliente
+
+Cliente e analista trocam mensagens dentro da ferramenta — na tela do cliente e
+em `#/projetos` → **Abrir**. Fica registrado junto com as artes do stand, e
+**ninguém edita nem apaga**, nem o cliente nem o time: é o que faz do histórico
+um registro que resolve discussão em vez de virar palavra contra palavra.
+
+Não há aviso automático. Para algo urgente, telefone continua sendo telefone.
 
 ### 6. Fechar o ciclo (`#/projetos` → **Abrir**)
 
@@ -196,6 +209,26 @@ Uma exceção é automática e proposital: **quem está corrigindo porque nós
 reprovamos a prova não é bloqueado**. Barrar o cliente por uma volta que o time
 pediu seria puni-lo pelo nosso processo. Para as demais exceções, existe a
 prorrogação por stand.
+
+### Sobre a resolução
+
+São **dois patamares**, não um só:
+
+| Faixa | O que acontece |
+|---|---|
+| abaixo de **100 dpi** | reprovada — não imprime |
+| entre **100 e 150 dpi** | **aprovada com ressalva** — imprime, fora do padrão |
+| **150 dpi** ou mais | aprovada |
+
+A versão anterior reprovava tudo abaixo de 150, inclusive arte que o time de CV
+aprovaria sem pestanejar — e ferramenta que reprova o que a pessoa aprova não é
+rigorosa, é ignorada.
+
+O piso do **perfil** nunca é afrouxado: adesivo de balcão continua exigindo 150
+dpi, porque é lido a 50 cm. A mesma arte de 120 dpi passa com ressalva numa
+lona e reprova num adesivo.
+
+**Sangria:** 10 cm por lado na lona (é o que se grampeia), **5 cm no adesivo**.
 
 ### Sobre o custo extra
 

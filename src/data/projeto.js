@@ -149,12 +149,32 @@ export function normalizarGabarito(g) {
   }
 }
 
+/**
+ * Lista de e-mails do cliente.
+ *
+ * Decisão de arte cai raramente numa pessoa só: tem o marketing, tem a
+ * agência, tem quem assina. Mandar a cobrança para um endereço só é como não
+ * mandar — alguém responde "não sou eu que vejo isso".
+ *
+ * O primeiro da lista continua sendo `email`, no singular, porque é o que as
+ * regras do Firestore validam e o que os envios já gravados carregam.
+ */
+export function listaDeEmails(valor) {
+  const bruto = Array.isArray(valor) ? valor : String(valor || '').split(/[;,\s]+/)
+  const limpos = bruto
+    .map((e) => String(e || '').trim().toLowerCase())
+    .filter((e) => EMAIL.test(e))
+  return [...new Set(limpos)].slice(0, 8)
+}
+
 export function projetoNovo(parcial = {}) {
+  const emails = listaDeEmails(parcial.emails?.length ? parcial.emails : parcial.email)
   return {
     token: parcial.token || tokenNovo(),
     feira: parcial.feira || '',
     expositor: parcial.expositor || '',
-    email: parcial.email || '',
+    email: emails[0] || parcial.email || '',
+    emails,
     stand: parcial.stand || '',
     localizacao: parcial.localizacao || '',
     // Pasta do projeto no Drive: o cliente consulta planta, memorial e
@@ -193,11 +213,13 @@ export function validarProjeto(p) {
 
 export function normalizarProjeto(p) {
   const texto = (v, max) => String(v ?? '').trim().slice(0, max)
+  const emails = listaDeEmails(p.emails?.length ? p.emails : p.email)
   return {
     token: p.token || tokenNovo(),
     feira: texto(p.feira, 160),
     expositor: texto(p.expositor, 120),
-    email: texto(p.email, 160).toLowerCase(),
+    email: emails[0] || texto(p.email, 160).toLowerCase(),
+    emails,
     stand: texto(p.stand, 160),
     localizacao: texto(p.localizacao, 160),
     linkDrive: texto(p.linkDrive, 800),
@@ -220,6 +242,7 @@ export function cadastroDoProjeto(projeto) {
   return {
     nome: projeto.expositor,
     email: projeto.email,
+    emails: listaDeEmails(projeto.emails?.length ? projeto.emails : projeto.email),
     feira: projeto.feira,
     stand: projeto.stand,
     localizacao: projeto.localizacao || '',

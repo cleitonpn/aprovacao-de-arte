@@ -5,6 +5,7 @@ import {
 } from '../services/projetos.js'
 import { enviarProva, EXTENSOES_PROVA } from '../services/envio.js'
 import { traduzirErroAuth } from '../services/sessao.js'
+import Conversa from './Conversa.jsx'
 
 // O que o analista faz com um projeto: responder pedidos, mandar a prova de
 // aprovação, marcar o que entrou em impressão e prorrogar prazo caso a caso.
@@ -107,6 +108,8 @@ export default function PainelProjeto({ sessao, projeto, resumo, envios, podeApr
       />}
 
       <ArquivosDeApoio apoio={resumo.apoio} />
+
+      <Conversa token={projeto.token} ehTime sessao={sessao} />
 
       <div className="cartao">
         <h3>Peças</h3>

@@ -19,10 +19,20 @@ const POL_POR_CM = 1 / 2.54
 // Política da empresa: pisos que valem para TODA peça. O perfil de cada tipo
 // de peça só pode ser MAIS exigente que eles, nunca menos. Editáveis no painel
 // do time de comunicação visual.
+// A densidade tem DOIS patamares, e a diferença entre eles é o que separa
+// "esta arte não imprime" de "esta arte imprime pior do que poderia".
+//
+// A versão anterior tinha um número só, 150, e reprovava tudo abaixo dele —
+// inclusive arte que o time de CV aprovaria sem pestanejar. Uma ferramenta que
+// reprova o que a pessoa aprovaria não é rigorosa: é ignorada, e aí não serve
+// para nada. Agora 150 continua sendo o alvo, mas quem fica entre 100 e 150
+// passa com ressalva, com o cliente sabendo o que está aceitando.
+export const DPI_PISO_ABSOLUTO = 100
 export const DPI_MINIMO_GLOBAL = 150
 export const SANGRIA_MINIMA_MM = 100
 
 export const POLITICA_PADRAO = {
+  dpiPisoAbsoluto: DPI_PISO_ABSOLUTO,
   dpiMinimoGlobal: DPI_MINIMO_GLOBAL,
   sangriaMinimaMm: SANGRIA_MINIMA_MM,
 }
@@ -36,11 +46,22 @@ const TOLERANCIA = 0.995
 /** Exigências aplicáveis a uma peça, já com os pisos da empresa embutidos. */
 export function exigencia(perfil, politica = {}) {
   const p = { ...POLITICA_PADRAO, ...politica }
+  // O piso do PERFIL nunca é afrouxado: o adesivo de balcão pede 150 dpi
+  // porque é visto a 50 cm, e nenhuma política de empresa muda essa física.
+  // O piso da empresa só levanta o de peças mais tolerantes.
+  const dpiPiso = Math.max(perfil.dpiMin || 0, p.dpiPisoAbsoluto || 0)
   const dpiMin = Math.max(perfil.dpiMin || 0, p.dpiMinimoGlobal || 0)
   return {
+    dpiPiso,
     dpiMin,
     dpiIdeal: Math.max(perfil.dpiIdeal || 0, dpiMin),
-    sangriaMm: Math.max(perfil.sangriaMm || 0, p.sangriaMinimaMm || 0),
+    // Sangria própria vence o piso da empresa. Os 10 cm existem para lona
+    // tensionada, que precisa de material para grampear; num adesivo de balcão
+    // isso viraria 10 cm de vinil jogado fora em cada lado — e o designer, com
+    // razão, ignoraria o gabarito.
+    sangriaMm: perfil.sangriaPropria
+      ? (perfil.sangriaMm || 0)
+      : Math.max(perfil.sangriaMm || 0, p.sangriaMinimaMm || 0),
     margemMm: perfil.margemMm || 0,
   }
 }
@@ -88,7 +109,7 @@ export function dpiEfetivo(pixels, cm) {
 export function avaliar(ctx) {
   const { peca, perfil, medidas } = ctx
   const politica = { ...POLITICA_PADRAO, ...(ctx.politica || {}) }
-  const { dpiMin, dpiIdeal, sangriaMm } = exigencia(perfil, politica)
+  const { dpiPiso, dpiMin, dpiIdeal, sangriaMm } = exigencia(perfil, politica)
   const escala = ctx.escalaFator || 1
   const achados = []
   const add = (a) => achados.push(a)
@@ -113,6 +134,8 @@ export function avaliar(ctx) {
   const dpiV = dpiEfetivo(alturaPx, peca.alturaCm)
   const dpi = Math.min(dpiH, dpiV)
 
+  const necPisoL = pxNecessarios(peca.larguraCm, dpiPiso)
+  const necPisoA = pxNecessarios(peca.alturaCm, dpiPiso)
   const necMinL = pxNecessarios(peca.larguraCm, dpiMin)
   const necMinA = pxNecessarios(peca.alturaCm, dpiMin)
   const necIdealL = pxNecessarios(peca.larguraCm, dpiIdeal)
@@ -125,6 +148,7 @@ export function avaliar(ctx) {
 
   const resumoResolucao = {
     dpi, dpiH, dpiV, dpiNaEscala, escala,
+    piso: { largura: necPisoL, altura: necPisoA, dpi: dpiPiso },
     minimo: { largura: necMinL, altura: necMinA, dpi: dpiMin },
     ideal: { largura: necIdealL, altura: necIdealA, dpi: dpiIdeal },
     enviado: { largura: larguraPx, altura: alturaPx },
@@ -139,14 +163,25 @@ export function avaliar(ctx) {
       titulo: 'Arquivo vetorial — resolução ilimitada',
       detalhe: 'A arte é composta por vetores, que podem ser ampliados a qualquer tamanho sem perda. Não há restrição de resolução.',
     })
-  } else if (dpi < dpiMin * TOLERANCIA) {
-    const fator = dpiMin / Math.max(dpi, 0.01)
+  } else if (dpi < dpiPiso * TOLERANCIA) {
+    const fator = dpiPiso / Math.max(dpi, 0.01)
     add({
       id: 'resolucao',
       nivel: 'bloqueante',
       titulo: `Resolução insuficiente — ${num(dpi)} dpi no tamanho impresso`,
-      detalhe: `O mínimo aceito é ${dpiMin} dpi no tamanho final. A arte enviada tem ${px(larguraPx)} × ${px(alturaPx)} px, o que dá ${num(dpi)} dpi numa peça de ${num(peca.larguraCm)} × ${num(peca.alturaCm)} cm${escala > 1 ? ` (${num(dpiNaEscala)} dpi na escala 1:${escala} em que foi montada)` : ''}.`,
-      acao: `Peça ao designer o arquivo com no mínimo ${px(necMinL)} × ${px(necMinA)} px — cerca de ${num(fator)}× o que foi enviado.`,
+      detalhe: `O mínimo que ainda imprime nesta peça é ${dpiPiso} dpi no tamanho final. A arte enviada tem ${px(larguraPx)} × ${px(alturaPx)} px, o que dá ${num(dpi)} dpi numa peça de ${num(peca.larguraCm)} × ${num(peca.alturaCm)} cm${escala > 1 ? ` (${num(dpiNaEscala)} dpi na escala 1:${escala} em que foi montada)` : ''}.`,
+      acao: `Peça ao designer o arquivo com no mínimo ${px(necPisoL)} × ${px(necPisoA)} px — cerca de ${num(fator)}× o que foi enviado. O ideal são ${px(necMinL)} × ${px(necMinA)} px (${dpiMin} dpi).`,
+      dados: resumoResolucao,
+    })
+  } else if (dpi < dpiMin * TOLERANCIA) {
+    // A faixa entre o piso e o padrão da casa. Imprime, e o time de CV
+    // aprovaria — mas o cliente precisa saber que aceitou menos do que o alvo.
+    add({
+      id: 'resolucao',
+      nivel: 'ressalva',
+      titulo: `Resolução abaixo do padrão — ${num(dpi)} dpi no tamanho impresso`,
+      detalhe: `Nosso padrão é ${dpiMin} dpi no tamanho final; esta arte tem ${num(dpi)} dpi. Acima de ${dpiPiso} dpi a peça imprime e fica aceitável a ${num(perfil.distanciaM)} m, mas de perto o detalhe fino aparece amaciado.`,
+      acao: `Se der para conseguir o arquivo com ${px(necMinL)} × ${px(necMinA)} px, o resultado fica no padrão. Senão, é possível seguir assim.`,
       dados: resumoResolucao,
     })
   } else if (dpi < dpiIdeal * TOLERANCIA) {
@@ -396,13 +431,18 @@ export function avaliar(ctx) {
 
 /** Dimensões-alvo da peça, com e sem sangria. Base do gabarito. */
 export function especificacao(peca, perfil, politica = {}) {
-  const { dpiMin, dpiIdeal, sangriaMm } = exigencia(perfil, politica)
+  const { dpiPiso, dpiMin, dpiIdeal, sangriaMm } = exigencia(perfil, politica)
   const sangriaCm = sangriaMm / 10
   const totalL = peca.larguraCm + 2 * sangriaCm
   const totalA = peca.alturaCm + 2 * sangriaCm
   return {
     visivel: { larguraCm: peca.larguraCm, alturaCm: peca.alturaCm },
     comSangria: { larguraCm: totalL, alturaCm: totalA },
+    piso: {
+      largura: pxNecessarios(totalL, dpiPiso),
+      altura: pxNecessarios(totalA, dpiPiso),
+      dpi: dpiPiso,
+    },
     minimo: {
       largura: pxNecessarios(totalL, dpiMin),
       altura: pxNecessarios(totalA, dpiMin),

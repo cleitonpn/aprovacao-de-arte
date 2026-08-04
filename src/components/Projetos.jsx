@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { PERFIS_PADRAO, ESCALAS } from '../data/perfis.js'
 import {
-  projetoNovo, pecaNova, validarProjeto, perfilPorTexto, MAXIMO_PECAS,
+  projetoNovo, pecaNova, validarProjeto, perfilPorTexto, listaDeEmails, MAXIMO_PECAS,
 } from '../data/projeto.js'
 import { importarProjetos, MODELO_CSV } from '../core/importacao.js'
 import { resumoDoProjeto } from '../core/fluxo.js'
@@ -312,7 +312,10 @@ export default function Projetos({ sessao }) {
               <button
                 className="btn btn-ghost"
                 onClick={() => navigator.clipboard?.writeText(
-                  linhas.filter(({ sit }) => sit.pendentes.length).map(({ projeto }) => projeto.email).join('; '),
+                  [...new Set(linhas
+                    .filter(({ sit }) => sit.pendentes.length)
+                    .flatMap(({ projeto }) => (projeto.emails?.length ? projeto.emails : [projeto.email])))]
+                    .filter(Boolean).join('; '),
                 )}
               >
                 Copiar e-mails com pendência
@@ -463,7 +466,10 @@ function LinhaProjeto({ projeto, sit, podeCadastrar, podeCobrar, onAbrir, onEdit
   }
 
   const assunto = `Artes do stand ${projeto.stand} — ${projeto.feira}`
-  const mailto = `mailto:${encodeURIComponent(projeto.email)}?subject=${encodeURIComponent(assunto)}&body=${encodeURIComponent(textoDeCobranca(projeto, sit))}`
+  // Todos os decisores no mesmo e-mail: mandar só para o primeiro é quase o
+  // mesmo que não mandar — alguém responde "não sou eu que vejo isso".
+  const destinatarios = (projeto.emails?.length ? projeto.emails : [projeto.email]).filter(Boolean)
+  const mailto = `mailto:${encodeURIComponent(destinatarios.join(','))}?subject=${encodeURIComponent(assunto)}&body=${encodeURIComponent(textoDeCobranca(projeto, sit))}`
 
   return (
     <div className={`projeto ${sit.completo ? 'completo' : ''}`}>
@@ -472,7 +478,7 @@ function LinhaProjeto({ projeto, sit, podeCadastrar, podeCobrar, onAbrir, onEdit
           <strong>{projeto.stand}</strong>
           <span className="dica-campo"> · {projeto.expositor}</span>
           <br />
-          <a href={`mailto:${projeto.email}`}>{projeto.email}</a>
+          <a href={`mailto:${destinatarios.join(',')}`}>{destinatarios.join(', ')}</a>
           {projeto.localizacao && <em className="dica-campo"> · {projeto.localizacao}</em>}
         </div>
         <div className="projeto-progresso">
@@ -846,9 +852,24 @@ function FormularioProjeto({ sessao, inicial, onSalvar, onCancelar }) {
           {erros.stand && <em className="erro-campo">{erros.stand}</em>}
         </label>
         <label className="campo">
-          <span>E-mail do cliente</span>
-          <input type="email" value={dados.email} onChange={(e) => alterar('email', e.target.value)} />
-          {erros.email && <em className="erro-campo">{erros.email}</em>}
+          <span>E-mails do cliente</span>
+          <input
+            type="text"
+            value={(dados.emails?.length ? dados.emails : [dados.email].filter(Boolean)).join('; ')}
+            onChange={(e) => {
+              const lista = listaDeEmails(e.target.value)
+              setDados((d) => ({ ...d, emails: lista, email: lista[0] || e.target.value.trim() }))
+            }}
+            placeholder="ana@cliente.com; agencia@parceira.com"
+          />
+          {erros.email
+            ? <em className="erro-campo">{erros.email}</em>
+            : (
+              <em className="dica-campo">
+                Separe por ponto e vírgula. Decisão de arte raramente é de uma
+                pessoa só — a cobrança vai para todos.
+              </em>
+            )}
         </label>
       </div>
 
