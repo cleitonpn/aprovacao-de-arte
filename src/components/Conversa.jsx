@@ -31,6 +31,7 @@ const fmtQuando = (v) => {
 
 export default function Conversa({ token, ehTime = false, sessao = null, identidade = null }) {
   const [mensagens, setMensagens] = useState([])
+  const [aberta, setAberta] = useState(false)
   const [texto, setTexto] = useState('')
   const [nome, setNome] = useState(identidade?.nome || '')
   const [email, setEmail] = useState(identidade?.email || '')
@@ -102,6 +103,34 @@ export default function Conversa({ token, ehTime = false, sessao = null, identid
   // ressalva: o link circula entre várias pessoas, e "alguém perguntou" não
   // ajuda ninguém a responder.
   const podeEnviar = texto.trim().length > 1 && (ehTime || nome.trim().length > 2)
+
+  // Fechada até ter assunto.
+  //
+  // Aberta e vazia, a caixa foi lida como parte do formulário de envio: "achei
+  // que tinha que digitar nele". Um campo de texto em branco no meio de uma
+  // tela de tarefa parece obrigatório, e o cliente parava ali para descobrir o
+  // que escrever. Convite fechado, o mesmo espaço passa a dizer o contrário —
+  // é opcional, e está aqui se precisar. Basta uma mensagem existir, de
+  // qualquer lado, e a conversa abre e fica aberta: aí ela é assunto pendente,
+  // não decoração. Do lado do time isso não se aplica: o analista abre o painel
+  // justamente para falar com o cliente.
+  if (!ehTime && !aberta && !mensagens.length) {
+    return (
+      <div className="cartao conversa-convite">
+        <div>
+          <strong>Ficou com dúvida sobre alguma peça?</strong>
+          <p className="ajuda">
+            Medida, material, prazo — pergunte ao time por aqui. Fica registrado
+            junto com as artes deste stand, sem precisar procurar depois quem
+            falou o quê no WhatsApp.
+          </p>
+        </div>
+        <button className="btn btn-ghost" onClick={() => setAberta(true)}>
+          Falar com o time
+        </button>
+      </div>
+    )
+  }
 
   return (
     <div className="cartao conversa">

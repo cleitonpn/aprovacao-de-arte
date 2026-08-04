@@ -22,6 +22,8 @@
 // Essa separação é o que impede o cliente de assinar a decisão do analista.
 // Ela está nas regras do Firestore, não só aqui.
 
+import { emMs } from './datas.js'
+
 export const STATUS = {
   aguardando: { rotulo: 'Aguardando arte', ordem: 0, cor: 'neutro' },
   recebida: { rotulo: 'Arte recebida', ordem: 1, cor: 'ok' },
@@ -38,15 +40,8 @@ export const STATUS_DO_TIME = ['em_impressao', 'impressa']
 export const PRECISA_DO_CLIENTE = ['aguardando', 'em_prova', 'reprovada']
 
 const mapa = (v) => (v && typeof v === 'object' ? v : {})
-const emMs = (v) => {
-  if (!v) return 0
-  if (typeof v === 'string') return Date.parse(v) || 0
-  if (typeof v?.seconds === 'number') return v.seconds * 1000
-  if (v instanceof Date) return v.getTime()
-  return 0
-}
 
-/** Converte prazo (Timestamp do Firestore, Date ou ISO) em milissegundos. */
+/** Converte prazo (Timestamp do Firestore, Date, ISO ou ms) em milissegundos. */
 export const prazoEmMs = emMs
 
 /**
@@ -289,10 +284,54 @@ export function resumoDoProjeto(projeto, agora = Date.now()) {
     pendentes: pecas.filter((s) => s.status === 'aguardando'),
     aguardandoCliente: conta((s) => PRECISA_DO_CLIENTE.includes(s.status)),
     emProducao: conta((s) => STATUS_DO_TIME.includes(s.status)),
+    emImpressao: conta((s) => s.status === 'em_impressao'),
+    impressas: conta((s) => s.status === 'impressa'),
     pedidosEmAberto: pecas.filter((s) => s.pedidoEmAberto),
     prazo: situacaoDoPrazo(projeto, agora),
     completo: pecas.length > 0 && conta((s) => s.status !== 'aguardando') === pecas.length,
   }
+}
+
+/**
+ * As fatias em que o analista realmente pensa quando abre o painel.
+ *
+ * Não é uma classificação: um stand pode ser "100% enviadas" E "em impressão"
+ * ao mesmo tempo, e é certo que apareça nas duas. São perguntas — "quem ainda
+ * não mandou nada?", "o que já está na impressora?" — e cada uma responde a
+ * sua. Tentar espremer o stand numa única fase daria a resposta errada para
+ * metade das perguntas.
+ *
+ * `casa` recebe o resumo do projeto (o de `resumoDoProjeto`, possivelmente com
+ * `recebidas` corrigido pelo que de fato chegou em `envios`).
+ */
+export const FASES = [
+  { id: 'todos', rotulo: 'Todos', casa: () => true },
+  {
+    id: 'sem_arte',
+    rotulo: 'Sem nenhuma arte',
+    casa: (s) => s.total > 0 && s.recebidas === 0,
+  },
+  {
+    id: 'parcial',
+    rotulo: 'Enviaram em parte',
+    casa: (s) => s.recebidas > 0 && s.recebidas < s.total,
+  },
+  {
+    id: 'completo',
+    rotulo: '100% enviadas',
+    casa: (s) => s.total > 0 && s.recebidas === s.total,
+  },
+  { id: 'em_impressao', rotulo: 'Em impressão', casa: (s) => s.emImpressao > 0 },
+  {
+    id: 'impressa',
+    rotulo: 'Tudo impresso',
+    casa: (s) => s.total > 0 && s.impressas === s.total,
+  },
+]
+
+/** Predicado da fase escolhida — cai em "todos" se o id não existir. */
+export function filtroDeFase(id) {
+  return (FASES.find((f) => f.id === id) || FASES[0]).casa
 }
 
 // O aviso de custo extra é deliberadamente SEM valor. Parte dos expositores

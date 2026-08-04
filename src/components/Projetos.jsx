@@ -4,7 +4,8 @@ import {
   projetoNovo, pecaNova, validarProjeto, perfilPorTexto, listaDeEmails, MAXIMO_PECAS,
 } from '../data/projeto.js'
 import { importarProjetos, MODELO_CSV } from '../core/importacao.js'
-import { resumoDoProjeto } from '../core/fluxo.js'
+import { resumoDoProjeto, FASES, filtroDeFase } from '../core/fluxo.js'
+import { formatarData as fmtData, paraInputData, fimDoDia } from '../core/datas.js'
 import {
   salvarProjeto, salvarProjetos, apagarProjeto, salvarFeira,
   ouvirProjetos, ouvirEnvios,
@@ -29,20 +30,6 @@ import PainelProjeto from './PainelProjeto.jsx'
 // que chegou.
 
 const nomeDoPerfil = (id) => PERFIS_PADRAO.find((p) => p.id === id)?.nome || id
-const fmtData = (v) => {
-  if (!v) return null
-  const ms = typeof v === 'string' ? Date.parse(v) : v.seconds * 1000
-  return Number.isFinite(ms) ? new Date(ms).toLocaleDateString('pt-BR') : null
-}
-const paraInputData = (v) => {
-  if (!v) return ''
-  const ms = typeof v === 'string' ? Date.parse(v) : v.seconds * 1000
-  return Number.isFinite(ms) ? new Date(ms).toISOString().slice(0, 10) : ''
-}
-// O prazo vale até o FIM do dia escolhido: guardar 00:00 faria "prazo dia 10"
-// vencer na virada do dia 9 para o 10, e ninguém entende prazo assim.
-const fimDoDia = (aaaammdd) => (aaaammdd ? new Date(`${aaaammdd}T23:59:59`).toISOString() : null)
-
 export function linkDoProjeto(token) {
   const { origin, pathname } = window.location
   return `${origin}${pathname}#/p/${token}`
@@ -82,7 +69,7 @@ function situacao(projeto, enviosPorProjeto) {
 }
 
 function textoDeCobranca(projeto, sit) {
-  const prazo = fmtData(sit.prazo.limite)
+  const prazo = fmtData(sit.prazo.limite, null)
   const linhas = [
     `Olá, ${projeto.expositor}!`,
     '',
@@ -120,6 +107,7 @@ export default function Projetos({ sessao }) {
   const [erro, setErro] = useState(null)
   const [painel, setPainel] = useState(null) // null | 'importar' | {projeto} | {detalhe}
   const [filtro, setFiltro] = useState('')
+  const [fase, setFase] = useState('todos')
 
   // A escuta substitui o F5. O analista deixa esta tela aberta o dia inteiro
   // durante a montagem; obrigá-lo a recarregar para saber se chegou arte é
@@ -158,7 +146,11 @@ export default function Projetos({ sessao }) {
 
   const marcaConversa = (token) => vistoEm(usuario?.email, `conversa:${token}`)
 
-  const linhas = useMemo(() => {
+  // Duas etapas de propósito: o texto e a feira definem o UNIVERSO desta tela,
+  // e é sobre ele que as fatias são contadas. Contar depois do filtro de fase
+  // daria a cada botão o seu próprio número e zero em todos os outros — que é
+  // o oposto de um painel.
+  const universo = useMemo(() => {
     const t = filtro.trim().toLowerCase()
     // O prazo vem da feira, não da cópia guardada no projeto. É a mesma leitura
     // que a tela do cliente faz — se as duas divergissem, o time veria um prazo
@@ -178,6 +170,15 @@ export default function Projetos({ sessao }) {
         .some((v) => String(v || '').toLowerCase().includes(t)))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projetos, enviosPorProjeto, filtro, feira, usuario?.email, versaoDoVisto])
+
+  const contagens = useMemo(() => Object.fromEntries(
+    FASES.map((f) => [f.id, universo.filter(({ sit }) => f.casa(sit)).length]),
+  ), [universo])
+
+  const linhas = useMemo(
+    () => universo.filter(({ sit }) => filtroDeFase(fase)(sit)),
+    [universo, fase],
+  )
 
   const resumo = useMemo(() => {
     const total = linhas.reduce((s, l) => s + l.sit.total, 0)
@@ -258,6 +259,28 @@ export default function Projetos({ sessao }) {
             <span>Filtrar por stand, cliente ou e-mail</span>
             <input type="text" value={filtro} onChange={(e) => setFiltro(e.target.value)} placeholder="digite para filtrar" />
           </label>
+        </div>
+
+        {/*
+          As perguntas do dia da montagem viram um clique. Antes, "quem ainda
+          não mandou nada?" era o analista lendo a lista inteira e contando de
+          cabeça — e na semana da feira essa lista tem centenas de linhas.
+          O número fica no botão mesmo quando é zero: saber que não há ninguém
+          sem arte é uma resposta tão útil quanto a lista.
+        */}
+        <div className="filtros-fase" role="group" aria-label="Filtrar por situação do envio">
+          {FASES.map((f) => (
+            <button
+              key={f.id}
+              type="button"
+              className={`chip ${fase === f.id ? 'ativo' : ''}`}
+              aria-pressed={fase === f.id}
+              onClick={() => setFase(f.id)}
+            >
+              {f.rotulo}
+              <span className="chip-conta">{contagens[f.id] ?? 0}</span>
+            </button>
+          ))}
         </div>
 
         {podeCadastrar && (
@@ -354,7 +377,11 @@ export default function Projetos({ sessao }) {
           </p>
         )}
         {!carregando && projetos.length > 0 && !linhas.length && (
-          <p className="ajuda">Nenhum resultado para “{filtro}”.</p>
+          <p className="ajuda">
+            {universo.length
+              ? <>Nenhum stand em “{FASES.find((f) => f.id === fase)?.rotulo}”{filtro && <> com o texto “{filtro}”</>}.</>
+              : <>Nenhum resultado para “{filtro}”.</>}
+          </p>
         )}
         {linhas.map(({ projeto, sit, temMensagemNova }) => (
           <LinhaProjeto
@@ -446,7 +473,7 @@ function FeiraEmEdicao({ sessao, feira, feiraId, novaFeira, onPronto, onCancelar
 }
 
 function ResumoDaFeira({ feira, podeEditar, onEditar, onNova }) {
-  const prazo = fmtData(feira?.prazoEnvio)
+  const prazo = fmtData(feira?.prazoEnvio, null)
   return (
     <div className="bloco-prazo">
       <div className="linha">

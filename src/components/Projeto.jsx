@@ -3,6 +3,7 @@ import { carregarPerfis, carregarPolitica, carregarDetectorNitidez } from '../da
 import { POLITICA_PADRAO, especificacao } from '../core/regras.js'
 import { cadastroDoProjeto, pecaNova, perfilPorTexto } from '../data/projeto.js'
 import { resumoDoProjeto, situacaoDaPeca, AVISO_PRAZO, AVISO_EXTRA } from '../core/fluxo.js'
+import { formatarData as fmtData, formatarDataHora as fmtDataHora } from '../core/datas.js'
 import {
   carregarProjetoPublico, ouvirProjetoPublico, marcarEntrega, pedirNovaVersao,
   aceitarCustoExtra, responderProva,
@@ -26,8 +27,6 @@ import Conversa from './Conversa.jsx'
 // uma senha por pessoa deixaria justamente ela de fora.
 
 const fmt = (n) => new Intl.NumberFormat('pt-BR').format(Math.round(n))
-const fmtData = (v) => (v ? new Date(typeof v === 'string' ? v : v.seconds * 1000).toLocaleDateString('pt-BR') : '—')
-const fmtDataHora = (v) => (v ? new Date(typeof v === 'string' ? v : v.seconds * 1000).toLocaleString('pt-BR') : '—')
 
 export default function Projeto({ token }) {
   // Lidos uma vez: são leituras de localStorage e não mudam nesta tela — o
@@ -118,6 +117,7 @@ export default function Projeto({ token }) {
       <PainelDaPeca
         situacao={ativa}
         projeto={projeto}
+        resumo={resumo}
         cadastro={cadastro}
         perfis={perfis}
         politica={politica}
@@ -146,36 +146,7 @@ export default function Projeto({ token }) {
 
   return (
     <>
-      <section className="capa">
-        <div className="capa-texto">
-          <span className="capa-etiqueta">{projeto.feira}</span>
-          <h2>{projeto.stand}</h2>
-          {projeto.localizacao && <p className="capa-local">{projeto.localizacao}</p>}
-          <p className="capa-frase">
-            As medidas de cada peça já vêm do projeto do seu stand — você não
-            precisa informar tamanho nenhum. A conferência acontece no seu
-            próprio navegador, e o arquivo só sai do seu computador quando você
-            clicar em enviar.
-          </p>
-          {projeto.linkDrive && (
-            <a className="btn btn-drive" href={projeto.linkDrive} target="_blank" rel="noreferrer">
-              Ver o projeto do stand
-            </a>
-          )}
-        </div>
-
-        <div className="capa-medidor">
-          <Anel feito={resumo.recebidas} total={resumo.total} />
-          <p className="capa-medidor-texto">
-            {resumo.completo
-              ? 'Todas as artes enviadas'
-              : `${resumo.recebidas} de ${resumo.total} artes enviadas`}
-          </p>
-          {resumo.emProducao > 0 && (
-            <p className="dica-campo">{resumo.emProducao} já em produção</p>
-          )}
-        </div>
-      </section>
+      <Capa projeto={projeto} resumo={resumo} />
 
       <AvisoPrazo prazo={resumo.prazo} />
 
@@ -216,6 +187,64 @@ export default function Projeto({ token }) {
 
       <Conversa token={projeto.token} identidade={{ nome: '', email: '' }} />
     </>
+  )
+}
+
+/**
+ * A capa da tela do cliente.
+ *
+ * Ela aparece na lista de peças E na tela de envio, e isso não é enfeite
+ * repetido: a tela de envio é onde o cliente passa mais tempo, e era
+ * justamente ali que ele perdia de vista em que stand estava mexendo e quanto
+ * ainda faltava. Na versão compacta some a frase de boas-vindas — ele já leu —
+ * e entra a peça que está sendo enviada, com a saída para a lista.
+ */
+function Capa({ projeto, resumo, compacta = false, legenda = null, onVoltar = null }) {
+  return (
+    <section className={`capa ${compacta ? 'compacta' : ''}`}>
+      <div className="capa-texto">
+        <span className="capa-etiqueta">{projeto.feira}</span>
+        <h2>{projeto.stand}</h2>
+        {compacta
+          ? legenda && <p className="capa-local">{legenda}</p>
+          : (
+            <>
+              {projeto.localizacao && <p className="capa-local">{projeto.localizacao}</p>}
+              <p className="capa-frase">
+                As medidas de cada peça já vêm do projeto do seu stand — você
+                não precisa informar tamanho nenhum. A conferência acontece no
+                seu próprio navegador, e o arquivo só sai do seu computador
+                quando você clicar em enviar.
+              </p>
+            </>
+          )}
+
+        {(onVoltar || projeto.linkDrive) && (
+          <div className="capa-acoes">
+            {onVoltar && (
+              <button className="btn btn-ghost" onClick={onVoltar}>← Todas as peças</button>
+            )}
+            {projeto.linkDrive && (
+              <a className="btn btn-drive" href={projeto.linkDrive} target="_blank" rel="noreferrer">
+                Ver o projeto do stand
+              </a>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="capa-medidor">
+        <Anel feito={resumo.recebidas} total={resumo.total} />
+        <p className="capa-medidor-texto">
+          {resumo.completo
+            ? 'Todas as artes enviadas'
+            : `${resumo.recebidas} de ${resumo.total} artes enviadas`}
+        </p>
+        {resumo.emProducao > 0 && (
+          <p className="dica-campo">{resumo.emProducao} já em produção</p>
+        )}
+      </div>
+    </section>
   )
 }
 
@@ -672,7 +701,7 @@ function PecaForaDaLista({ bloqueado, onCriar }) {
   )
 }
 
-function PainelDaPeca({ situacao, projeto, cadastro, perfis, politica, detectorNitidez, onVoltar, onEnviado }) {
+function PainelDaPeca({ situacao, projeto, resumo, cadastro, perfis, politica, detectorNitidez, onVoltar, onEnviado }) {
   const peca = situacao.peca
   const perfil = perfis.find((p) => p.id === peca.perfilId) || perfis[0]
   const alvo = { larguraCm: peca.larguraCm, alturaCm: peca.alturaCm }
@@ -687,6 +716,14 @@ function PainelDaPeca({ situacao, projeto, cadastro, perfis, politica, detectorN
 
   return (
     <>
+      <Capa
+        projeto={projeto}
+        resumo={resumo}
+        compacta
+        legenda={`Enviando: ${peca.rotulo}`}
+        onVoltar={onVoltar}
+      />
+
       <div className="cartao">
         <div className="admin-topo">
           <div>
@@ -696,7 +733,6 @@ function PainelDaPeca({ situacao, projeto, cadastro, perfis, politica, detectorN
               {situacao.proximaVersao > 1 && ` · enviando a versão ${situacao.proximaVersao}`}
             </p>
           </div>
-          <button className="btn btn-ghost" onClick={onVoltar}>← Todas as peças</button>
         </div>
 
         {situacao.status === 'reprovada' && (

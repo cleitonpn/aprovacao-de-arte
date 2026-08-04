@@ -10,6 +10,8 @@
 // olhou. Comparar por data, e não por contagem, é o que faz o aviso continuar
 // certo quando duas mensagens chegam entre um clique e outro.
 
+import { emMs } from '../core/datas.js'
+
 const CHAVE = 'aprovacao-arte:visto'
 
 // Quem está desenhando bolinha a partir daqui.
@@ -49,15 +51,6 @@ function gravar(dados) {
   } catch {
     /* aba anônima ou cota cheia: sem marcador, tudo aparece como novo */
   }
-}
-
-const emMs = (v) => {
-  if (!v) return 0
-  if (typeof v === 'number') return v
-  if (typeof v === 'string') return Date.parse(v) || 0
-  if (typeof v?.seconds === 'number') return v.seconds * 1000
-  if (v instanceof Date) return v.getTime()
-  return 0
 }
 
 /** Data (ms) do último item que este analista viu neste assunto. */

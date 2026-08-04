@@ -3,6 +3,7 @@ import { listarAnalistas, criarAnalista, liberarAnalista, removerAnalista, tradu
 import { EMAIL } from '../data/projeto.js'
 import { LISTA_DE_PAPEIS, PAPEIS, acessoDe, ROTULO_PERMISSAO } from '../core/permissoes.js'
 import { usarFeiras } from './Admin.jsx'
+import { formatarData as fmtData } from '../core/datas.js'
 
 // Cadastro dos analistas que têm acesso às telas internas.
 //
@@ -22,7 +23,6 @@ import { usarFeiras } from './Admin.jsx'
 // analista de cobrança com acesso a todas as feiras continua sem aprovar nada;
 // um analista completo só opera as feiras dele.
 
-const fmtData = (t) => (t?.seconds ? new Date(t.seconds * 1000).toLocaleDateString('pt-BR') : '—')
 
 function senhaSugerida() {
   const alfabeto = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789'

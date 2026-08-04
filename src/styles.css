@@ -536,12 +536,23 @@ textarea { width: 100%; font: inherit; font-size: 13px; padding: 9px 11px; borde
 .capa-local { margin: 4px 0 0; color: var(--suave); font-size: 14px; }
 .capa-frase { margin: 12px 0 0; max-width: 62ch; font-size: 13.5px; line-height: 1.65; color: var(--suave); }
 
+/* O botão do Drive era preto sólido com um emoji de pasta: no tema escuro
+   virava um retângulo branco no meio da capa, e o amarelo do emoji era uma cor
+   que não aparece em nenhum outro lugar da tela. Agora ele usa o mesmo acento
+   da etiqueta da feira, logo acima, e a seta diz o que o emoji dizia — isto
+   abre fora daqui. */
+.capa-acoes { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
 .btn-drive {
-  margin-top: 16px; display: inline-flex; align-items: center; gap: 8px;
-  background: var(--texto); color: var(--cartao); font-weight: 600;
+  display: inline-flex; align-items: center; gap: 8px; font-weight: 600;
+  background: color-mix(in srgb, var(--acento) 10%, transparent);
+  color: var(--acento);
+  border: 1px solid color-mix(in srgb, var(--acento) 35%, var(--borda));
 }
-.btn-drive::before { content: '📁'; font-size: 15px; }
-.btn-drive:hover { filter: brightness(1.15); }
+.btn-drive::after { content: '↗'; font-size: 13px; opacity: .75; }
+.btn-drive:hover {
+  filter: none;
+  background: color-mix(in srgb, var(--acento) 18%, transparent);
+}
 
 .capa-medidor { text-align: center; }
 .capa-medidor-texto { margin: 8px 0 0; font-size: 13px; font-weight: 600; }
@@ -581,11 +592,20 @@ textarea { width: 100%; font: inherit; font-size: 13px; padding: 9px 11px; borde
 
 .projeto-cabecalho { display: block; }
 
+/* A mesma capa, um degrau menor, na tela de envio: ali ela não é a chamada da
+   página, é a referência de onde o cliente está e de quanto falta. */
+.capa.compacta { padding: 18px 22px; gap: 20px; }
+.capa.compacta h2 { font-size: 22px; }
+.capa.compacta .capa-acoes { margin-top: 12px; }
+.capa.compacta .anel { width: 96px; height: 96px; }
+.capa.compacta .capa-medidor-texto { font-size: 12.5px; }
+
 @media (max-width: 859px) {
   .capa { grid-template-columns: minmax(0, 1fr); gap: 18px; padding: 20px; text-align: center; }
   .capa h2 { font-size: 24px; }
   .capa-frase { margin-left: auto; margin-right: auto; }
-  .btn-drive { width: 100%; justify-content: center; }
+  .capa-acoes { justify-content: center; }
+  .capa-acoes .btn, .btn-drive { flex: 1 1 180px; justify-content: center; }
   .anel { width: 108px; height: 108px; }
 }
 
@@ -610,7 +630,38 @@ textarea { width: 100%; font: inherit; font-size: 13px; padding: 9px 11px; borde
 .lista-permissoes { margin: 10px 0 0; padding-left: 18px; font-size: 12.5px; color: var(--suave); }
 .lista-permissoes li { margin-bottom: 2px; }
 
+/* ------------------------------------------- filtros por fase do envio */
+.filtros-fase { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 12px; }
+.chip {
+  display: inline-flex; align-items: center; gap: 7px;
+  background: transparent; color: var(--texto);
+  border: 1px solid var(--borda); border-radius: 999px;
+  padding: 6px 12px; font-size: 13px; font-family: inherit; cursor: pointer;
+  transition: border-color .15s ease, background .15s ease;
+}
+.chip:hover { border-color: color-mix(in srgb, var(--acento) 45%, var(--borda)); }
+.chip.ativo {
+  border-color: var(--acento); color: var(--acento); font-weight: 600;
+  background: color-mix(in srgb, var(--acento) 10%, transparent);
+}
+.chip-conta {
+  min-width: 18px; padding: 1px 6px; border-radius: 999px;
+  background: var(--borda); color: var(--suave);
+  font-size: 11.5px; font-weight: 700; line-height: 1.5;
+}
+.chip.ativo .chip-conta { background: var(--acento); color: #fff; }
+
 /* ------------------------------------------------------------- conversa */
+/* Fechada, a caixa é um convite — e um convite não parece um campo que ficou
+   por preencher, que era como o cliente a lia. */
+.conversa-convite {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 16px; flex-wrap: wrap;
+}
+.conversa-convite > div { min-width: 0; flex: 1 1 320px; }
+.conversa-convite strong { font-size: 14.5px; }
+.conversa-convite .ajuda { margin: 4px 0 0; }
+
 .conversa-linha {
   display: grid; gap: 10px; max-height: 380px; overflow-y: auto;
   padding: 12px; margin: 10px 0 14px;

@@ -4,6 +4,7 @@ import { enviarProva, EXTENSOES_PROVA } from '../services/envio.js'
 import { registrarProva, ouvirEnvios } from '../services/projetos.js'
 import { vistoEm, marcarVisto, dataEmMs, assinarVisto } from '../store/visto.js'
 import { feirasVisiveis } from '../core/permissoes.js'
+import { formatarDataHora as fmtData } from '../core/datas.js'
 
 // Artes recebidas: escolhe a feira, vê o que chegou e baixa.
 //
@@ -11,7 +12,6 @@ import { feirasVisiveis } from '../core/permissoes.js'
 // envolve as três telas internas. Esta só recebe a sessão já liberada.
 
 const ROTULO = { aprovado: 'Aprovada', ressalva: 'Com ressalva', reprovado: 'Reprovada' }
-const fmtData = (t) => (t?.seconds ? new Date(t.seconds * 1000).toLocaleString('pt-BR') : '—')
 const fmtMb = (n) => (Number.isFinite(n) ? `${(n / 1048576).toFixed(1)} MB` : '—')
 
 // Baixar vários arquivos grandes de uma vez: o navegador não zipa nada (seria

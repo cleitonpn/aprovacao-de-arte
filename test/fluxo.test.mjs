@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  situacaoDaPeca, situacaoDoPrazo, resumoDoProjeto, provasDaPeca,
+  situacaoDaPeca, situacaoDoPrazo, resumoDoProjeto, provasDaPeca, FASES, filtroDeFase,
 } from '../src/core/fluxo.js'
 
 // A esteira da peça é a regra de negócio mais fácil de quebrar sem ninguém
@@ -347,4 +347,76 @@ test('a prova continua valendo enquanto a versão não muda', () => {
     controle: { provas: { pr1: { pecaIds: ['p_lona'], versoes: { p_lona: 1 }, enviadaEm: '2026-08-05T10:00:00Z' } } },
   })
   assert.equal(situacaoDaPeca(p, lona, AGORA).status, 'em_prova')
+})
+
+// --------------------------------------------------------- fatias do painel
+//
+// Na semana da feira o painel tem centenas de linhas e o analista faz sempre
+// as mesmas perguntas: quem não mandou nada, quem mandou pela metade, o que
+// já está na impressora. Cada fatia responde UMA delas — e um stand pode
+// aparecer em mais de uma, o que é certo: "100% enviadas" e "em impressão"
+// são verdadeiras ao mesmo tempo com frequência.
+
+const fatia = (id, sit) => filtroDeFase(id)(sit)
+
+test('as fatias respondem cada uma a sua pergunta', () => {
+  const semNada = resumoDoProjeto(projeto(), AGORA)
+  assert.equal(fatia('sem_arte', semNada), true)
+  assert.equal(fatia('parcial', semNada), false)
+  assert.equal(fatia('completo', semNada), false)
+
+  const metade = resumoDoProjeto(projeto({ entregas: entregue('p_lona') }), AGORA)
+  assert.equal(fatia('sem_arte', metade), false)
+  assert.equal(fatia('parcial', metade), true)
+  assert.equal(fatia('completo', metade), false)
+
+  const tudo = resumoDoProjeto(projeto({
+    entregas: { ...entregue('p_lona'), ...entregue('p_test') },
+  }), AGORA)
+  assert.equal(fatia('parcial', tudo), false)
+  assert.equal(fatia('completo', tudo), true)
+})
+
+test('em impressão e impressa são contadas separadamente', () => {
+  const impressao = projeto({
+    entregas: { ...entregue('p_lona'), ...entregue('p_test') },
+    controle: { pecas: { p_lona: { status: 'em_impressao' }, p_test: { status: 'impressa' } } },
+  })
+  const s = resumoDoProjeto(impressao, AGORA)
+  assert.equal(s.emImpressao, 1)
+  assert.equal(s.impressas, 1)
+  assert.equal(s.emProducao, 2)
+
+  assert.equal(fatia('em_impressao', s), true, 'uma peça na impressora já responde a pergunta')
+  assert.equal(fatia('impressa', s), false, '"tudo impresso" é TUDO, não uma peça')
+
+  const todasImpressas = resumoDoProjeto({
+    ...impressao,
+    controle: { pecas: { p_lona: { status: 'impressa' }, p_test: { status: 'impressa' } } },
+  }, AGORA)
+  assert.equal(fatia('impressa', todasImpressas), true)
+  assert.equal(fatia('em_impressao', todasImpressas), false)
+})
+
+test('um stand pode estar em mais de uma fatia — e isso é o certo', () => {
+  const s = resumoDoProjeto(projeto({
+    entregas: { ...entregue('p_lona'), ...entregue('p_test') },
+    controle: { pecas: { p_lona: { status: 'em_impressao' } } },
+  }), AGORA)
+  assert.equal(fatia('completo', s), true)
+  assert.equal(fatia('em_impressao', s), true)
+})
+
+test('projeto sem peça nenhuma não entra em fatia de pendência', () => {
+  const vazio = resumoDoProjeto({ token: 'x', pecas: [] }, AGORA)
+  for (const id of ['sem_arte', 'parcial', 'completo', 'em_impressao', 'impressa']) {
+    assert.equal(fatia(id, vazio), false, `${id} não deveria casar com projeto vazio`)
+  }
+  assert.equal(fatia('todos', vazio), true)
+})
+
+test('fase desconhecida não esconde a lista — cai em "todos"', () => {
+  const s = resumoDoProjeto(projeto(), AGORA)
+  assert.equal(fatia('inventada', s), true)
+  assert.equal(FASES[0].id, 'todos')
 })

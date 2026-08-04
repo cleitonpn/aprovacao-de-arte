@@ -6,6 +6,7 @@ import {
 import { enviarProva, EXTENSOES_PROVA } from '../services/envio.js'
 import { traduzirErroAuth } from '../services/sessao.js'
 import Conversa from './Conversa.jsx'
+import { formatarDataHora as fmtDataHora, paraInputData, fimDoDia } from '../core/datas.js'
 
 // O que o analista faz com um projeto: responder pedidos, mandar a prova de
 // aprovação, marcar o que entrou em impressão e prorrogar prazo caso a caso.
@@ -15,15 +16,6 @@ import Conversa from './Conversa.jsx'
 // mais simples de programar e inútil na operação: o analista abre isto entre
 // duas ligações e precisa ver a pendência, não o inventário.
 
-const fmtDataHora = (v) => (v ? new Date(typeof v === 'string' ? v : v.seconds * 1000).toLocaleString('pt-BR') : '—')
-const paraInputData = (v) => {
-  if (!v) return ''
-  const ms = typeof v === 'string' ? Date.parse(v) : v.seconds * 1000
-  return Number.isFinite(ms) ? new Date(ms).toISOString().slice(0, 10) : ''
-}
-// O prazo vale até o FIM do dia escolhido. Guardar 00:00 faria "prazo dia 10"
-// vencer na virada do dia 9 para o 10, e ninguém entende o prazo assim.
-const fimDoDia = (aaaammdd) => (aaaammdd ? new Date(`${aaaammdd}T23:59:59`).toISOString() : null)
 
 export default function PainelProjeto({ sessao, projeto, resumo, envios, podeAprovar = true, onFechar, onMudou }) {
   const [erro, setErro] = useState(null)
