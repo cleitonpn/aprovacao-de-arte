@@ -126,10 +126,178 @@ export async function marcarEntrega(token, pecaId, dados) {
       protocolo: dados.protocolo ?? null,
       veredicto: dados.veredicto ?? null,
       arquivo: dados.arquivo ?? null,
+      versao: Number(dados.versao) || 1,
       riscoAceito: dados.riscoAceito ? true : false,
       em: new Date().toISOString(),
     }),
   })
+}
+
+// ------------------------------------------------------- ações do cliente
+//
+// Tudo aqui roda com a sessão anônima e o token do link, e por isso só toca
+// nos três campos que as regras liberam ao cliente: `entregas`, `pedidos` e
+// `respostasProva`. A decisão do analista mora em `controle`, que ele não
+// alcança — é o que impede o cliente de assinar a própria liberação.
+
+async function escreverComoCliente(token, mudanca) {
+  const { app, firestore } = await sessaoAnonima()
+  const bd = firestore.getFirestore(app)
+  await firestore.updateDoc(firestore.doc(bd, COLECAO, token), mudanca)
+}
+
+/**
+ * Pedido de nova versão de uma peça já entregue.
+ *
+ * `paraVersao` é o que impede o pedido de continuar valendo depois de
+ * atendido: sem ele, a peça ficaria presa em "em análise" para sempre. E o
+ * motivo é obrigatório porque, sem ele, o analista decide no escuro — não sabe
+ * se é correção de telefone ou troca de conceito.
+ */
+export function pedirNovaVersao(token, pecaId, { motivo, paraVersao }) {
+  return escreverComoCliente(token, {
+    [`pedidos.${pecaId}`]: semIndefinidos({
+      motivo: String(motivo || '').trim().slice(0, 600),
+      paraVersao: Number(paraVersao) || 2,
+      em: new Date().toISOString(),
+      aceiteExtra: null,
+    }),
+  })
+}
+
+/**
+ * Aceite do custo extra.
+ *
+ * Guarda o TEXTO exato que estava na tela junto com a data. Um `true` seco não
+ * serviria de nada numa discussão sobre a fatura três meses depois — e é
+ * justamente aí que este registro é usado.
+ */
+export function aceitarCustoExtra(token, pecaId, { texto, motivoDaRecusa }) {
+  return escreverComoCliente(token, {
+    [`pedidos.${pecaId}.aceiteExtra`]: semIndefinidos({
+      em: new Date().toISOString(),
+      texto: String(texto || '').slice(0, 2000),
+      motivoDaRecusa: motivoDaRecusa ?? null,
+    }),
+  })
+}
+
+/** Resposta do cliente a uma prova: aprovada, reprovada ou reprovada em partes. */
+export function responderProva(token, provaId, { decisao, pecasReprovadas = [], observacao = '' }) {
+  return escreverComoCliente(token, {
+    [`respostasProva.${provaId}`]: semIndefinidos({
+      decisao,
+      pecasReprovadas: decisao === 'aprovada' ? [] : pecasReprovadas,
+      observacao: String(observacao || '').trim().slice(0, 1000),
+      em: new Date().toISOString(),
+    }),
+  })
+}
+
+// ---------------------------------------------------------- ações do time
+
+function escreverComoTime(fb, token, mudanca) {
+  const { getFirestore, doc, updateDoc } = fb.firestore
+  return updateDoc(doc(getFirestore(fb.app), COLECAO, token), mudanca)
+}
+
+/** Libera exatamente uma versão nova daquela peça. */
+export function liberarNovaVersao(fb, token, pecaId, { ate, observacao, por }) {
+  return escreverComoTime(fb, token, {
+    [`controle.pecas.${pecaId}.liberadoAte`]: Number(ate) || 2,
+    [`controle.pecas.${pecaId}.liberacao`]: semIndefinidos({
+      em: new Date().toISOString(),
+      por: por ?? null,
+      observacao: String(observacao || '').trim().slice(0, 600) || null,
+    }),
+    [`controle.pecas.${pecaId}.recusa`]: null,
+  })
+}
+
+export function recusarNovaVersao(fb, token, pecaId, { motivo, exigeExtra, por }) {
+  return escreverComoTime(fb, token, {
+    [`controle.pecas.${pecaId}.recusa`]: semIndefinidos({
+      motivo: String(motivo || '').trim().slice(0, 800),
+      exigeExtra: Boolean(exigeExtra),
+      em: new Date().toISOString(),
+      por: por ?? null,
+    }),
+  })
+}
+
+export function definirStatusDaPeca(fb, token, pecaId, status, por) {
+  return escreverComoTime(fb, token, {
+    [`controle.pecas.${pecaId}.status`]: status || null,
+    [`controle.pecas.${pecaId}.statusEm`]: new Date().toISOString(),
+    [`controle.pecas.${pecaId}.statusPor`]: por ?? null,
+  })
+}
+
+/**
+ * Registra a prova de aprovação já enviada ao armazenamento.
+ *
+ * Uma prova cobre N peças de propósito: na prática ela é o mockup do stand
+ * inteiro, e é isso que dá sentido a "reprovar em partes" — o cliente aprova a
+ * lona e reprova a testeira dentro da mesma imagem.
+ */
+export function registrarProva(fb, token, { id, arquivo, pecaIds, observacao, por }) {
+  return escreverComoTime(fb, token, {
+    [`controle.provas.${id}`]: semIndefinidos({
+      arquivo: arquivo ?? null,
+      pecaIds: pecaIds || [],
+      observacao: String(observacao || '').trim().slice(0, 800) || null,
+      enviadaEm: new Date().toISOString(),
+      enviadaPor: por ?? null,
+    }),
+  })
+}
+
+/**
+ * Datas vão como Timestamp do Firestore, não como texto.
+ *
+ * Texto ISO ordena bem e seria mais simples de ler no console — mas comparar
+ * data em texto dentro de uma consulta ou de uma regra é armadilha certa. O
+ * lado da leitura já aceita os três formatos (ver `fluxo.js`), então o custo
+ * aqui é zero.
+ */
+function paraCarimbo(fb, iso) {
+  if (!iso) return null
+  const data = iso instanceof Date ? iso : new Date(iso)
+  return Number.isNaN(data.getTime()) ? null : fb.firestore.Timestamp.fromDate(data)
+}
+
+/** Prorrogação do prazo para um stand específico. `ate` em ISO, ou null. */
+export function prorrogarPrazo(fb, token, ate, por) {
+  return escreverComoTime(fb, token, {
+    prorrogadoAte: paraCarimbo(fb, ate),
+    prorrogadoPor: ate ? (por ?? null) : null,
+  })
+}
+
+/**
+ * Aplica o prazo a todos os projetos da feira.
+ *
+ * O prazo mora no projeto, e não na feira, por um motivo prático: o cliente já
+ * lê o projeto dele: guardá-lo na feira exigiria uma segunda leitura e uma
+ * regra a mais para liberar essa leitura ao expositor. O custo é reescrever os
+ * projetos quando a data muda — que é raro, e cabe num lote.
+ */
+export async function definirPrazoDaFeira(fb, feiraId, prazoIso, por, aoProgredir) {
+  const { getFirestore, doc, writeBatch } = fb.firestore
+  const bd = getFirestore(fb.app)
+  const projetos = await listarProjetos(fb, feiraId)
+  const carimbo = paraCarimbo(fb, prazoIso)
+
+  for (let i = 0; i < projetos.length; i += POR_LOTE) {
+    const fatia = projetos.slice(i, i + POR_LOTE)
+    const lote = writeBatch(bd)
+    for (const p of fatia) {
+      lote.update(doc(bd, COLECAO, p.token), { prazoEnvio: carimbo, prazoPor: por ?? null })
+    }
+    await lote.commit()
+    aoProgredir?.(Math.min(i + POR_LOTE, projetos.length), projetos.length)
+  }
+  return projetos.length
 }
 
 export { carregarFirebase }

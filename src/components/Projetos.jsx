@@ -4,11 +4,16 @@ import {
   projetoNovo, pecaNova, validarProjeto, perfilPorTexto, MAXIMO_PECAS,
 } from '../data/projeto.js'
 import { importarProjetos, MODELO_CSV } from '../core/importacao.js'
-import { salvarProjeto, salvarProjetos, listarProjetos, apagarProjeto } from '../services/projetos.js'
+import { resumoDoProjeto } from '../core/fluxo.js'
+import {
+  salvarProjeto, salvarProjetos, listarProjetos, apagarProjeto, definirPrazoDaFeira,
+} from '../services/projetos.js'
 import { traduzirErroAuth } from '../services/sessao.js'
 import { usarFeiras, baixarTexto } from './Admin.jsx'
+import PainelProjeto from './PainelProjeto.jsx'
 
-// Cadastro dos projetos: quais peças cada stand precisa entregar.
+// Cadastro e acompanhamento dos projetos: quais peças cada stand precisa
+// entregar, e em que pé está cada uma.
 //
 // Esta tela é a inversão do fluxo. Antes o cliente digitava a medida da peça e
 // a análise inteira dependia daquele número; agora a medida vem daqui, de quem
@@ -19,52 +24,81 @@ import { usarFeiras, baixarTexto } from './Admin.jsx'
 // que chegou.
 
 const nomeDoPerfil = (id) => PERFIS_PADRAO.find((p) => p.id === id)?.nome || id
+const fmtData = (v) => {
+  if (!v) return null
+  const ms = typeof v === 'string' ? Date.parse(v) : v.seconds * 1000
+  return Number.isFinite(ms) ? new Date(ms).toLocaleDateString('pt-BR') : null
+}
+const paraInputData = (v) => {
+  if (!v) return ''
+  const ms = typeof v === 'string' ? Date.parse(v) : v.seconds * 1000
+  return Number.isFinite(ms) ? new Date(ms).toISOString().slice(0, 10) : ''
+}
+// O prazo vale até o FIM do dia escolhido: guardar 00:00 faria "prazo dia 10"
+// vencer na virada do dia 9 para o 10, e ninguém entende prazo assim.
+const fimDoDia = (aaaammdd) => (aaaammdd ? new Date(`${aaaammdd}T23:59:59`).toISOString() : null)
 
 export function linkDoProjeto(token) {
   const { origin, pathname } = window.location
   return `${origin}${pathname}#/p/${token}`
 }
 
-/** Casa cada peça cadastrada com o envio correspondente. */
+/**
+ * Junta as duas fontes de verdade sobre o projeto.
+ *
+ * O ESTADO de cada peça (em prova, aprovada, em impressão) sai do documento do
+ * projeto. Já o que de fato CHEGOU sai de `envios`, que o expositor não lê nem
+ * escreve. É de propósito: se algum dia o espelho do projeto divergir do que
+ * foi realmente recebido, o painel mostra o que chegou, não o que alguém
+ * declarou ter enviado.
+ */
 function situacao(projeto, enviosPorProjeto) {
   const envios = enviosPorProjeto.get(projeto.token) || []
-  const porPeca = new Map()
-  for (const e of envios) {
-    if (!e.pecaId) continue
-    const anterior = porPeca.get(e.pecaId)
-    // Vale o envio mais recente: o cliente pode reenviar depois de corrigir.
-    if (!anterior || (e.criadoEm?.seconds || 0) > (anterior.criadoEm?.seconds || 0)) porPeca.set(e.pecaId, e)
-  }
-  const pecas = (projeto.pecas || []).map((p) => ({ ...p, envio: porPeca.get(p.id) || null }))
-  const recebidas = pecas.filter((p) => p.envio).length
+  const resumo = resumoDoProjeto(projeto)
+  const comEnvio = new Set(envios.filter((e) => e.pecaId).map((e) => e.pecaId))
+
+  const pecas = resumo.pecas.map((s) => ({ ...s, envios: envios.filter((e) => e.pecaId === s.peca.id) }))
+  const recebidas = pecas.filter((s) => comEnvio.has(s.peca.id)).length
+
   return {
+    ...resumo,
     pecas,
+    envios,
     recebidas,
-    total: pecas.length,
-    pendentes: pecas.filter((p) => !p.envio),
+    pendentes: pecas.filter((s) => !comEnvio.has(s.peca.id)),
     apoio: envios.filter((e) => e.tipoEnvio === 'avulso'),
     // Arte que o cliente mandou por fora da lista: ele digitou a medida à mão.
     // Precisa aparecer com destaque justamente porque é o único caso em que a
     // medida voltou a ser palpite dele.
     extras: envios.filter((e) => e.tipoEnvio !== 'avulso' && !e.pecaId),
     completo: pecas.length > 0 && recebidas === pecas.length,
+    provasAguardando: pecas.filter((s) => s.status === 'em_prova').length,
   }
 }
 
 function textoDeCobranca(projeto, sit) {
+  const prazo = fmtData(sit.prazo.limite)
   const linhas = [
     `Olá, ${projeto.expositor}!`,
     '',
     `Estamos finalizando a produção do stand ${projeto.stand} para ${projeto.feira} e ainda faltam ${sit.pendentes.length} ${sit.pendentes.length === 1 ? 'arte' : 'artes'}:`,
     '',
-    ...sit.pendentes.map((p) => `• ${p.rotulo} — ${p.larguraCm} × ${p.alturaCm} cm`),
+    ...sit.pendentes.map(({ peca }) => `• ${peca.rotulo} — ${peca.larguraCm} × ${peca.alturaCm} cm`),
     '',
+  ]
+  if (prazo) {
+    linhas.push(
+      `O prazo para envio é ${prazo}. Artes enviadas depois disso podem ter taxa de urgência e acabamento comprometido — se precisar de mais tempo, fale com a gente antes do prazo.`,
+      '',
+    )
+  }
+  linhas.push(
     'Para enviar, use o link abaixo. Ele já vem com as medidas certas de cada peça, confere a qualidade do arquivo na hora e diz o que ajustar caso algo não passe:',
     '',
     linkDoProjeto(projeto.token),
     '',
     'Não precisa de login nem de senha — pode encaminhar direto para quem cuida da arte.',
-  ]
+  )
   return linhas.join('\n')
 }
 
@@ -75,7 +109,7 @@ export default function Projetos({ sessao }) {
   const [envios, setEnvios] = useState([])
   const [carregando, setCarregando] = useState(false)
   const [erro, setErro] = useState(null)
-  const [painel, setPainel] = useState(null) // null | 'importar' | {projeto}
+  const [painel, setPainel] = useState(null) // null | 'importar' | {projeto} | {detalhe}
   const [filtro, setFiltro] = useState('')
 
   const recarregar = useCallback(async () => {
@@ -120,8 +154,15 @@ export default function Projetos({ sessao }) {
   const resumo = useMemo(() => {
     const total = linhas.reduce((s, l) => s + l.sit.total, 0)
     const recebidas = linhas.reduce((s, l) => s + l.sit.recebidas, 0)
-    const completos = linhas.filter((l) => l.sit.completo).length
-    return { stands: linhas.length, total, recebidas, faltam: total - recebidas, completos }
+    return {
+      stands: linhas.length,
+      total,
+      recebidas,
+      faltam: total - recebidas,
+      completos: linhas.filter((l) => l.sit.completo).length,
+      pedidos: linhas.reduce((s, l) => s + l.sit.pedidosEmAberto.length, 0),
+      provas: linhas.reduce((s, l) => s + l.sit.provasAguardando, 0),
+    }
   }, [linhas])
 
   const guardar = async (projeto) => {
@@ -130,8 +171,7 @@ export default function Projetos({ sessao }) {
     await recarregar()
   }
 
-  const remover = async (projeto) => {
-    const sit = situacao(projeto, enviosPorProjeto)
+  const remover = async (projeto, sit) => {
     const aviso = sit.recebidas
       ? `O stand ${projeto.stand} já tem ${sit.recebidas} arquivo(s) recebido(s). Apagar o projeto NÃO apaga os arquivos, mas o link do cliente para de funcionar. Continuar?`
       : `Apagar o projeto do stand ${projeto.stand}?`
@@ -145,6 +185,22 @@ export default function Projetos({ sessao }) {
   }
   if (painel?.projeto) {
     return <FormularioProjeto inicial={painel.projeto} onSalvar={guardar} onCancelar={() => setPainel(null)} />
+  }
+  if (painel?.detalhe) {
+    const atual = projetos.find((p) => p.token === painel.detalhe) 
+    if (atual) {
+      const sit = situacao(atual, enviosPorProjeto)
+      return (
+        <PainelProjeto
+          sessao={sessao}
+          projeto={atual}
+          resumo={sit}
+          envios={sit.envios}
+          onFechar={() => setPainel(null)}
+          onMudou={recarregar}
+        />
+      )
+    }
   }
 
   return (
@@ -184,6 +240,15 @@ export default function Projetos({ sessao }) {
         {(erro || erroFeiras) && <p className="erro-envio">{erro || erroFeiras}</p>}
 
         {linhas.length > 0 && (
+          <PrazoDaFeira
+            sessao={sessao}
+            feiraId={feiraId}
+            projetos={projetos}
+            onMudou={recarregar}
+          />
+        )}
+
+        {linhas.length > 0 && (
           <>
             <p className="ajuda resumo-admin">
               <strong>{resumo.stands}</strong> stands · <strong>{resumo.recebidas}</strong> de{' '}
@@ -192,6 +257,8 @@ export default function Projetos({ sessao }) {
                 ? <><strong>{resumo.faltam}</strong> pendentes</>
                 : 'nada pendente'}{' '}
               · {resumo.completos} stands completos
+              {resumo.pedidos > 0 && <> · <strong className="destaque-pendencia">{resumo.pedidos} pedido(s) aguardando resposta</strong></>}
+              {resumo.provas > 0 && <> · {resumo.provas} prova(s) com o cliente</>}
             </p>
             <div className="acoes">
               <button
@@ -238,8 +305,9 @@ export default function Projetos({ sessao }) {
             key={projeto.token}
             projeto={projeto}
             sit={sit}
+            onAbrir={() => setPainel({ detalhe: projeto.token })}
             onEditar={() => setPainel({ projeto })}
-            onRemover={() => remover(projeto)}
+            onRemover={() => remover(projeto, sit)}
           />
         ))}
       </div>
@@ -247,7 +315,70 @@ export default function Projetos({ sessao }) {
   )
 }
 
-function LinhaProjeto({ projeto, sit, onEditar, onRemover }) {
+/**
+ * Prazo de envio da feira.
+ *
+ * O prazo é gravado em CADA projeto, não na feira. Parece redundante, mas o
+ * cliente já lê o projeto dele — guardar na feira exigiria uma segunda leitura
+ * e mais uma regra liberando essa leitura ao expositor. O custo é reescrever os
+ * projetos quando a data muda, o que é raro e cabe num lote.
+ */
+function PrazoDaFeira({ sessao, feiraId, projetos, onMudou }) {
+  const atual = projetos.find((p) => p.prazoEnvio)?.prazoEnvio || null
+  const [data, setData] = useState(() => paraInputData(atual))
+  const [gravando, setGravando] = useState(null)
+  const [erro, setErro] = useState(null)
+
+  useEffect(() => { setData(paraInputData(atual)) }, [atual])
+
+  const divergentes = projetos.filter((p) => paraInputData(p.prazoEnvio) !== paraInputData(atual)).length
+
+  const aplicar = async (iso) => {
+    setErro(null)
+    setGravando({ feito: 0, total: projetos.length })
+    try {
+      await definirPrazoDaFeira(sessao.fb, feiraId, iso, sessao.usuario?.email,
+        (feito, total) => setGravando({ feito, total }))
+      await onMudou()
+    } catch (e) {
+      setErro(traduzirErroAuth(e))
+    } finally {
+      setGravando(null)
+    }
+  }
+
+  return (
+    <div className="bloco-prazo">
+      <div className="linha">
+        <label className="campo">
+          <span>Prazo final de envio das artes desta feira</span>
+          <input type="date" value={data} onChange={(e) => setData(e.target.value)} />
+        </label>
+        <div className="acoes">
+          <button className="btn btn-ghost" disabled={!data || Boolean(gravando)} onClick={() => aplicar(fimDoDia(data))}>
+            {gravando ? `Aplicando ${gravando.feito}/${gravando.total}…` : 'Aplicar a todos os stands'}
+          </button>
+          {atual && (
+            <button className="btn btn-ghost perigo" disabled={Boolean(gravando)} onClick={() => aplicar(null)}>
+              Remover prazo
+            </button>
+          )}
+        </div>
+      </div>
+      {erro && <p className="erro-envio">{erro}</p>}
+      <p className="nota">
+        Depois do prazo, o envio de peça nova fica bloqueado e o cliente vê o
+        aviso sobre taxa de urgência. Correções que o time pediu continuam
+        liberadas — quem foi reprovado numa prova não é punido pela nossa volta.
+        Para abrir exceção a um stand, use <strong>Abrir</strong> e prorrogue só
+        para ele.
+        {divergentes > 0 && ` ${divergentes} stand(s) estão com prazo diferente do exibido.`}
+      </p>
+    </div>
+  )
+}
+
+function LinhaProjeto({ projeto, sit, onAbrir, onEditar, onRemover }) {
   const [aberto, setAberto] = useState(false)
   const [copiado, setCopiado] = useState(null)
 
@@ -278,11 +409,18 @@ function LinhaProjeto({ projeto, sit, onEditar, onRemover }) {
           <span className={`tag ${sit.completo ? 'aprovado' : sit.recebidas ? 'ressalva' : ''}`}>
             {sit.recebidas} de {sit.total}
           </span>
+          {sit.pedidosEmAberto.length > 0 && (
+            <span className="tag reprovado">{sit.pedidosEmAberto.length} pedido(s)</span>
+          )}
+          {sit.provasAguardando > 0 && <em className="dica-campo">{sit.provasAguardando} em prova</em>}
+          {sit.emProducao > 0 && <em className="dica-campo">{sit.emProducao} em produção</em>}
           {sit.apoio.length > 0 && <em className="dica-campo">{sit.apoio.length} arquivo(s) de apoio</em>}
+          {sit.prazo.prorrogado && <em className="dica-campo">prazo prorrogado</em>}
         </div>
       </div>
 
       <div className="acoes compactas">
+        <button className="btn" onClick={onAbrir}>Abrir</button>
         <button className="btn btn-ghost" onClick={() => copiar(linkDoProjeto(projeto.token), 'link')}>
           {copiado === 'link' ? '✓ Link copiado' : 'Copiar link do cliente'}
         </button>
@@ -312,24 +450,22 @@ function LinhaProjeto({ projeto, sit, onEditar, onRemover }) {
               </div>
             </li>
           ))}
-          {sit.pecas.map((p) => (
-            <li key={p.id} className={p.envio ? 'entregue' : 'pendente'}>
-              <span className="marca" aria-hidden>{p.envio ? '✓' : '·'}</span>
+          {sit.pecas.map((s) => (
+            <li key={s.peca.id} className={s.envios.length ? 'entregue' : 'pendente'}>
+              <span className="marca" aria-hidden>{s.envios.length ? '✓' : '·'}</span>
               <div>
-                <strong>{p.rotulo}</strong>
+                <strong>{s.peca.rotulo}</strong>
                 <em className="dica-campo">
-                  {' '}{p.larguraCm} × {p.alturaCm} cm · {nomeDoPerfil(p.perfilId)}
-                  {p.escalaFator > 1 && ` · escala 1:${p.escalaFator}`}
+                  {' '}{s.peca.larguraCm} × {s.peca.alturaCm} cm · {nomeDoPerfil(s.peca.perfilId)}
+                  {s.peca.escalaFator > 1 && ` · escala 1:${s.peca.escalaFator}`}
                 </em>
-                {p.envio
-                  ? (
-                    <p className="dica-campo">
-                      {p.envio.veredicto === 'ressalva' ? 'Recebida com ressalva' : 'Recebida'}
-                      {p.envio.riscoAceito ? ' (risco aceito)' : ''} · {p.envio.protocolo}
-                      {p.envio.link && <> · <a href={p.envio.link} target="_blank" rel="noreferrer">baixar</a></>}
-                    </p>
-                  )
-                  : <p className="dica-campo">Aguardando o cliente</p>}
+                <p className="dica-campo">
+                  <span className={`tag ${s.cor}`}>{s.rotulo}</span>
+                  {s.envios.length > 0 && ` · ${s.envios.length} versão(ões)`}
+                  {s.envios.length > 0 && s.envios[s.envios.length - 1].link && (
+                    <> · <a href={s.envios[s.envios.length - 1].link} target="_blank" rel="noreferrer">baixar a mais recente</a></>
+                  )}
+                </p>
               </div>
             </li>
           ))}

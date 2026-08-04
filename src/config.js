@@ -23,6 +23,10 @@ export const ENVIO = {
   // Arquivo de apoio é logo e fonte, não arte de grande formato. O limite
   // menor é o que impede a pasta de apoio de virar depósito de arquivo pesado.
   tamanhoMaximoAvulsoMb: Number(env.VITE_TAMANHO_MAXIMO_AVULSO_MB || 100),
+  // Prova de aprovação é um print ou mockup para o cliente conferir na tela.
+  // Não precisa de resolução de impressão, então o limite é pequeno de
+  // propósito — prova pesada demora a abrir no celular do cliente.
+  tamanhoMaximoProvaMb: Number(env.VITE_TAMANHO_MAXIMO_PROVA_MB || 30),
 }
 
 export const firebaseConfigurado = () => Boolean(FIREBASE.apiKey && FIREBASE.projectId)

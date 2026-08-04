@@ -15,10 +15,11 @@ link do cliente.
 
 ---
 
-> 🔁 **Se você já colou as regras antes, cole de novo.** As duas mudaram para
-> incluir os projetos, os arquivos de apoio e o cadastro de analistas. Sem
-> republicar, o cadastro de projetos falha com *permissão negada* e o link do
-> cliente abre vazio.
+> 🔁 **Se você já colou as regras antes, cole de novo.** As duas mudaram de
+> novo, agora para o fluxo de aprovação: pedido de nova versão, prova de
+> aprovação, prazo e status de impressão. Sem republicar, o cliente não
+> consegue pedir troca de arte nem responder a uma prova, e o envio da prova
+> pelo analista é recusado.
 
 ## Passo 1 — Colar as regras do Firestore
 
@@ -55,13 +56,16 @@ link do cliente.
 
 Duas pastas com regras diferentes, de propósito:
 
-| Pasta | O que aceita | Limite |
-|---|---|---|
-| `envios/` | arte de peça: JPG, PNG, PDF | 1 GB |
-| `avulsos/` | apoio: SVG, EPS/AI, ZIP + os acima | 200 MB |
+| Pasta | O que aceita | Quem grava | Limite |
+|---|---|---|---|
+| `envios/` | arte de peça: JPG, PNG, PDF | o cliente | 1 GB |
+| `avulsos/` | apoio: SVG, EPS/AI, ZIP + os acima | o cliente | 200 MB |
+| `provas/` | prova de aprovação: JPG, PNG, WEBP, PDF | **só o time** | 30 MB |
 
-Misturar as duas obrigaria a afrouxar a regra da arte, e aí um `.zip` passaria
-a ser aceito como peça para impressão.
+Misturar as pastas obrigaria a afrouxar a regra da arte, e aí um `.zip`
+passaria a ser aceito como peça para impressão. Em `provas/` o sentido se
+inverte: gravar é privilégio do time — se fosse aberta, o cliente poderia subir
+a própria prova de aprovação e o documento perderia o valor.
 
 ---
 
@@ -137,7 +141,46 @@ copiar de uma vez os e-mails de todos os stands com pendência.
 
 ### 4. Baixar (`#/admin`)
 
-Igual a antes, agora com o nome da peça cadastrada em cada arquivo.
+Com o nome da peça cadastrada em cada arquivo, e uma coluna
+**Prova de aprovação** para mandar o print direto da lista.
+
+### 5. Fechar o ciclo (`#/projetos` → **Abrir**)
+
+É onde o analista trabalha depois que a arte chega:
+
+- **Prova de aprovação** — sobe o print/mockup e marca quais peças ele cobre.
+  O cliente responde *aprovo tudo*, *aprovo em partes* (marcando quais peças
+  precisam de arte nova) ou *reprovo tudo*, com data e hora registradas.
+- **Pedidos de nova versão** — quando o cliente quer trocar uma arte já
+  entregue, ele precisa explicar o motivo. O pedido aparece aqui e você
+  **libera** ou **recusa com justificativa**. Se marcar *tem custo extra*, o
+  cliente vê a opção de aceitar — e o aceite fica registrado.
+- **Em impressão / impressa** — o cliente passa a ver esse status. Peça em
+  produção trava o reenvio automaticamente, e a recusa já vem com o texto
+  preenchido.
+- **Prorrogar prazo** — exceção só para aquele stand, com data de validade.
+
+O que o time decide (liberar, recusar, prova, status, prazo) o cliente não
+consegue escrever nem com o link em mãos. Isso está nas regras do Firestore,
+não só na tela.
+
+### Sobre o prazo
+
+O prazo é da feira e se aplica a todos os stands de uma vez. Depois dele, o
+envio de peça nova fica bloqueado e o cliente vê o aviso sobre taxa de urgência.
+
+Uma exceção é automática e proposital: **quem está corrigindo porque nós
+reprovamos a prova não é bloqueado**. Barrar o cliente por uma volta que o time
+pediu seria puni-lo pelo nosso processo. Para as demais exceções, existe a
+prorrogação por stand.
+
+### Sobre o custo extra
+
+O aviso ao cliente **não cita valor**, de propósito: parte dos expositores paga
+pela organizadora do evento, que aplica margem própria sobre o nosso preço, e
+publicar um número criaria uma expectativa que a fatura não confirma. O texto
+manda falar com o atendimento. O aceite registrado guarda a data, a hora e o
+texto exato que estava na tela — o trâmite comercial segue fora do sistema.
 
 ---
 
@@ -172,6 +215,14 @@ deve ficar curta, e o campo *liberado por* registra quem liberou quem.
    de peças, **sem pedir login**, com as medidas certas.
 3. Suba uma arte aprovada. O cartão da peça deve virar ✓ e o contador subir.
 4. Volte a `#/projetos` e confirme que o stand mudou de `0 de 3` para `1 de 3`.
+5. Na aba anônima, tente enviar a mesma peça de novo: deve pedir o motivo.
+   Escreva e envie.
+6. Em `#/projetos` → **Abrir**, o pedido aparece no topo. Recuse marcando
+   *tem custo extra* e veja o cliente receber a opção de aceitar.
+7. Ainda em **Abrir**, mande uma prova cobrindo a peça. Na aba anônima ela
+   aparece com os três botões de resposta.
+8. Marque a peça como **em impressão** e confirme que o cliente vê o status e
+   perde o botão de enviar.
 
 ### Se der errado
 
@@ -186,6 +237,9 @@ deve ficar curta, e o campo *liberado por* registra quem liberou quem.
 | "registro do envio recusado" | regras do **Firestore** desatualizadas (passo 1) |
 | Arquivo de apoio recusado | regras do Storage sem a pasta `avulsos/` — republique |
 | Planilha importa com acento quebrado | salve como *CSV UTF-8* no Excel (a ferramenta tenta os dois, mas o UTF-8 é o certo) |
+| Prova recusada ao enviar | regras do Storage sem a pasta `provas/` — republique (passo 2) |
+| Cliente não consegue pedir troca de arte | regras do Firestore desatualizadas (passo 1) |
+| Cliente diz que não viu a prova | não existe e-mail automático — avise pelo botão de e-mail do painel |
 
 ---
 

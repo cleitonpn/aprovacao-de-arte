@@ -88,7 +88,22 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
-    // Os projetos: quais peças cada stand precisa entregar.
+    // Os projetos: quais peças cada stand precisa entregar, e em que pé está
+    // cada uma.
+    //
+    // Uma escolha consciente sobre ONDE cada trava mora. O prazo de envio e a
+    // exigência de liberação para reenviar são checados na interface, não
+    // aqui. Não é esquecimento: a mesma peça pode legitimamente ser reenviada
+    // fora do prazo e sem pedido — quando fomos NÓS que reprovamos a prova e
+    // pedimos a correção. Escrever essa exceção em linguagem de regras exigiria
+    // cruzar provas com respostas dentro do documento, e um erro ali barraria
+    // um cliente que está certo, no dia da feira. O risco assimétrico manda
+    // errar para o lado de deixar passar.
+    //
+    // O que É travado aqui é o que seria grave forjar: a decisão do analista.
+    // E como o painel do time monta o histórico a partir de `envios` — que o
+    // expositor não lê nem escreve —, qualquer contorno aparece na tela em vez
+    // de acontecer em silêncio.
     match /projetos/{token} {
       // Leitura por ID é liberada a qualquer sessão autenticada — inclusive a
       // anônima do expositor — porque o token de 12 caracteres aleatórios É a
@@ -100,17 +115,25 @@ service cloud.firestore {
 
       allow create, delete: if ehAdmin();
 
-      // Duas escritas possíveis, e a diferença importa:
+      // Duas escritas possíveis, e a diferença é o coração do fluxo de
+      // aprovação:
       //
-      // - o time altera o projeto inteiro;
-      // - o expositor só consegue tocar em `entregas`, o espelho que marca a
-      //   peça como enviada na tela dele. Sem esta restrição, quem tivesse o
-      //   link poderia reescrever as medidas das peças — e a ferramenta
-      //   voltaria a aprovar arte contra medida errada, que é exatamente o
-      //   problema que o cadastro veio resolver.
+      // - o time altera o projeto inteiro, incluindo `controle` (liberações,
+      //   recusas, provas, status de impressão) e o prazo;
+      // - o expositor só alcança os três campos das AÇÕES DELE: o que enviou
+      //   (`entregas`), o que pediu (`pedidos`) e o que respondeu numa prova
+      //   (`respostasProva`).
+      //
+      // É esta linha que impede o cliente de assinar a decisão do analista.
+      // Com o link em mãos ele pode pedir uma versão nova, mas não pode
+      // liberá-la; pode reprovar uma prova, mas não pode declarar a peça
+      // impressa; e não encosta na medida cadastrada — se encostasse, a
+      // ferramenta voltaria a aprovar arte contra medida errada, que é o
+      // problema que o cadastro veio resolver.
       allow update: if ehAdmin()
         || (request.auth != null
-            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['entregas']));
+            && request.resource.data.diff(resource.data).affectedKeys()
+                 .hasOnly(['entregas', 'pedidos', 'respostasProva']));
     }
 
     // Alimenta o seletor de feiras. O expositor só pode gravar o nome e a data

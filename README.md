@@ -59,6 +59,32 @@ npm run build     # build de produção (dist/)
 5. **O painel mostra o que falta**, não só o que chegou, e gera o e-mail de
    cobrança já escrito com a lista das peças pendentes.
 
+### A esteira de cada peça
+
+```
+aguardando → recebida → em prova → aprovada → em impressão → impressa
+                 ↑                     ↓
+                 └── nova versão ← reprovada (total ou em partes)
+```
+
+- **Prova de aprovação**: o analista sobe o print/mockup e marca quais peças
+  ele cobre. O cliente responde aprovando tudo, reprovando tudo ou **aprovando
+  em partes** — marcando quais peças precisam de arte nova. Uma prova cobre
+  várias peças de propósito: na prática ela é o mockup do stand inteiro.
+- **Troca de arte já entregue** exige pedido com justificativa. O analista
+  libera ou recusa por escrito. Se a recusa marcar custo extra, o cliente vê a
+  opção de aceitar — sem valor na tela, porque parte dos expositores paga pela
+  organizadora do evento, que aplica margem própria.
+- **Prazo de envio** por feira, com prorrogação por stand. Depois do prazo o
+  cliente vê o aviso sobre taxa de urgência e acabamento comprometido.
+- **Em impressão / impressa**: o cliente acompanha, e a peça em produção trava
+  o reenvio sozinha — a recusa do pedido já vem com o motivo preenchido.
+
+Onde cada trava mora é uma decisão explicada em `firestore.rules`: o que seria
+grave forjar (a decisão do analista) é lei no servidor; o prazo e a exigência
+de pedido ficam na interface, porque a mesma peça pode legitimamente ser
+reenviada fora do prazo quando fomos **nós** que reprovamos a prova.
+
 ## O problema que ela resolve
 
 O gargalo não é avaliar a arte — o time de comunicação visual faz isso em
@@ -235,6 +261,7 @@ src/
     pdf.js         Inspeção de PDF/AI via pdf.js
     mensagem.js    Texto para o designer e laudo JSON
     importacao.js  Leitura da planilha de projetos (CSV), nos dois formatos
+    fluxo.js       A esteira da peça: status, bloqueios, prazo (funções puras)
   data/
     perfis.js      Tipos de peça, limiares, escalas (editável e persistido)
     cadastro.js    Cadastro do expositor e validação
@@ -246,11 +273,11 @@ src/
   store/
     historico.js   Histórico local das análises
     usarAnalise.js Estado da análise, compartilhado pelas duas telas
-  components/      Interface (Cadastro, Envio, Projeto, Projetos, Admin…)
+  components/      Interface (Projeto, Projetos, PainelProjeto, Admin…)
   config.js        Variáveis de ambiente (nada secreto aqui)
 firestore.rules    Quem lê e escreve cada coleção
 storage.rules      Tipo, tamanho e pasta de cada arquivo
-test/              Testes das regras, da calibração, do laudo e da importação
+test/              Regras, calibração, laudo, importação e esteira do fluxo
 ```
 
 Detalhe de implementação que não é óbvio: a análise espectral roda sobre

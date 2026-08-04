@@ -1,5 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { traduzirErroAuth } from '../services/sessao.js'
+import { enviarProva, EXTENSOES_PROVA } from '../services/envio.js'
+import { registrarProva } from '../services/projetos.js'
 
 // Artes recebidas: escolhe a feira, vê o que chegou e baixa.
 //
@@ -75,6 +77,70 @@ export function usarFeiras(fb) {
   }, [fb])
 
   return { feiras, feiraId, setFeiraId, erro }
+}
+
+/**
+ * Atalho para mandar a prova de aprovação desta arte ao cliente.
+ *
+ * Cobre só ESTA peça, de propósito: é o caminho de quem acabou de conferir um
+ * arquivo e quer fechar o ciclo sem sair da lista. A prova que cobre várias
+ * peças de uma vez — o mockup do stand inteiro — está em Projetos → Abrir, que
+ * é onde o analista tem as peças todas à vista para escolher.
+ */
+function BotaoProva({ envio, sessao }) {
+  const [estado, setEstado] = useState('parado') // parado | enviando | pronto | erro
+  const [erro, setErro] = useState(null)
+  const entrada = useRef(null)
+
+  if (envio.tipoEnvio === 'avulso') return <em className="dica-campo">—</em>
+  if (!envio.projetoId || !envio.pecaId) {
+    return <em className="dica-campo" title="A prova depende de um projeto cadastrado">sem projeto</em>
+  }
+
+  const enviar = async (arquivo) => {
+    if (!arquivo) return
+    setEstado('enviando')
+    setErro(null)
+    try {
+      const prova = await enviarProva(
+        arquivo,
+        { feiraId: envio.feiraId, stand: envio.cadastro?.stand || 'stand' },
+        () => {},
+      )
+      await registrarProva(sessao.fb, envio.projetoId, {
+        id: prova.id,
+        arquivo: prova.arquivo,
+        pecaIds: [envio.pecaId],
+        observacao: '',
+        por: sessao.usuario?.email,
+      })
+      setEstado('pronto')
+    } catch (e) {
+      setErro(e?.message || 'Não foi possível enviar a prova.')
+      setEstado('erro')
+    } finally {
+      if (entrada.current) entrada.current.value = ''
+    }
+  }
+
+  return (
+    <>
+      <input
+        ref={entrada} type="file" hidden
+        accept={EXTENSOES_PROVA.map((x) => `.${x}`).join(',')}
+        onChange={(e) => enviar(e.target.files?.[0])}
+      />
+      <button
+        className="link"
+        disabled={estado === 'enviando'}
+        onClick={() => entrada.current?.click()}
+      >
+        {estado === 'enviando' ? 'enviando…' : estado === 'pronto' ? '✓ prova enviada' : 'enviar prova'}
+      </button>
+      {estado === 'pronto' && <><br /><em className="dica-campo">avise o cliente por e-mail</em></>}
+      {erro && <><br /><em className="erro-campo">{erro}</em></>}
+    </>
+  )
 }
 
 export default function Admin({ sessao }) {
@@ -223,6 +289,7 @@ export default function Admin({ sessao }) {
                   <th>Resultado</th>
                   <th>Enviada em</th>
                   <th>Arquivo</th>
+                  <th>Prova de aprovação</th>
                 </tr>
               </thead>
               <tbody>
@@ -254,6 +321,9 @@ export default function Admin({ sessao }) {
                         : <em className="dica-campo">—</em>}
                       <br />
                       <em className="dica-campo">{fmtMb(e.arquivo?.tamanho)} · {e.protocolo}</em>
+                    </td>
+                    <td>
+                      <BotaoProva envio={e} sessao={sessao} />
                     </td>
                   </tr>
                 ))}

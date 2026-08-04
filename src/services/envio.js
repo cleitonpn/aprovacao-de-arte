@@ -10,7 +10,7 @@
 // importante para a operação — recusam qualquer envio de arte reprovada, ou
 // de arte com ressalva sem o aceite de risco registrado.
 
-import { sessaoAnonima } from './firebase.js'
+import { sessaoAnonima, carregarFirebase } from './firebase.js'
 import { ENVIO, envioConfigurado } from '../config.js'
 import { paraNomeArquivo, idDeFeira } from '../data/cadastro.js'
 import { semIndefinidos } from '../core/mensagem.js'
@@ -103,7 +103,9 @@ export async function enviarArte(arquivo, dados, aoProgredir) {
   // — é o que o time reconhece na pasta de downloads. Sem projeto, sobra o
   // nome do tipo de peça, que é o que a ferramenta sabe.
   const rotuloPeca = projeto?.pecaRotulo || perfil.nome
-  const nomeNoStorage = `${paraNomeArquivo(cadastro.stand)}__${paraNomeArquivo(rotuloPeca)}__${protocolo}${extensao}`
+  const versao = Number(projeto?.versao) || 1
+  const sufixoVersao = versao > 1 ? `__v${versao}` : ''
+  const nomeNoStorage = `${paraNomeArquivo(cadastro.stand)}__${paraNomeArquivo(rotuloPeca)}${sufixoVersao}__${protocolo}${extensao}`
   const caminho = `envios/${feiraId}/${nomeNoStorage}`
 
   let etapa = 'arquivo'
@@ -159,6 +161,9 @@ export async function enviarArte(arquivo, dados, aoProgredir) {
       projetoId: projeto?.token || null,
       pecaId: projeto?.pecaId || null,
       pecaRotulo: projeto?.pecaRotulo || null,
+      // A versão é o que transforma o reenvio em histórico legível: o time vê
+      // "Lona de fundo — v2" em vez de dois arquivos com o mesmo nome.
+      versao: Number(projeto?.versao) || 1,
       cadastro,
       peca,
       perfil: { id: perfil.id, nome: perfil.nome },
@@ -267,5 +272,64 @@ export async function enviarAvulso(arquivo, dados, aoProgredir) {
   } catch (e) {
     console.error(`falha no envio de apoio (etapa: ${etapa})`, e)
     throw new Error(traduzirErro(e, etapa))
+  }
+}
+
+// -------------------------------------------------------- prova de aprovação
+
+const TIPO_PROVA_POR_EXTENSAO = {
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  webp: 'image/webp',
+  pdf: 'application/pdf',
+}
+
+export const EXTENSOES_PROVA = Object.keys(TIPO_PROVA_POR_EXTENSAO)
+
+/**
+ * Sobe a prova de aprovação — o print/mockup que o analista manda ao cliente.
+ *
+ * Vai numa pasta própria (`provas/`), gravável só por quem consta em `admins`.
+ * As outras duas pastas são graváveis por qualquer sessão anônima, porque é o
+ * cliente que escreve nelas; esta é o contrário, e misturá-las deixaria o
+ * cliente subir a própria prova de aprovação.
+ *
+ * Usa a sessão que já existe (a do analista logado). Não cria sessão anônima:
+ * se não houver ninguém autenticado, é erro de verdade e precisa aparecer.
+ */
+export async function enviarProva(arquivo, { feiraId, stand }, aoProgredir) {
+  if (!envioConfigurado()) throw new Error('O envio não está configurado nesta instalação.')
+
+  const ext = (arquivo.name.match(/\.([a-z0-9]+)$/i)?.[1] || '').toLowerCase()
+  const tipo = TIPO_PROVA_POR_EXTENSAO[ext]
+  if (!tipo) {
+    throw new Error(`Prova em .${ext || '(sem extensão)'} não é aceita. Envie ${EXTENSOES_PROVA.map((e) => `.${e}`).join(', ')}.`)
+  }
+  const limite = ENVIO.tamanhoMaximoProvaMb * 1024 * 1024
+  if (arquivo.size > limite) {
+    throw new Error(`A prova tem ${(arquivo.size / 1048576).toFixed(0)} MB e o limite é ${ENVIO.tamanhoMaximoProvaMb} MB.`)
+  }
+
+  const fb = await carregarFirebase()
+  const usuario = fb.auth.getAuth(fb.app).currentUser
+  if (!usuario || usuario.isAnonymous) throw new Error('Sua sessão expirou. Entre novamente para enviar a prova.')
+
+  const id = `pv_${protocoloNovo().slice(3).replace(/-/g, '').toLowerCase()}`
+  const caminho = `provas/${feiraId}/${paraNomeArquivo(stand)}__${id}.${ext}`
+
+  aoProgredir?.(0)
+  try {
+    const alvo = fb.storage.ref(fb.storage.getStorage(fb.app), caminho)
+    const tarefa = fb.storage.uploadBytesResumable(alvo, arquivo, { contentType: tipo })
+    await new Promise((resolve, reject) => {
+      tarefa.on('state_changed', (s) => aoProgredir?.(s.totalBytes ? s.bytesTransferred / s.totalBytes : 0), reject, resolve)
+    })
+    const link = await fb.storage.getDownloadURL(alvo)
+    aoProgredir?.(1)
+    return { id, arquivo: { nome: arquivo.name, tamanho: arquivo.size, tipo, caminho, link } }
+  } catch (e) {
+    console.error('falha ao enviar a prova', e)
+    throw new Error(traduzirErro(e, 'arquivo'))
   }
 }

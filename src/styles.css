@@ -407,3 +407,106 @@ textarea { width: 100%; font: inherit; font-size: 13px; padding: 9px 11px; borde
   .projeto-topo { flex-direction: column; }
   .projeto-progresso { text-align: left; align-items: flex-start; }
 }
+
+/* ==========================================================================
+   Fluxo de aprovação: prazo, prova, pedido de nova versão, status
+   ========================================================================== */
+
+/* As cores do fluxo (ver core/fluxo.js) reaproveitam as mesmas variáveis dos
+   veredictos. Um "em impressão" verde e um "aprovado" verde diferentes seriam
+   dois vocabulários visuais para a mesma ideia. */
+.tag.ok { background: var(--ok-fundo); color: var(--ok); }
+.tag.alerta { background: var(--alerta-fundo); color: var(--alerta); }
+.tag.ruim { background: var(--ruim-fundo); color: var(--ruim); }
+.tag.neutro { background: var(--borda); color: var(--suave); }
+
+.aviso-prazo { border-left: 4px solid var(--acento); }
+.aviso-prazo strong { display: block; margin-bottom: 6px; font-size: 14.5px; }
+.aviso-prazo p { margin: 0 0 6px; font-size: 13.5px; color: var(--suave); line-height: 1.55; }
+.aviso-prazo.perto { border-left-color: var(--alerta); background: var(--alerta-fundo); }
+.aviso-prazo.vencido { border-left-color: var(--ruim); background: var(--ruim-fundo); }
+.aviso-prazo.perto strong, .aviso-prazo.vencido strong { color: inherit; }
+
+.bloco-prazo { border: 1px solid var(--borda); border-radius: 10px; padding: 12px 14px; margin: 14px 0; }
+.bloco-prazo .linha { align-items: flex-end; margin-bottom: 6px; }
+.bloco-prazo .acoes { margin: 0 0 4px; }
+.bloco-prazo input[type='date'] { max-width: 200px; }
+
+/* ------------------------------------------------------------ prova */
+.prova { border-left: 4px solid var(--alerta); }
+.prova-imagem { display: block; margin: 12px 0; text-align: center; }
+.prova-imagem img {
+  max-width: 100%; max-height: 460px; border-radius: 9px;
+  border: 1px solid var(--borda); background: #fff;
+}
+.prova-imagem span { display: block; margin-top: 6px; }
+
+/* --------------------------------------------------- cartões de peça */
+.pecas-cartoes { list-style: none; margin: 0 0 14px; padding: 0; display: grid; gap: 12px; }
+.peca-cartao {
+  display: flex; justify-content: space-between; align-items: flex-start; gap: 14px;
+  border: 1px solid var(--borda); border-radius: 10px; padding: 14px 15px;
+}
+.peca-cartao-info { min-width: 0; flex: 1; }
+.peca-cartao-topo { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
+.peca-cartao-acao { flex: 0 0 auto; display: flex; flex-direction: column; gap: 6px; }
+.peca-cartao strong { font-size: 14.5px; }
+.peca-cartao p { margin: 3px 0 0; }
+.peca-cartao.estado-ok { border-color: var(--ok); }
+.peca-cartao.estado-alerta { border-color: var(--alerta); background: var(--alerta-fundo); }
+.peca-cartao.estado-ruim { border-color: var(--ruim); background: var(--ruim-fundo); }
+
+.bloqueio { margin-top: 10px; padding: 10px 12px; border-radius: 8px; background: var(--borda); }
+.bloqueio strong { display: block; font-size: 13px; }
+.bloqueio p { margin: 3px 0 0; font-size: 12.5px; color: var(--suave); line-height: 1.5; }
+.bloqueio.em_producao { background: var(--ruim-fundo); }
+.bloqueio.recusado { background: var(--ruim-fundo); }
+.bloqueio.prazo { background: var(--alerta-fundo); }
+
+.destaque-extra { border-color: var(--alerta); background: var(--alerta-fundo); }
+.destaque-extra p { font-size: 13px; line-height: 1.55; }
+.destaque-correcao { border-left: 3px solid var(--ruim); padding-left: 10px; }
+.destaque-pendencia { color: var(--ruim); }
+
+/* ------------------------------------------------- painel do analista */
+.pedidos-abertos { border-left: 4px solid var(--ruim); }
+.pedido, .peca-time { border-bottom: 1px solid var(--borda); padding: 12px 0; }
+.pedido:last-child, .peca-time:last-child { border-bottom: 0; padding-bottom: 0; }
+.pedido-topo { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.motivo-cliente {
+  margin: 8px 0 4px; padding: 9px 12px; border-radius: 8px;
+  background: var(--fundo); font-size: 13.5px; font-style: italic; line-height: 1.55;
+}
+.versoes { list-style: none; margin: 8px 0; padding: 0; display: grid; gap: 4px; font-size: 12.5px; }
+.versoes li { color: var(--suave); }
+.versoes a { color: var(--acento); }
+
+/* -------------------------------------------------------------- telas */
+/* No monitor a lista de peças vira grade; no celular empilha. Antes era uma
+   coluna estreita no meio da página, com rolagem à toa. */
+@media (min-width: 860px) {
+  .pecas-cartoes { grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); }
+  .projeto-cabecalho { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 380px); gap: 24px; align-items: start; }
+  .projeto-cabecalho h2 { grid-column: 1; }
+  .projeto-cabecalho > .ajuda { grid-column: 1; margin-top: -6px; }
+  .progresso-peças { grid-column: 2; grid-row: 1 / span 3; margin: 0; }
+  .projeto-cabecalho > .nota { grid-column: 1; margin: 0; }
+}
+
+@media (max-width: 859px) {
+  .peca-cartao { flex-direction: column; align-items: stretch; }
+  .peca-cartao-acao { flex-direction: row; }
+  .peca-cartao-acao .btn { flex: 1; }
+  .projeto-topo { flex-direction: column; }
+  .projeto-progresso { text-align: left; align-items: flex-start; flex-direction: row; flex-wrap: wrap; }
+  .bloco-prazo .linha, .acoes { flex-wrap: wrap; }
+  .abas { overflow-x: auto; flex-wrap: nowrap; }
+  .abas a { white-space: nowrap; }
+  .abas a.fora { margin-left: 0; }
+}
+
+@media (max-width: 620px) {
+  .app { padding: 16px 12px 48px; }
+  .cartao { padding: 14px; }
+  .acoes .btn, .acoes .link { flex: 1 1 auto; }
+}

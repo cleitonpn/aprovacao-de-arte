@@ -55,6 +55,26 @@ service firebase.storage {
         && request.resource.contentType.matches('image/jpeg|image/png|image/svg\\+xml|application/pdf|application/postscript|application/zip');
     }
 
+    // Prova de aprovação: o print/mockup que o ANALISTA manda ao cliente.
+    //
+    // Aqui o sentido da escrita se inverte. Nas duas pastas acima quem grava é
+    // o expositor, com sessão anônima. Nesta, gravar é privilégio do time — se
+    // fosse aberta, o cliente poderia subir a própria prova de aprovação e o
+    // documento perderia todo o valor. A checagem consulta a mesma coleção
+    // `admins` que governa o Firestore, para não existirem duas listas de
+    // permissão vivendo separadas.
+    match /provas/{feiraId}/{arquivo} {
+      allow read: if request.auth != null;
+
+      allow write: if request.auth != null
+        && request.auth.token.email_verified == true
+        && firestore.exists(/databases/(default)/documents/admins/$(request.auth.token.email))
+        && request.resource != null
+        && request.resource.size > 0
+        && request.resource.size < 30 * 1024 * 1024              // 30 MB
+        && request.resource.contentType.matches('image/jpeg|image/png|image/webp|application/pdf');
+    }
+
     // Nada mais é acessível — inclusive listar o conteúdo das pastas.
     match /{allPaths=**} {
       allow read, write: if false;

@@ -53,17 +53,19 @@ export default function App() {
   const rota = usarRota()
 
   if (rota.tela === 'projeto') {
+    // Largura cheia, e não a coluna estreita de antes: no monitor do escritório
+    // a tela ficava espremida no meio da página, com as peças uma embaixo da
+    // outra e rolagem à toa. O conteúdo se organiza sozinho — a lista vira
+    // grade no PC e empilha no celular.
     return (
-      <div className="app estreito">
+      <div className="app">
         <header className="topo">
           <div>
             <h1>Envio de artes</h1>
             <p>Confira e envie as artes do seu stand.</p>
           </div>
         </header>
-        <div className="coluna">
-          <Projeto token={rota.token} />
-        </div>
+        <Projeto token={rota.token} />
         <footer className="rodape">
           A análise roda no seu navegador. O arquivo só é enviado quando você
           clicar em <strong>Enviar arte para produção</strong>.
