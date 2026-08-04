@@ -18,6 +18,7 @@ import Projetos from './components/Projetos.jsx'
 import Usuarios from './components/Usuarios.jsx'
 import Projeto from './components/Projeto.jsx'
 import { usarSessao } from './services/sessao.js'
+import { abasDe, telaInicial, pode } from './core/permissoes.js'
 import * as cadastroStore from './data/cadastro.js'
 
 // Rota por hash, sem biblioteca de roteamento: são cinco telas e nenhuma delas
@@ -42,12 +43,6 @@ function usarRota() {
   if (['admin', 'projetos', 'analistas'].includes(partes[0])) return { tela: partes[0] }
   return { tela: 'ferramenta' }
 }
-
-const TELAS_INTERNAS = [
-  { id: 'admin', rotulo: 'Artes recebidas' },
-  { id: 'projetos', rotulo: 'Projetos' },
-  { id: 'analistas', rotulo: 'Analistas' },
-]
 
 export default function App() {
   const rota = usarRota()
@@ -81,6 +76,15 @@ export default function App() {
 
 function PainelInterno({ tela }) {
   const sessao = usarSessao()
+  const abas = abasDe(sessao.acesso)
+
+  // Entrar por um endereço que o papel não alcança não pode virar tela em
+  // branco nem erro: manda para a primeira tela que a pessoa realmente usa.
+  const inicial = telaInicial(sessao.acesso)
+  const permitida = abas.some((a) => a.id === tela)
+  useEffect(() => {
+    if (sessao.liberado && !permitida && inicial) window.location.hash = `#/${inicial}`
+  }, [sessao.liberado, permitida, inicial])
 
   return (
     <div className="app">
@@ -99,18 +103,19 @@ function PainelInterno({ tela }) {
 
       {sessao.liberado && (
         <nav className="abas">
-          {TELAS_INTERNAS.map((t) => (
+          {abas.map((t) => (
             <a key={t.id} href={`#/${t.id}`} className={t.id === tela ? 'ativa' : ''}>{t.rotulo}</a>
           ))}
+          <span className="papel-atual">{sessao.acesso?.rotulo}</span>
           <a href="#/" className="fora">Abrir a ferramenta</a>
         </nav>
       )}
 
       <div className="coluna">
         <Acesso sessao={sessao}>
-          {tela === 'admin' && <Admin sessao={sessao} />}
-          {tela === 'projetos' && <Projetos sessao={sessao} />}
-          {tela === 'analistas' && <Usuarios sessao={sessao} />}
+          {permitida && tela === 'admin' && pode(sessao.acesso, 'verArtes') && <Admin sessao={sessao} />}
+          {permitida && tela === 'projetos' && <Projetos sessao={sessao} />}
+          {permitida && tela === 'analistas' && pode(sessao.acesso, 'gerenciarAnalistas') && <Usuarios sessao={sessao} />}
         </Acesso>
       </div>
     </div>

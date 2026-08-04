@@ -11,6 +11,7 @@ import {
 import { enviarGabarito, EXTENSOES_GABARITO } from '../services/envio.js'
 import { idDeFeira } from '../data/cadastro.js'
 import { traduzirErroAuth } from '../services/sessao.js'
+import { pode } from '../core/permissoes.js'
 import { usarFeiras, baixarTexto } from './Admin.jsx'
 import PainelProjeto from './PainelProjeto.jsx'
 
@@ -106,7 +107,10 @@ function textoDeCobranca(projeto, sit) {
 
 export default function Projetos({ sessao }) {
   const { fb, usuario } = sessao
-  const { feiras, feira, feiraId, setFeiraId, recarregar: recarregarFeiras, erro: erroFeiras } = usarFeiras(fb)
+  const { feiras, feira, feiraId, setFeiraId, recarregar: recarregarFeiras, erro: erroFeiras } = usarFeiras(fb, sessao.acesso)
+  const podeCadastrar = pode(sessao.acesso, 'cadastrarProjetos')
+  const podeCobrar = pode(sessao.acesso, 'cobrar')
+  const podeAprovar = pode(sessao.acesso, 'aprovar')
   const [editandoFeira, setEditandoFeira] = useState(null) // null | 'editar' | 'nova'
   const [projetos, setProjetos] = useState([])
   const [envios, setEnvios] = useState([])
@@ -206,6 +210,7 @@ export default function Projetos({ sessao }) {
           projeto={atual}
           resumo={sit}
           envios={sit.envios}
+          podeAprovar={podeAprovar}
           onFechar={() => setPainel(null)}
           onMudou={recarregar}
         />
@@ -237,15 +242,17 @@ export default function Projetos({ sessao }) {
           </label>
         </div>
 
-        <div className="acoes">
-          <button className="btn" onClick={() => setPainel('importar')}>Importar planilha</button>
-          <button
-            className="btn btn-ghost"
-            onClick={() => setPainel({ projeto: projetoNovo({ feira: feiras.find((f) => f.id === feiraId)?.nome || '' }) })}
-          >
-            Novo projeto
-          </button>
-        </div>
+        {podeCadastrar && (
+          <div className="acoes">
+            <button className="btn" onClick={() => setPainel('importar')}>Importar planilha</button>
+            <button
+              className="btn btn-ghost"
+              onClick={() => setPainel({ projeto: projetoNovo({ feira: feiras.find((f) => f.id === feiraId)?.nome || '' }) })}
+            >
+              Novo projeto
+            </button>
+          </div>
+        )}
 
         {(erro || erroFeiras) && <p className="erro-envio">{erro || erroFeiras}</p>}
 
@@ -267,6 +274,7 @@ export default function Projetos({ sessao }) {
           : (
             <ResumoDaFeira
               feira={feira}
+              podeEditar={podeCadastrar}
               onEditar={() => setEditandoFeira('editar')}
               onNova={() => setEditandoFeira('nova')}
             />
@@ -284,6 +292,7 @@ export default function Projetos({ sessao }) {
               {resumo.pedidos > 0 && <> · <strong className="destaque-pendencia">{resumo.pedidos} pedido(s) aguardando resposta</strong></>}
               {resumo.provas > 0 && <> · {resumo.provas} prova(s) com o cliente</>}
             </p>
+            {podeCobrar && (
             <div className="acoes">
               <button
                 className="btn btn-ghost"
@@ -309,6 +318,7 @@ export default function Projetos({ sessao }) {
                 Copiar e-mails com pendência
               </button>
             </div>
+            )}
           </>
         )}
       </div>
@@ -329,6 +339,8 @@ export default function Projetos({ sessao }) {
             key={projeto.token}
             projeto={projeto}
             sit={sit}
+            podeCadastrar={podeCadastrar}
+            podeCobrar={podeCobrar}
             onAbrir={() => setPainel({ detalhe: projeto.token })}
             onEditar={() => setPainel({ projeto })}
             onRemover={() => remover(projeto, sit)}
@@ -410,7 +422,7 @@ function FeiraEmEdicao({ sessao, feira, feiraId, novaFeira, onPronto, onCancelar
   )
 }
 
-function ResumoDaFeira({ feira, onEditar, onNova }) {
+function ResumoDaFeira({ feira, podeEditar, onEditar, onNova }) {
   const prazo = fmtData(feira?.prazoEnvio)
   return (
     <div className="bloco-prazo">
@@ -425,16 +437,18 @@ function ResumoDaFeira({ feira, onEditar, onNova }) {
             depois. Exceção individual: <strong>Abrir</strong> → prorrogar.
           </p>
         </div>
-        <div className="acoes">
-          <button className="btn btn-ghost" onClick={onEditar}>Editar feira</button>
-          <button className="btn btn-ghost" onClick={onNova}>Nova feira</button>
-        </div>
+        {podeEditar && (
+          <div className="acoes">
+            <button className="btn btn-ghost" onClick={onEditar}>Editar feira</button>
+            <button className="btn btn-ghost" onClick={onNova}>Nova feira</button>
+          </div>
+        )}
       </div>
     </div>
   )
 }
 
-function LinhaProjeto({ projeto, sit, onAbrir, onEditar, onRemover }) {
+function LinhaProjeto({ projeto, sit, podeCadastrar, podeCobrar, onAbrir, onEditar, onRemover }) {
   const [aberto, setAberto] = useState(false)
   const [copiado, setCopiado] = useState(null)
 
@@ -480,14 +494,14 @@ function LinhaProjeto({ projeto, sit, onAbrir, onEditar, onRemover }) {
         <button className="btn btn-ghost" onClick={() => copiar(linkDoProjeto(projeto.token), 'link')}>
           {copiado === 'link' ? '✓ Link copiado' : 'Copiar link do cliente'}
         </button>
-        {sit.pendentes.length > 0 && (
+        {podeCobrar && sit.pendentes.length > 0 && (
           <a className="btn btn-ghost" href={mailto}>Cobrar por e-mail ({sit.pendentes.length})</a>
         )}
         <button className="btn btn-ghost" onClick={() => setAberto((v) => !v)}>
           {aberto ? 'Ocultar peças' : `Ver as ${sit.total} peças`}
         </button>
-        <button className="btn btn-ghost" onClick={onEditar}>Editar</button>
-        <button className="btn btn-ghost perigo" onClick={onRemover}>Apagar</button>
+        {podeCadastrar && <button className="btn btn-ghost" onClick={onEditar}>Editar</button>}
+        {podeCadastrar && <button className="btn btn-ghost perigo" onClick={onRemover}>Apagar</button>}
       </div>
 
       {aberto && (

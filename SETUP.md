@@ -209,6 +209,29 @@ texto exato que estava na tela — o trâmite comercial segue fora do sistema.
 
 ## Analistas (`#/analistas`)
 
+**Só o Administrador abre esta tela.** Isso está nas regras do Firestore, não
+só na interface: sem essa trava, qualquer analista se promoveria e os níveis
+abaixo virariam decoração.
+
+Cada pessoa tem **duas definições independentes** — o que ela pode fazer, e em
+quais feiras. Dar todas as feiras a alguém não amplia o que ele faz nelas.
+
+| Papel | O que faz |
+|---|---|
+| **Administrador** | Tudo, em todas as feiras. Único que cadastra e remove analistas. |
+| **Analista completo** | Opera as feiras dele de ponta a ponta: cadastra projetos, manda prova, libera reenvio, marca impressão, cobra. |
+| **Cadastro** | Só cadastra feiras/projetos e importa planilha. Não manda prova, não libera reenvio, não marca impressão. |
+| **Cobrança** | Acompanha o que falta e cobra por e-mail. Não altera cadastro nem decide sobre arte. |
+
+O escopo por feira é literal: um analista atribuído a duas feiras **não vê a
+terceira no seletor**. E as abas que o papel não alcança somem — aba que só dá
+erro ao clicar é pior que aba nenhuma.
+
+Vale a franqueza sobre onde cada trava mora: **a lista de analistas é lei no
+servidor**, porque é a única cuja falsificação seria grave. Os demais limites
+são regra de tela — o risco aqui é a equipe errar o clique, não alguém montar
+chamada de API, e toda ação relevante fica registrada com o e-mail de quem fez.
+
 Duas formas de liberar alguém, porque existem dois casos reais:
 
 - **Criar conta com senha** — para quem não usa conta Google. A senha inicial
@@ -257,6 +280,8 @@ deve ficar curta, e o campo *liberado por* registra quem liberou quem.
 | `auth/unauthorized-domain` ao entrar | falta `cleitonpn.github.io` em Authentication → Settings → Domínios autorizados |
 | "Conta ainda não liberada" | o e-mail não está na coleção `admins` — libere em `#/analistas` |
 | Analista novo não entra | ele ainda não clicou no link de confirmação do e-mail |
+| Analista não vê a feira dele | a feira não foi marcada no acesso dele em `#/analistas` |
+| Aba "Analistas" não aparece | o papel não é Administrador |
 | `permission-denied` ao cadastrar projeto | regras do **Firestore** desatualizadas (passo 1) |
 | Link do cliente abre "Link não encontrado" | regras do Firestore desatualizadas, ou o token foi copiado pela metade |
 | "envio do **arquivo** recusado" | regras do **Storage** desatualizadas (passo 2) |

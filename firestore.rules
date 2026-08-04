@@ -31,6 +31,18 @@ service cloud.firestore {
         && exists(/databases/$(database)/documents/admins/$(request.auth.token.email));
     }
 
+    /**
+     * O papel de quem está pedindo. Registro antigo, sem `papel`, é
+     * administrador — era o que esses cadastros de fato eram antes de os
+     * níveis existirem, e rebaixá-los aqui trancaria o time inteiro para fora
+     * do painel de uma vez.
+     */
+    function ehGestor() {
+      return ehAdmin()
+        && get(/databases/$(database)/documents/admins/$(request.auth.token.email))
+             .data.get('papel', 'admin') == 'admin';
+    }
+
     function textoValido(v, maximo) {
       return v is string && v.size() > 1 && v.size() <= maximo;
     }
@@ -177,11 +189,20 @@ service cloud.firestore {
     // sem servidor nosso no meio, a alternativa seria voltar a depender do
     // console do Firebase a cada contratação. A lista deve ficar curta, e o
     // campo `criadoPor` registra quem liberou quem.
+    // Níveis de acesso do time.
+    //
+    // Escrever aqui é privilégio do ADMINISTRADOR, e essa é a única permissão
+    // que travamos no servidor. Não por capricho: é a única cuja falsificação
+    // seria grave. Se um analista de cobrança pudesse editar o próprio
+    // documento, ele se promoveria em dois cliques e todos os outros níveis
+    // virariam decoração. As demais permissões são regra de tela — o modelo de
+    // ameaça ali é a equipe errando o clique, não alguém montando chamada de
+    // API, e toda ação relevante fica registrada com o e-mail de quem fez.
     match /admins/{email} {
       allow read: if request.auth != null
         && request.auth.token.email_verified == true
         && (request.auth.token.email == email || ehAdmin());
-      allow create, update, delete: if ehAdmin();
+      allow create, update, delete: if ehGestor();
     }
 
     match /{document=**} {

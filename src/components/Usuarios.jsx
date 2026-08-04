@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { listarAnalistas, criarAnalista, liberarAnalista, removerAnalista, traduzirErroAuth } from '../services/sessao.js'
 import { EMAIL } from '../data/projeto.js'
+import { LISTA_DE_PAPEIS, PAPEIS, acessoDe, ROTULO_PERMISSAO } from '../core/permissoes.js'
+import { usarFeiras } from './Admin.jsx'
 
 // Cadastro dos analistas que têm acesso às telas internas.
 //
@@ -11,9 +13,14 @@ import { EMAIL } from '../data/projeto.js'
 // - **Só liberar o e-mail**: para quem vai entrar com Google. A conta já
 //   existe no Google; aqui só entra a permissão.
 //
-// Vale saber: quem tem acesso a esta tela pode liberar qualquer pessoa,
-// inclusive a si mesmo em outro endereço. É o preço de não ter um servidor
-// nosso no meio — e por isso a lista deve ficar curta, com gente do time.
+// Só o ADMINISTRADOR chega aqui, e isso é lei no servidor, não só na tela: sem
+// essa trava qualquer analista se promoveria, e os níveis abaixo virariam
+// decoração.
+//
+// Duas perguntas independentes por pessoa, e o formulário as separa de
+// propósito: o que ela PODE fazer (o papel) e ONDE ela pode (as feiras). Um
+// analista de cobrança com acesso a todas as feiras continua sem aprovar nada;
+// um analista completo só opera as feiras dele.
 
 const fmtData = (t) => (t?.seconds ? new Date(t.seconds * 1000).toLocaleDateString('pt-BR') : '—')
 
@@ -27,6 +34,8 @@ function senhaSugerida() {
 
 export default function Usuarios({ sessao }) {
   const { fb, usuario } = sessao
+  // Sem recorte: para atribuir feiras a alguém é preciso ver todas elas.
+  const { feiras } = usarFeiras(fb, { todasAsFeiras: true, permissoes: [], feiras: [] })
   const [analistas, setAnalistas] = useState([])
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState(null)
@@ -34,8 +43,15 @@ export default function Usuarios({ sessao }) {
   const [nome, setNome] = useState('')
   const [email, setEmail] = useState('')
   const [senha, setSenha] = useState(senhaSugerida)
+  const [papel, setPapel] = useState('completo')
+  const [todasAsFeiras, setTodasAsFeiras] = useState(false)
+  const [feirasEscolhidas, setFeirasEscolhidas] = useState([])
   const [salvando, setSalvando] = useState(false)
   const [criado, setCriado] = useState(null)
+  const [editando, setEditando] = useState(null)
+
+  const definicao = PAPEIS[papel]
+  const escopoTravado = Boolean(definicao?.sempreTodasAsFeiras)
 
   const recarregar = useCallback(async () => {
     if (!fb) return
@@ -58,20 +74,34 @@ export default function Usuarios({ sessao }) {
     if (!EMAIL.test(limpo)) { setErro('E-mail inválido.'); return }
     if (modo === 'conta' && senha.length < 6) { setErro('A senha precisa de pelo menos 6 caracteres.'); return }
 
+    if (!escopoTravado && !todasAsFeiras && !feirasEscolhidas.length) {
+      setErro('Escolha pelo menos uma feira, ou marque "todas as feiras".')
+      return
+    }
+
     setSalvando(true)
     setErro(null)
     setCriado(null)
+    const acessoNovo = {
+      papel,
+      feiras: feirasEscolhidas,
+      todasAsFeiras: escopoTravado || todasAsFeiras,
+      criadoPor: usuario?.email,
+    }
     try {
-      if (modo === 'conta') {
-        await criarAnalista(fb, { email: limpo, nome, senha, criadoPor: usuario?.email })
+      if (modo === 'conta' && !editando) {
+        await criarAnalista(fb, { email: limpo, nome, senha, ...acessoNovo })
         setCriado({ email: limpo, senha })
       } else {
-        await liberarAnalista(fb, { email: limpo, nome, criadoPor: usuario?.email })
+        await liberarAnalista(fb, { email: limpo, nome, ...acessoNovo })
         setCriado({ email: limpo, senha: null })
       }
       setNome('')
       setEmail('')
       setSenha(senhaSugerida())
+      setEditando(null)
+      setFeirasEscolhidas([])
+      setTodasAsFeiras(false)
       await recarregar()
     } catch (erroCriacao) {
       setErro(traduzirErroAuth(erroCriacao, 'gravacao'))
@@ -101,15 +131,14 @@ export default function Usuarios({ sessao }) {
   return (
     <>
       <form className="cartao" onSubmit={cadastrar} noValidate>
-        <h2>Liberar acesso</h2>
+        <h2>{editando ? `Alterar acesso de ${editando}` : 'Liberar acesso'}</h2>
         <p className="ajuda">
-          <strong>Há um único nível de acesso.</strong> Todo mundo desta lista —
-          gestor, analista, quem for — usa as três telas por igual: vê as artes
-          recebidas, cadastra e importa projetos, e libera outras pessoas. Não
-          existe permissão reduzida.
+          Duas decisões por pessoa: <strong>o que ela pode fazer</strong> e{' '}
+          <strong>em quais feiras</strong>. Elas são independentes — dar todas as
+          feiras a alguém não amplia o que ele faz nelas.
         </p>
 
-        <div className="escolha-modo">
+        {!editando && <div className="escolha-modo">
           <label className={modo === 'conta' ? 'ativo' : ''}>
             <input type="radio" checked={modo === 'conta'} onChange={() => setModo('conta')} />
             <span>
@@ -124,7 +153,7 @@ export default function Usuarios({ sessao }) {
               <em>Para quem vai entrar com Google. A conta já existe; aqui entra só a permissão.</em>
             </span>
           </label>
-        </div>
+        </div>}
 
         <div className="linha">
           <label className="campo">
@@ -137,7 +166,7 @@ export default function Usuarios({ sessao }) {
           </label>
         </div>
 
-        {modo === 'conta' && (
+        {modo === 'conta' && !editando && (
           <label className="campo">
             <span>Senha inicial</span>
             <div className="linha">
@@ -149,6 +178,55 @@ export default function Usuarios({ sessao }) {
             </em>
           </label>
         )}
+
+        <div className="escolha-modo">
+          {LISTA_DE_PAPEIS.map((p) => (
+            <label key={p.id} className={papel === p.id ? 'ativo' : ''}>
+              <input type="radio" checked={papel === p.id} onChange={() => setPapel(p.id)} />
+              <span>
+                <strong>{p.rotulo}</strong>
+                <em>{p.descricao}</em>
+              </span>
+            </label>
+          ))}
+        </div>
+
+        <div className="peca-editor">
+          <p className="ajuda">
+            <strong>Em quais feiras?</strong>{' '}
+            {escopoTravado
+              ? 'O administrador alcança todas, sempre — não há o que escolher.'
+              : 'Ele só enxerga, no seletor, as feiras marcadas aqui.'}
+          </p>
+          {!escopoTravado && (
+            <>
+              <label className="alternador">
+                <input type="checkbox" checked={todasAsFeiras} onChange={(e) => setTodasAsFeiras(e.target.checked)} />
+                <span>Todas as feiras, inclusive as que forem criadas depois</span>
+              </label>
+              {!todasAsFeiras && (
+                <div className="grade-feiras">
+                  {!feiras.length && <em className="dica-campo">Nenhuma feira cadastrada ainda.</em>}
+                  {feiras.map((f) => (
+                    <label className="alternador" key={f.id}>
+                      <input
+                        type="checkbox"
+                        checked={feirasEscolhidas.includes(f.id)}
+                        onChange={(e) => setFeirasEscolhidas((atual) => (
+                          e.target.checked ? [...atual, f.id] : atual.filter((x) => x !== f.id)
+                        ))}
+                      />
+                      <span>{f.nome}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+          <ul className="lista-permissoes">
+            {definicao.permissoes.map((x) => <li key={x}>{ROTULO_PERMISSAO[x]}</li>)}
+          </ul>
+        </div>
 
         {erro && <p className="erro-envio">{erro}</p>}
 
@@ -169,8 +247,16 @@ export default function Usuarios({ sessao }) {
 
         <div className="acoes">
           <button className="btn" type="submit" disabled={salvando}>
-            {salvando ? 'Cadastrando…' : modo === 'conta' ? 'Criar conta e liberar' : 'Liberar acesso'}
+            {salvando ? 'Salvando…' : editando ? 'Salvar alterações' : modo === 'conta' ? 'Criar conta e liberar' : 'Liberar acesso'}
           </button>
+          {editando && (
+            <button
+              className="btn btn-ghost" type="button"
+              onClick={() => { setEditando(null); setNome(''); setEmail(''); setFeirasEscolhidas([]); setTodasAsFeiras(false); setPapel('completo') }}
+            >
+              Cancelar
+            </button>
+          )}
         </div>
       </form>
 
@@ -182,7 +268,7 @@ export default function Usuarios({ sessao }) {
           <div className="tabela-rolagem">
             <table className="envios">
               <thead>
-                <tr><th>Nome</th><th>E-mail</th><th>Desde</th><th>Liberado por</th><th /></tr>
+                <tr><th>Nome</th><th>E-mail</th><th>Papel</th><th>Feiras</th><th>Desde</th><th /></tr>
               </thead>
               <tbody>
                 {analistas.map((a) => (
@@ -192,9 +278,38 @@ export default function Usuarios({ sessao }) {
                       {a.email}
                       {a.email === usuario?.email && <em className="dica-campo"> (você)</em>}
                     </td>
-                    <td>{fmtData(a.criadoEm)}</td>
-                    <td><em className="dica-campo">{a.criadoPor || '—'}</em></td>
+                    <td><span className="tag neutro">{acessoDe(a).rotulo}</span></td>
                     <td>
+                      {acessoDe(a).todasAsFeiras
+                        ? <em className="dica-campo">todas</em>
+                        : (
+                          <em className="dica-campo">
+                            {acessoDe(a).feiras
+                              .map((id) => feiras.find((f) => f.id === id)?.nome || id)
+                              .join(', ') || '— nenhuma'}
+                          </em>
+                        )}
+                    </td>
+                    <td>{fmtData(a.criadoEm)}</td>
+                    <td>
+                      <button
+                        className="link"
+                        onClick={() => {
+                          const ac = acessoDe(a)
+                          setEditando(a.email)
+                          setNome(a.nome || '')
+                          setEmail(a.email)
+                          setPapel(ac.papel)
+                          setTodasAsFeiras(ac.todasAsFeiras)
+                          setFeirasEscolhidas(ac.feiras)
+                          setCriado(null)
+                          setErro(null)
+                          window.scrollTo({ top: 0, behavior: 'smooth' })
+                        }}
+                      >
+                        alterar
+                      </button>
+                      {' · '}
                       <button className="link perigo" onClick={() => remover(a.email)}>remover</button>
                     </td>
                   </tr>
@@ -209,11 +324,10 @@ export default function Usuarios({ sessao }) {
           Authentication → Usuários.
         </p>
         <p className="nota">
-          Como o acesso é único, quem está aqui também pode liberar mais gente —
-          inclusive a si mesmo em outro endereço. A coluna <em>liberado por</em>{' '}
-          registra quem incluiu quem. Se um dia fizer sentido ter alguém que só
-          baixa arte, sem poder mexer em projeto nem em acesso, dá para separar
-          em dois níveis — é uma mudança pequena.
+          Só quem é <strong>Administrador</strong> abre esta tela e altera
+          papéis — e isso está nas regras do Firestore, não só aqui. Sem essa
+          trava, qualquer analista se promoveria e os níveis abaixo virariam
+          decoração.
         </p>
       </div>
     </>

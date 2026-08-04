@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { traduzirErroAuth } from '../services/sessao.js'
 import { enviarProva, EXTENSOES_PROVA } from '../services/envio.js'
 import { registrarProva } from '../services/projetos.js'
+import { feirasVisiveis } from '../core/permissoes.js'
 
 // Artes recebidas: escolhe a feira, vê o que chegou e baixa.
 //
@@ -56,8 +57,14 @@ export function baixarTexto(nome, conteudo, tipo) {
   setTimeout(() => URL.revokeObjectURL(url), 5000)
 }
 
-/** Seletor de feira compartilhado pelas telas internas. */
-export function usarFeiras(fb) {
+/**
+ * Seletor de feira compartilhado pelas telas internas.
+ *
+ * `acesso` recorta a lista: um analista atribuído a duas feiras não deve nem
+ * enxergar a terceira no seletor. Filtrar aqui, num lugar só, é o que impede a
+ * lista completa de vazar por uma tela que alguém esqueceu de tratar.
+ */
+export function usarFeiras(fb, acesso) {
   const [feiras, setFeiras] = useState([])
   const [feiraId, setFeiraId] = useState('')
   const [erro, setErro] = useState(null)
@@ -67,15 +74,15 @@ export function usarFeiras(fb) {
     try {
       const { getFirestore, collection, getDocs } = fb.firestore
       const snap = await getDocs(collection(getFirestore(fb.app), 'feiras'))
-      const lista = snap.docs
+      const lista = feirasVisiveis(acesso, snap.docs
         .map((d) => ({ id: d.id, ...d.data() }))
-        .sort((a, b) => (b.atualizadaEm?.seconds || 0) - (a.atualizadaEm?.seconds || 0))
+        .sort((a, b) => (b.atualizadaEm?.seconds || 0) - (a.atualizadaEm?.seconds || 0)))
       setFeiras(lista)
       setFeiraId((atual) => selecionar || atual || lista[0]?.id || '')
     } catch (e) {
       setErro(traduzirErroAuth(e))
     }
-  }, [fb])
+  }, [fb, acesso])
 
   useEffect(() => { recarregar() }, [recarregar])
 
@@ -150,7 +157,7 @@ function BotaoProva({ envio, sessao }) {
 
 export default function Admin({ sessao }) {
   const { fb } = sessao
-  const { feiras, feiraId, setFeiraId, erro: erroFeiras } = usarFeiras(fb)
+  const { feiras, feiraId, setFeiraId, erro: erroFeiras } = usarFeiras(fb, sessao.acesso)
   const [envios, setEnvios] = useState([])
   const [buscando, setBuscando] = useState(false)
   const [filtro, setFiltro] = useState('')

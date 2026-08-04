@@ -24,7 +24,7 @@ const paraInputData = (v) => {
 // vencer na virada do dia 9 para o 10, e ninguém entende o prazo assim.
 const fimDoDia = (aaaammdd) => (aaaammdd ? new Date(`${aaaammdd}T23:59:59`).toISOString() : null)
 
-export default function PainelProjeto({ sessao, projeto, resumo, envios, onFechar, onMudou }) {
+export default function PainelProjeto({ sessao, projeto, resumo, envios, podeAprovar = true, onFechar, onMudou }) {
   const [erro, setErro] = useState(null)
   const [ocupado, setOcupado] = useState(false)
 
@@ -68,12 +68,12 @@ export default function PainelProjeto({ sessao, projeto, resumo, envios, onFecha
 
         {erro && <p className="erro-envio">{erro}</p>}
 
-        <Prazo projeto={projeto} resumo={resumo} ocupado={ocupado} onProrrogar={(ate) => rodar(
+        <Prazo projeto={projeto} resumo={resumo} ocupado={ocupado} podeAprovar={podeAprovar} onProrrogar={(ate) => rodar(
           () => prorrogarPrazo(sessao.fb, projeto.token, ate, sessao.usuario?.email),
         )} />
       </div>
 
-      {resumo.pedidosEmAberto.length > 0 && (
+      {podeAprovar && resumo.pedidosEmAberto.length > 0 && (
         <div className="cartao pedidos-abertos">
           <h3>Pedidos aguardando sua resposta ({resumo.pedidosEmAberto.length})</h3>
           {resumo.pedidosEmAberto.map((s) => (
@@ -98,13 +98,13 @@ export default function PainelProjeto({ sessao, projeto, resumo, envios, onFecha
         </div>
       )}
 
-      <NovaProva
+      {podeAprovar && <NovaProva
         sessao={sessao}
         projeto={projeto}
         resumo={resumo}
         ocupado={ocupado}
         onEnviar={(dados) => rodar(() => registrarProva(sessao.fb, projeto.token, { ...dados, por: sessao.usuario?.email }))}
-      />
+      />}
 
       <ArquivosDeApoio apoio={resumo.apoio} />
 
@@ -116,6 +116,7 @@ export default function PainelProjeto({ sessao, projeto, resumo, envios, onFecha
             situacao={s}
             envios={enviosPorPeca.get(s.peca.id) || []}
             ocupado={ocupado}
+            podeAprovar={podeAprovar}
             onStatus={(status) => rodar(
               () => definirStatusDaPeca(sessao.fb, projeto.token, s.peca.id, status, sessao.usuario?.email),
             )}
@@ -134,7 +135,7 @@ export default function PainelProjeto({ sessao, projeto, resumo, envios, onFecha
   )
 }
 
-function Prazo({ projeto, resumo, ocupado, onProrrogar }) {
+function Prazo({ projeto, resumo, ocupado, podeAprovar, onProrrogar }) {
   const [ate, setAte] = useState(() => paraInputData(projeto.prorrogadoAte))
 
   return (
@@ -155,7 +156,7 @@ function Prazo({ projeto, resumo, ocupado, onProrrogar }) {
         </div>
       </div>
 
-      <div className="linha">
+      {podeAprovar && <div className="linha">
         <label className="campo">
           <span>Liberar este stand até (prorrogação)</span>
           <input type="date" value={ate} onChange={(e) => setAte(e.target.value)} />
@@ -170,7 +171,7 @@ function Prazo({ projeto, resumo, ocupado, onProrrogar }) {
             </button>
           )}
         </div>
-      </div>
+      </div>}
       {projeto.prorrogadoAte && (
         <p className="nota">
           Prorrogado até {fmtDataHora(projeto.prorrogadoAte)} por {projeto.prorrogadoPor || '—'}.
@@ -451,7 +452,7 @@ function ArquivosDeApoio({ apoio }) {
   )
 }
 
-function PecaDoTime({ situacao, envios, ocupado, onStatus, onLiberar }) {
+function PecaDoTime({ situacao, envios, ocupado, podeAprovar, onStatus, onLiberar }) {
   const { peca, status, rotulo, cor, controle } = situacao
   const emProducao = status === 'em_impressao' || status === 'impressa'
 
@@ -486,17 +487,17 @@ function PecaDoTime({ situacao, envios, ocupado, onStatus, onLiberar }) {
       )}
 
       <div className="acoes compactas">
-        {status !== 'aguardando' && status !== 'em_impressao' && status !== 'impressa' && (
+        {podeAprovar && status !== 'aguardando' && status !== 'em_impressao' && status !== 'impressa' && (
           <button className="btn btn-ghost" disabled={ocupado} onClick={() => onStatus('em_impressao')}>
             Marcar “em impressão”
           </button>
         )}
-        {status === 'em_impressao' && (
+        {podeAprovar && status === 'em_impressao' && (
           <button className="btn btn-ghost" disabled={ocupado} onClick={() => onStatus('impressa')}>
             Marcar “impressa”
           </button>
         )}
-        {(status === 'em_impressao' || status === 'impressa') && (
+        {podeAprovar && (status === 'em_impressao' || status === 'impressa') && (
           <button className="btn btn-ghost perigo" disabled={ocupado} onClick={() => onStatus(null)}>
             Desfazer status
           </button>
@@ -508,7 +509,7 @@ function PecaDoTime({ situacao, envios, ocupado, onStatus, onLiberar }) {
           atendimento, e não havia como isso virar ação na ferramenta — o
           cliente não conseguia pedir e o analista não conseguia liberar.
         */}
-        {!situacao.podeEnviar && (
+        {podeAprovar && !situacao.podeEnviar && (
           <button className="btn btn-ghost" disabled={ocupado} onClick={() => onLiberar(emProducao)}>
             {emProducao ? 'Liberar reimpressão (custo extra combinado)' : 'Liberar envio de nova versão'}
           </button>

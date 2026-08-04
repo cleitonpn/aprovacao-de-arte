@@ -593,3 +593,19 @@ textarea { width: 100%; font: inherit; font-size: 13px; padding: 9px 11px; borde
 .gabarito-editor { border-top: 1px dashed var(--borda); margin-top: 10px; padding-top: 10px; }
 .gabarito-editor .linha { align-items: flex-end; margin-bottom: 4px; }
 .gabarito-editor .acoes { margin: 0 0 4px; }
+
+/* ----------------------------------------------------- níveis de analista */
+.papel-atual {
+  margin-left: auto; align-self: center; font-size: 12px; color: var(--suave);
+  border: 1px solid var(--borda); border-radius: 999px; padding: 3px 10px;
+}
+.abas a.fora { margin-left: 14px; }
+
+.grade-feiras {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 2px 14px; margin: 8px 0;
+}
+.grade-feiras .alternador { margin: 0; }
+
+.lista-permissoes { margin: 10px 0 0; padding-left: 18px; font-size: 12.5px; color: var(--suave); }
+.lista-permissoes li { margin-bottom: 2px; }

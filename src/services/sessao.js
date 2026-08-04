@@ -14,6 +14,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { carregarFirebase, appSecundario } from './firebase.js'
 import { firebaseConfigurado } from '../config.js'
+import { acessoDe } from '../core/permissoes.js'
 
 /**
  * @param {Error} e
@@ -92,7 +93,7 @@ export function usarSessao() {
   const [usuario, setUsuario] = useState(null)
   const [carregando, setCarregando] = useState(true)
   const [verificandoAcesso, setVerificandoAcesso] = useState(false)
-  const [ehAdmin, setEhAdmin] = useState(false)
+  const [acesso, setAcesso] = useState(null)
   const [erro, setErro] = useState(null)
 
   useEffect(() => {
@@ -118,14 +119,17 @@ export function usarSessao() {
   // e a leitura acontece contra as regras do servidor — não dá para contornar
   // pelo navegador.
   useEffect(() => {
-    if (!fb || !usuario) { setEhAdmin(false); return }
-    if (!usuario.emailVerified) { setEhAdmin(false); return }
+    if (!fb || !usuario || !usuario.emailVerified) { setAcesso(null); return undefined }
     let vivo = true
     setVerificandoAcesso(true)
     const { getFirestore, doc, getDoc } = fb.firestore
     getDoc(doc(getFirestore(fb.app), ADMINS, usuario.email))
-      .then((snap) => { if (vivo) setEhAdmin(snap.exists()) })
-      .catch(() => { if (vivo) setEhAdmin(false) })
+      // O documento não diz só SE a pessoa entra: diz o que ela pode fazer e
+      // em quais feiras. Ler as duas coisas de uma vez evita uma segunda
+      // consulta e, principalmente, evita a janela em que a tela já apareceu
+      // mas ainda não sabe o que esconder.
+      .then((snap) => { if (vivo) setAcesso(snap.exists() ? acessoDe(snap.data()) : null) })
+      .catch(() => { if (vivo) setAcesso(null) })
       .finally(() => { if (vivo) setVerificandoAcesso(false) })
     return () => { vivo = false }
   }, [fb, usuario])
@@ -183,9 +187,10 @@ export function usarSessao() {
     fb,
     usuario,
     carregando: carregando || verificandoAcesso,
-    ehAdmin,
+    acesso,
+    ehAdmin: Boolean(acesso),
     verificado: Boolean(usuario?.emailVerified),
-    liberado: Boolean(usuario?.emailVerified && ehAdmin),
+    liberado: Boolean(usuario?.emailVerified && acesso),
     erro,
     setErro,
     entrarComGoogle,
@@ -214,7 +219,7 @@ export async function listarAnalistas(fb) {
  * quem está cadastrando (ver `appSecundario`), e já sai com o e-mail de
  * verificação enviado — sem verificar, as regras não deixam entrar.
  */
-export async function criarAnalista(fb, { email, nome, senha, criadoPor }) {
+export async function criarAnalista(fb, { email, nome, senha, papel, feiras, todasAsFeiras, criadoPor }) {
   const limpo = String(email || '').trim().toLowerCase()
   const { secundario, auth, firestore } = await appSecundario()
   const autenticacaoSecundaria = auth.getAuth(secundario)
@@ -232,6 +237,9 @@ export async function criarAnalista(fb, { email, nome, senha, criadoPor }) {
   const bd = firestore.getFirestore(fb.app)
   await firestore.setDoc(firestore.doc(bd, ADMINS, limpo), {
     nome: String(nome || '').trim().slice(0, 120),
+    papel: papel || 'completo',
+    feiras: todasAsFeiras ? [] : (feiras || []),
+    todasAsFeiras: Boolean(todasAsFeiras),
     criadoEm: firestore.serverTimestamp(),
     criadoPor: criadoPor || null,
   })
@@ -239,15 +247,24 @@ export async function criarAnalista(fb, { email, nome, senha, criadoPor }) {
   return { email: limpo, uid: credencial?.user?.uid || null }
 }
 
-/** Libera alguém que já tem conta (por exemplo, quem entra com Google). */
-export async function liberarAnalista(fb, { email, nome, criadoPor }) {
+/**
+ * Libera alguém que já tem conta, ou altera o acesso de quem já está na lista.
+ *
+ * `merge` de propósito: editar o papel de um analista não pode apagar quando
+ * ele entrou nem quem o liberou — esse rastro é o que responde "por que fulano
+ * tem esse acesso?" três meses depois.
+ */
+export async function liberarAnalista(fb, { email, nome, papel, feiras, todasAsFeiras, criadoPor }) {
   const limpo = String(email || '').trim().toLowerCase()
   const bd = fb.firestore.getFirestore(fb.app)
   await fb.firestore.setDoc(fb.firestore.doc(bd, ADMINS, limpo), {
     nome: String(nome || '').trim().slice(0, 120),
+    papel: papel || 'completo',
+    feiras: todasAsFeiras ? [] : (feiras || []),
+    todasAsFeiras: Boolean(todasAsFeiras),
     criadoEm: fb.firestore.serverTimestamp(),
     criadoPor: criadoPor || null,
-  })
+  }, { merge: true })
   return { email: limpo }
 }
 
