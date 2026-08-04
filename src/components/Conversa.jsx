@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   ouvirConversa, enviarMensagemDoCliente, enviarMensagemDoTime,
 } from '../services/projetos.js'
@@ -29,7 +29,7 @@ const fmtQuando = (v) => {
   return new Date(ms).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
 }
 
-export default function Conversa({ token, ehTime = false, sessao = null, identidade = null, aoVerConversa = null }) {
+export default function Conversa({ token, ehTime = false, sessao = null, identidade = null }) {
   const [mensagens, setMensagens] = useState([])
   const [texto, setTexto] = useState('')
   const [nome, setNome] = useState(identidade?.nome || '')
@@ -65,12 +65,12 @@ export default function Conversa({ token, ehTime = false, sessao = null, identid
 
   useEffect(() => { fim.current?.scrollIntoView({ block: 'nearest' }) }, [mensagens.length])
 
-  // Estar com a conversa na tela É ter visto: marcar aqui evita a bolinha
-  // teimosa que continua acesa depois de a pessoa ter lido tudo.
+  // Estar com a conversa na tela É ter visto. Quem redesenha as bolinhas
+  // descobre sozinho: `marcarVisto` avisa seus assinantes, e as telas que
+  // pintam aviso estão inscritas nele.
   useEffect(() => {
     if (!ehTime || !mensagens.length) return
     marcarVisto(sessao?.usuario?.email, `conversa:${token}`, mensagens[mensagens.length - 1].em)
-    aoVerConversa?.()
   }, [ehTime, mensagens, token, sessao?.usuario?.email])
 
   const enviar = async () => {

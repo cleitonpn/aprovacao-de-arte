@@ -9,7 +9,7 @@ import {
   salvarProjeto, salvarProjetos, apagarProjeto, salvarFeira,
   ouvirProjetos, ouvirEnvios,
 } from '../services/projetos.js'
-import { vistoEm, marcarVisto, dataEmMs } from '../store/visto.js'
+import { vistoEm, dataEmMs, assinarVisto } from '../store/visto.js'
 import { enviarGabarito, EXTENSOES_GABARITO } from '../services/envio.js'
 import { idDeFeira } from '../data/cadastro.js'
 import { traduzirErroAuth } from '../services/sessao.js'
@@ -150,6 +150,12 @@ export default function Projetos({ sessao }) {
     return mapa
   }, [envios])
 
+  // Abrir a conversa marca como lida, e isso precisa apagar a etiqueta aqui na
+  // hora. Sem esta assinatura a lista só reagia a mudança vinda do servidor —
+  // e ler uma mensagem não muda documento nenhum.
+  const [versaoDoVisto, setVersaoDoVisto] = useState(0)
+  useEffect(() => assinarVisto(() => setVersaoDoVisto((v) => v + 1)), [])
+
   const marcaConversa = (token) => vistoEm(usuario?.email, `conversa:${token}`)
 
   const linhas = useMemo(() => {
@@ -171,7 +177,7 @@ export default function Projetos({ sessao }) {
       .filter(({ projeto }) => !t || [projeto.stand, projeto.expositor, projeto.email]
         .some((v) => String(v || '').toLowerCase().includes(t)))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projetos, enviosPorProjeto, filtro, feira, usuario?.email])
+  }, [projetos, enviosPorProjeto, filtro, feira, usuario?.email, versaoDoVisto])
 
   const resumo = useMemo(() => {
     const total = linhas.reduce((s, l) => s + l.sit.total, 0)
@@ -225,7 +231,6 @@ export default function Projetos({ sessao }) {
           podeAprovar={podeAprovar}
           onFechar={() => setPainel(null)}
           onMudou={recarregar}
-          aoVerConversa={() => setProjetos((atual) => [...atual])}
         />
       )
     }

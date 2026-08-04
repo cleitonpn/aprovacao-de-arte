@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { traduzirErroAuth } from '../services/sessao.js'
 import { enviarProva, EXTENSOES_PROVA } from '../services/envio.js'
 import { registrarProva, ouvirEnvios } from '../services/projetos.js'
-import { vistoEm, marcarVisto, dataEmMs } from '../store/visto.js'
+import { vistoEm, marcarVisto, dataEmMs, assinarVisto } from '../store/visto.js'
 import { feirasVisiveis } from '../core/permissoes.js'
 
 // Artes recebidas: escolhe a feira, vê o que chegou e baixa.
@@ -185,6 +185,12 @@ export default function Admin({ sessao }) {
     }, (e) => { setErro(traduzirErroAuth(e)); setBuscando(false) })
     return () => parar()
   }, [fb, feiraId, sessao.usuario?.email])
+
+  // Se a marca for atualizada em outra tela (ou em outra aba do navegador), o
+  // contador daqui acompanha sem recarregar.
+  useEffect(() => assinarVisto(
+    () => setMarca(vistoEm(sessao.usuario?.email, `envios:${feiraId}`)),
+  ), [sessao.usuario?.email, feiraId])
 
   const novos = useMemo(
     () => envios.filter((e) => dataEmMs(e.criadoEm) > marca).length,

@@ -25,7 +25,7 @@ const paraInputData = (v) => {
 // vencer na virada do dia 9 para o 10, e ninguém entende o prazo assim.
 const fimDoDia = (aaaammdd) => (aaaammdd ? new Date(`${aaaammdd}T23:59:59`).toISOString() : null)
 
-export default function PainelProjeto({ sessao, projeto, resumo, envios, podeAprovar = true, onFechar, onMudou, aoVerConversa }) {
+export default function PainelProjeto({ sessao, projeto, resumo, envios, podeAprovar = true, onFechar, onMudou }) {
   const [erro, setErro] = useState(null)
   const [ocupado, setOcupado] = useState(false)
 
@@ -109,7 +109,7 @@ export default function PainelProjeto({ sessao, projeto, resumo, envios, podeApr
 
       <ArquivosDeApoio apoio={resumo.apoio} />
 
-      <Conversa token={projeto.token} ehTime sessao={sessao} aoVerConversa={aoVerConversa} />
+      <Conversa token={projeto.token} ehTime sessao={sessao} />
 
       <div className="cartao">
         <h3>Peças</h3>

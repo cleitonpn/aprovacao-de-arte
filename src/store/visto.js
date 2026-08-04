@@ -12,6 +12,27 @@
 
 const CHAVE = 'aprovacao-arte:visto'
 
+// Quem está desenhando bolinha a partir daqui.
+//
+// Sem isto, "marcar como visto" gravava no localStorage e mais nada acontecia:
+// a contagem das abas é feita dentro da escuta do Firestore, que só reexecuta
+// quando um DOCUMENTO muda — e marcar como lido não muda documento nenhum. O
+// contador só sumia recarregando a página, que é exatamente o F5 que a escuta
+// em tempo real veio eliminar.
+const ouvintes = new Set()
+
+/** @returns {() => void} cancelador */
+export function assinarVisto(fn) {
+  ouvintes.add(fn)
+  return () => ouvintes.delete(fn)
+}
+
+function avisar() {
+  for (const fn of ouvintes) {
+    try { fn() } catch (e) { console.warn('ouvinte de "visto" falhou', e) }
+  }
+}
+
 function tudo() {
   try {
     const bruto = localStorage.getItem(CHAVE)
@@ -54,6 +75,7 @@ export function marcarVisto(quem, assunto, ate) {
   if (ms > (Number(dados[chave]) || 0)) {
     dados[chave] = ms
     gravar(dados)
+    avisar()
   }
 }
 
