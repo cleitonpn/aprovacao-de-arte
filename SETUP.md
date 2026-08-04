@@ -166,6 +166,23 @@ copiar de uma vez os e-mails de todos os stands com pendência.
 Com o nome da peça cadastrada em cada arquivo, e uma coluna
 **Prova de aprovação** para mandar o print direto da lista.
 
+### O painel se atualiza sozinho
+
+Nada de F5. As telas internas **escutam o Firestore em tempo real**: arte que
+chega, mensagem do cliente e resposta a uma prova aparecem sem recarregar.
+
+As abas mostram uma bolinha vermelha com o que é novo **desde a sua última
+visita** — contando todas as feiras que você alcança, não só a selecionada. Um
+aviso que só aparece depois de escolher a feira certa chega tarde demais.
+
+O marcador de "já vi" fica no navegador de cada analista, não no servidor: uma
+gravação por tela aberta, dezenas por dia por pessoa, seria caro demais para
+pintar uma bolinha. O preço é que trocar de máquina zera os avisos uma vez.
+
+Sobre custo: parece caro manter conexão aberta e não é. O Firestore cobra a
+leitura inicial de cada documento e, depois, só o que muda — um painel aberto
+oito horas numa feira parada custa o mesmo que abri-lo uma vez.
+
 ### Conversa com o cliente
 
 Cliente e analista trocam mensagens dentro da ferramenta — na tela do cliente e

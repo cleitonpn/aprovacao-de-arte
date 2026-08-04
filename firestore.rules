@@ -132,9 +132,11 @@ service cloud.firestore {
       //
       // - o time altera o projeto inteiro, incluindo `controle` (liberações,
       //   recusas, provas, status de impressão) e o prazo;
-      // - o expositor só alcança os três campos das AÇÕES DELE: o que enviou
-      //   (`entregas`), o que pediu (`pedidos`) e o que respondeu numa prova
-      //   (`respostasProva`).
+      // - o expositor só alcança os campos das AÇÕES DELE: o que enviou
+      //   (`entregas`), o que pediu (`pedidos`), o que respondeu numa prova
+      //   (`respostasProva`) e o carimbo da última mensagem (`conversa`), que
+      //   é só o que pinta a bolinha de aviso no painel. O TEXTO da conversa
+      //   não mora aqui — mora em documentos que ninguém edita.
       //
       // É esta linha que impede o cliente de assinar a decisão do analista.
       // Com o link em mãos ele pode pedir uma versão nova, mas não pode
@@ -145,7 +147,7 @@ service cloud.firestore {
       allow update: if ehAdmin()
         || (request.auth != null
             && request.resource.data.diff(resource.data).affectedKeys()
-                 .hasOnly(['entregas', 'pedidos', 'respostasProva']));
+                 .hasOnly(['entregas', 'pedidos', 'respostasProva', 'conversa']));
     }
 
     // A conversa entre o cliente e o time.

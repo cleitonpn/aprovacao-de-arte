@@ -4,7 +4,8 @@ import { POLITICA_PADRAO, especificacao } from '../core/regras.js'
 import { cadastroDoProjeto, pecaNova, perfilPorTexto } from '../data/projeto.js'
 import { resumoDoProjeto, situacaoDaPeca, AVISO_PRAZO, AVISO_EXTRA } from '../core/fluxo.js'
 import {
-  carregarProjetoPublico, marcarEntrega, pedirNovaVersao, aceitarCustoExtra, responderProva,
+  carregarProjetoPublico, ouvirProjetoPublico, marcarEntrega, pedirNovaVersao,
+  aceitarCustoExtra, responderProva,
 } from '../services/projetos.js'
 import { usarAnalise } from '../store/usarAnalise.js'
 import Upload from './Upload.jsx'
@@ -55,6 +56,22 @@ export default function Projeto({ token }) {
   }, [token])
 
   useEffect(() => { setEstado('carregando'); carregar() }, [carregar])
+
+  // Depois da primeira carga, a tela passa a escutar: a prova de aprovação e o
+  // status de impressão aparecem sem o cliente recarregar nada. É o mesmo
+  // motivo do painel do analista — só que aqui o ganho é ele não desistir e
+  // ligar para o atendimento perguntando "e aí?".
+  useEffect(() => {
+    if (estado !== 'pronto') return undefined
+    let vivo = true
+    let cancelar = null
+    ouvirProjetoPublico(
+      token,
+      (p) => { if (vivo) setProjeto((atual) => ({ ...p, feira: atual?.feira || p.feira, prazoEnvio: atual?.prazoEnvio ?? p.prazoEnvio })) },
+      (e) => console.warn('escuta do projeto interrompida', e),
+    ).then((c) => { cancelar = c; if (!vivo) c?.() })
+    return () => { vivo = false; cancelar?.() }
+  }, [estado, token])
 
   const cadastro = useMemo(() => (projeto ? cadastroDoProjeto(projeto) : null), [projeto])
   const resumo = useMemo(() => (projeto ? resumoDoProjeto(projeto) : null), [projeto])

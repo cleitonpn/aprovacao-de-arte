@@ -6,8 +6,10 @@ import {
 import { importarProjetos, MODELO_CSV } from '../core/importacao.js'
 import { resumoDoProjeto } from '../core/fluxo.js'
 import {
-  salvarProjeto, salvarProjetos, listarProjetos, apagarProjeto, salvarFeira,
+  salvarProjeto, salvarProjetos, apagarProjeto, salvarFeira,
+  ouvirProjetos, ouvirEnvios,
 } from '../services/projetos.js'
+import { vistoEm, marcarVisto, dataEmMs } from '../store/visto.js'
 import { enviarGabarito, EXTENSOES_GABARITO } from '../services/envio.js'
 import { idDeFeira } from '../data/cadastro.js'
 import { traduzirErroAuth } from '../services/sessao.js'
@@ -119,26 +121,24 @@ export default function Projetos({ sessao }) {
   const [painel, setPainel] = useState(null) // null | 'importar' | {projeto} | {detalhe}
   const [filtro, setFiltro] = useState('')
 
-  const recarregar = useCallback(async () => {
-    if (!fb || !feiraId) { setProjetos([]); setEnvios([]); return }
+  // A escuta substitui o F5. O analista deixa esta tela aberta o dia inteiro
+  // durante a montagem; obrigá-lo a recarregar para saber se chegou arte é
+  // transformar o painel num lugar que ele evita abrir.
+  useEffect(() => {
+    if (!fb || !feiraId) { setProjetos([]); setEnvios([]); return undefined }
     setCarregando(true)
     setErro(null)
-    try {
-      const { getFirestore, collection, getDocs, query, where } = fb.firestore
-      const [lista, snap] = await Promise.all([
-        listarProjetos(fb, feiraId),
-        getDocs(query(collection(getFirestore(fb.app), 'envios'), where('feiraId', '==', feiraId))),
-      ])
+    const falhou = (e) => setErro(traduzirErroAuth(e))
+    const pararProjetos = ouvirProjetos(fb, feiraId, (lista) => {
       setProjetos(lista)
-      setEnvios(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
-    } catch (e) {
-      setErro(traduzirErroAuth(e))
-    } finally {
       setCarregando(false)
-    }
+    }, falhou)
+    const pararEnvios = ouvirEnvios(fb, feiraId, setEnvios, falhou)
+    return () => { pararProjetos(); pararEnvios() }
   }, [fb, feiraId])
 
-  useEffect(() => { recarregar() }, [recarregar])
+  // Depois de gravar, não é preciso reler: a escuta já traz o que mudou.
+  const recarregar = useCallback(async () => {}, [])
 
   const enviosPorProjeto = useMemo(() => {
     const mapa = new Map()
@@ -150,6 +150,8 @@ export default function Projetos({ sessao }) {
     return mapa
   }, [envios])
 
+  const marcaConversa = (token) => vistoEm(usuario?.email, `conversa:${token}`)
+
   const linhas = useMemo(() => {
     const t = filtro.trim().toLowerCase()
     // O prazo vem da feira, não da cópia guardada no projeto. É a mesma leitura
@@ -157,10 +159,19 @@ export default function Projetos({ sessao }) {
     // e o cliente outro.
     const comPrazo = (p) => (feira && 'prazoEnvio' in feira ? { ...p, prazoEnvio: feira.prazoEnvio } : p)
     return projetos
-      .map((p) => ({ projeto: p, sit: situacao(comPrazo(p), enviosPorProjeto) }))
+      .map((p) => ({
+        projeto: p,
+        sit: situacao(comPrazo(p), enviosPorProjeto),
+        // Bolinha só quando a última palavra é do CLIENTE e é mais nova que a
+        // última vez que este analista abriu a conversa. Marcar por autor evita
+        // o painel acender por causa da própria resposta do time.
+        temMensagemNova: p.conversa?.ultimoAutor === 'cliente'
+          && dataEmMs(p.conversa?.ultimaEm) > marcaConversa(p.token),
+      }))
       .filter(({ projeto }) => !t || [projeto.stand, projeto.expositor, projeto.email]
         .some((v) => String(v || '').toLowerCase().includes(t)))
-  }, [projetos, enviosPorProjeto, filtro, feira])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projetos, enviosPorProjeto, filtro, feira, usuario?.email])
 
   const resumo = useMemo(() => {
     const total = linhas.reduce((s, l) => s + l.sit.total, 0)
@@ -173,6 +184,7 @@ export default function Projetos({ sessao }) {
       completos: linhas.filter((l) => l.sit.completo).length,
       pedidos: linhas.reduce((s, l) => s + l.sit.pedidosEmAberto.length, 0),
       provas: linhas.reduce((s, l) => s + l.sit.provasAguardando, 0),
+      mensagens: linhas.filter((l) => l.temMensagemNova).length,
     }
   }, [linhas])
 
@@ -213,6 +225,7 @@ export default function Projetos({ sessao }) {
           podeAprovar={podeAprovar}
           onFechar={() => setPainel(null)}
           onMudou={recarregar}
+          aoVerConversa={() => setProjetos((atual) => [...atual])}
         />
       )
     }
@@ -290,6 +303,7 @@ export default function Projetos({ sessao }) {
                 : 'nada pendente'}{' '}
               · {resumo.completos} stands completos
               {resumo.pedidos > 0 && <> · <strong className="destaque-pendencia">{resumo.pedidos} pedido(s) aguardando resposta</strong></>}
+              {resumo.mensagens > 0 && <> · <strong className="destaque-pendencia">{resumo.mensagens} conversa(s) com mensagem nova</strong></>}
               {resumo.provas > 0 && <> · {resumo.provas} prova(s) com o cliente</>}
             </p>
             {podeCobrar && (
@@ -337,11 +351,12 @@ export default function Projetos({ sessao }) {
         {!carregando && projetos.length > 0 && !linhas.length && (
           <p className="ajuda">Nenhum resultado para “{filtro}”.</p>
         )}
-        {linhas.map(({ projeto, sit }) => (
+        {linhas.map(({ projeto, sit, temMensagemNova }) => (
           <LinhaProjeto
             key={projeto.token}
             projeto={projeto}
             sit={sit}
+            temMensagemNova={temMensagemNova}
             podeCadastrar={podeCadastrar}
             podeCobrar={podeCobrar}
             onAbrir={() => setPainel({ detalhe: projeto.token })}
@@ -451,7 +466,7 @@ function ResumoDaFeira({ feira, podeEditar, onEditar, onNova }) {
   )
 }
 
-function LinhaProjeto({ projeto, sit, podeCadastrar, podeCobrar, onAbrir, onEditar, onRemover }) {
+function LinhaProjeto({ projeto, sit, temMensagemNova, podeCadastrar, podeCobrar, onAbrir, onEditar, onRemover }) {
   const [aberto, setAberto] = useState(false)
   const [copiado, setCopiado] = useState(null)
 
@@ -488,6 +503,7 @@ function LinhaProjeto({ projeto, sit, podeCadastrar, podeCobrar, onAbrir, onEdit
           {sit.pedidosEmAberto.length > 0 && (
             <span className="tag reprovado">{sit.pedidosEmAberto.length} pedido(s)</span>
           )}
+          {temMensagemNova && <span className="tag aviso">mensagem nova</span>}
           {sit.provasAguardando > 0 && <em className="dica-campo">{sit.provasAguardando} em prova</em>}
           {sit.emProducao > 0 && <em className="dica-campo">{sit.emProducao} em produção</em>}
           {sit.apoio.length > 0 && <em className="dica-campo">{sit.apoio.length} arquivo(s) de apoio</em>}
@@ -496,7 +512,9 @@ function LinhaProjeto({ projeto, sit, podeCadastrar, podeCobrar, onAbrir, onEdit
       </div>
 
       <div className="acoes compactas">
-        <button className="btn" onClick={onAbrir}>Abrir</button>
+        <button className={`btn ${temMensagemNova ? 'pulsa' : ''}`} onClick={onAbrir}>
+          Abrir{temMensagemNova && ' ·'}
+        </button>
         <button className="btn btn-ghost" onClick={() => copiar(linkDoProjeto(projeto.token), 'link')}>
           {copiado === 'link' ? '✓ Link copiado' : 'Copiar link do cliente'}
         </button>

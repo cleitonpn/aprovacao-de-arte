@@ -355,24 +355,48 @@ const MENSAGENS = 'mensagens'
 export async function enviarMensagemDoCliente(token, { texto, nome, email }) {
   const { app, firestore } = await sessaoAnonima()
   const bd = firestore.getFirestore(app)
+  const em = new Date().toISOString()
   await firestore.addDoc(firestore.collection(bd, COLECAO, token, MENSAGENS), semIndefinidos({
     autor: 'cliente',
     nome: String(nome || '').trim().slice(0, 120),
     email: String(email || '').trim().toLowerCase().slice(0, 160) || null,
     texto: String(texto || '').trim().slice(0, 2000),
-    em: new Date().toISOString(),
+    em,
   }))
+  await resumirConversa(bd, firestore, token, 'cliente', em)
+}
+
+/**
+ * Espelha no documento do projeto quando foi a última mensagem e de quem.
+ *
+ * Existe por causa da bolinha de aviso na LISTA de projetos: sem este resumo,
+ * pintar "tem mensagem nova" em trinta stands exigiria abrir a subcoleção de
+ * cada um — trinta consultas para desenhar trinta bolinhas. Com o resumo, a
+ * informação já vem junto com a lista que a tela carrega de qualquer forma.
+ *
+ * O cliente consegue escrever aqui, e isso é aceitável: o pior que ele faz é
+ * provocar um aviso à toa. O conteúdo da conversa continua intocável.
+ */
+function resumirConversa(bd, firestore, token, autor, em) {
+  return firestore.updateDoc(firestore.doc(bd, COLECAO, token), {
+    conversa: { ultimaEm: em, ultimoAutor: autor },
+  }).catch((e) => {
+    // Falhar aqui não pode derrubar a mensagem, que já foi gravada.
+    console.warn('mensagem enviada, mas o resumo da conversa não atualizou', e)
+  })
 }
 
 export async function enviarMensagemDoTime(fb, token, { texto, autorEmail, autorNome }) {
   const bd = fb.firestore.getFirestore(fb.app)
+  const em = new Date().toISOString()
   await fb.firestore.addDoc(fb.firestore.collection(bd, COLECAO, token, MENSAGENS), semIndefinidos({
     autor: 'time',
     nome: String(autorNome || autorEmail || 'Comunicação visual').trim().slice(0, 120),
     email: autorEmail || null,
     texto: String(texto || '').trim().slice(0, 2000),
-    em: new Date().toISOString(),
+    em,
   }))
+  await resumirConversa(bd, fb.firestore, token, 'time', em)
 }
 
 /** Ordena aqui, e não na consulta, para não exigir índice: são poucas dezenas. */
@@ -393,4 +417,64 @@ export async function lerConversaComoTime(fb, token) {
   const bd = fb.firestore.getFirestore(fb.app)
   const snap = await fb.firestore.getDocs(fb.firestore.collection(bd, COLECAO, token, MENSAGENS))
   return ordenar(snap.docs)
+}
+
+// ---------------------------------------------------- escuta em tempo real
+//
+// `onSnapshot` no lugar de recarregar a página. O analista deixa o painel
+// aberto o dia inteiro durante a montagem; obrigá-lo a apertar F5 para
+// descobrir se chegou arte é transformar a ferramenta num lugar que ele evita.
+//
+// O custo é baixo e vale explicitar, porque parece caro e não é: o Firestore
+// cobra a leitura inicial de cada documento e, depois disso, só o que MUDA.
+// Um painel aberto por oito horas numa feira parada custa o mesmo que abri-lo
+// uma vez.
+//
+// Toda função aqui devolve o cancelador do listener. Quem chama é obrigado a
+// usá-lo no `return` do efeito — listener que sobrevive à tela vaza conexão e,
+// pior, escreve estado em componente que já saiu.
+
+export function ouvirProjetos(fb, feiraId, aoMudar, aoFalhar) {
+  const { getFirestore, collection, query, where, onSnapshot } = fb.firestore
+  return onSnapshot(
+    query(collection(getFirestore(fb.app), COLECAO), where('feiraId', '==', feiraId)),
+    (snap) => aoMudar(snap.docs
+      .map((d) => ({ token: d.id, ...d.data() }))
+      .sort((a, b) => String(a.stand || '').localeCompare(String(b.stand || ''), 'pt-BR'))),
+    aoFalhar,
+  )
+}
+
+export function ouvirEnvios(fb, feiraId, aoMudar, aoFalhar) {
+  const { getFirestore, collection, query, where, onSnapshot } = fb.firestore
+  return onSnapshot(
+    query(collection(getFirestore(fb.app), 'envios'), where('feiraId', '==', feiraId)),
+    (snap) => aoMudar(snap.docs
+      .map((d) => ({ id: d.id, ...d.data() }))
+      .sort((a, b) => (b.criadoEm?.seconds || 0) - (a.criadoEm?.seconds || 0))),
+    aoFalhar,
+  )
+}
+
+/** Escuta a conversa de um projeto. Serve aos dois lados. */
+export async function ouvirConversa(token, aoMudar, aoFalhar, fb = null) {
+  // O time já tem sessão; o cliente precisa da anônima. Uma função só para os
+  // dois evita duas telas com comportamento sutilmente diferente.
+  const contexto = fb ? { app: fb.app, firestore: fb.firestore } : await sessaoAnonima()
+  const { getFirestore, collection, onSnapshot } = contexto.firestore
+  return onSnapshot(
+    collection(getFirestore(contexto.app), COLECAO, token, MENSAGENS),
+    (snap) => aoMudar(ordenar(snap.docs)),
+    aoFalhar,
+  )
+}
+
+/** Escuta o projeto do cliente — entregas, provas e status chegam sozinhos. */
+export async function ouvirProjetoPublico(token, aoMudar, aoFalhar) {
+  const { app, firestore } = await sessaoAnonima()
+  return firestore.onSnapshot(
+    firestore.doc(firestore.getFirestore(app), COLECAO, token),
+    (snap) => { if (snap.exists()) aoMudar({ token: snap.id, ...snap.data() }) },
+    aoFalhar,
+  )
 }

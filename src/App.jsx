@@ -19,6 +19,7 @@ import Usuarios from './components/Usuarios.jsx'
 import Projeto from './components/Projeto.jsx'
 import { usarSessao } from './services/sessao.js'
 import { abasDe, telaInicial, pode } from './core/permissoes.js'
+import { usarAvisos } from './store/usarAvisos.js'
 import * as cadastroStore from './data/cadastro.js'
 
 // Rota por hash, sem biblioteca de roteamento: são cinco telas e nenhuma delas
@@ -77,6 +78,7 @@ export default function App() {
 function PainelInterno({ tela }) {
   const sessao = usarSessao()
   const abas = abasDe(sessao.acesso)
+  const avisos = usarAvisos(sessao)
 
   // Entrar por um endereço que o papel não alcança não pode virar tela em
   // branco nem erro: manda para a primeira tela que a pessoa realmente usa.
@@ -104,7 +106,10 @@ function PainelInterno({ tela }) {
       {sessao.liberado && (
         <nav className="abas">
           {abas.map((t) => (
-            <a key={t.id} href={`#/${t.id}`} className={t.id === tela ? 'ativa' : ''}>{t.rotulo}</a>
+            <a key={t.id} href={`#/${t.id}`} className={t.id === tela ? 'ativa' : ''}>
+              {t.rotulo}
+              {avisos[t.id] > 0 && <span className="badge">{avisos[t.id] > 99 ? '99+' : avisos[t.id]}</span>}
+            </a>
           ))}
           <span className="papel-atual">{sessao.acesso?.rotulo}</span>
           <a href="#/" className="fora">Abrir a ferramenta</a>

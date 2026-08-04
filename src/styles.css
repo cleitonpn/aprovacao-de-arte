@@ -642,3 +642,39 @@ textarea { width: 100%; font: inherit; font-size: 13px; padding: 9px 11px; borde
 .bloco-simulador .simulador { margin: 0; }
 
 .risco .linha { margin: 10px 0; }
+
+/* ------------------------------------------------- avisos de novidade */
+.badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 18px; height: 18px; padding: 0 5px; margin-left: 7px;
+  border-radius: 999px; background: var(--ruim); color: #fff;
+  font-size: 11px; font-weight: 700; line-height: 1; vertical-align: middle;
+}
+
+.ao-vivo { display: inline-flex; align-items: center; gap: 6px; }
+.ao-vivo::before {
+  content: ''; width: 7px; height: 7px; border-radius: 50%;
+  background: var(--ok); animation: pulso 2.4s ease-in-out infinite;
+}
+@keyframes pulso { 0%, 100% { opacity: 1 } 50% { opacity: .25 } }
+
+.faixa-novidade {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  background: var(--ok-fundo); color: var(--ok);
+  border-radius: 9px; padding: 9px 12px; margin: 10px 0; font-size: 13.5px;
+}
+.faixa-novidade .link { color: inherit; margin-left: auto; }
+
+.tag.aviso { background: var(--ruim); color: #fff; }
+.linha-nova td { background: color-mix(in srgb, var(--ok) 8%, transparent); }
+.linha-nova td:first-child { box-shadow: inset 3px 0 0 var(--ok); }
+
+.btn.pulsa { box-shadow: 0 0 0 0 color-mix(in srgb, var(--ruim) 60%, transparent); animation: chamada 2s ease-out infinite; }
+@keyframes chamada {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--ruim) 55%, transparent); }
+  70% { box-shadow: 0 0 0 8px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ao-vivo::before, .btn.pulsa { animation: none; }
+}

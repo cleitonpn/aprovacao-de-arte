@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
-  lerConversaComoCliente, lerConversaComoTime,
-  enviarMensagemDoCliente, enviarMensagemDoTime,
+  ouvirConversa, enviarMensagemDoCliente, enviarMensagemDoTime,
 } from '../services/projetos.js'
+import { marcarVisto } from '../store/visto.js'
 
 // A conversa entre o cliente e o time, dentro da ferramenta.
 //
@@ -12,10 +12,12 @@ import {
 // contra palavra. Aqui ela fica ao lado da peça, com data, autor e sem
 // possibilidade de edição por nenhum dos dois lados (ver `firestore.rules`).
 //
-// Não é chat de tempo real de propósito: fica com um botão de atualizar e
-// relê ao abrir. Escuta contínua custaria uma conexão aberta por cliente com o
-// link, o dia inteiro, para um volume de mensagens que é de algumas por
-// semana.
+// É tempo real: quem está com a tela aberta vê a resposta chegar. Cheguei a
+// deixar com botão de atualizar por receio do custo de manter uma conexão
+// aberta, mas a conta não se sustenta — o Firestore cobra a leitura inicial e
+// depois só o que muda, então uma tela aberta e parada custa o mesmo que
+// abri-la uma vez. E um chat onde é preciso apertar "atualizar" para saber se
+// responderam não é usado duas vezes.
 
 const fmtQuando = (v) => {
   const ms = Date.parse(v || '')
@@ -27,7 +29,7 @@ const fmtQuando = (v) => {
   return new Date(ms).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
 }
 
-export default function Conversa({ token, ehTime = false, sessao = null, identidade = null }) {
+export default function Conversa({ token, ehTime = false, sessao = null, identidade = null, aoVerConversa = null }) {
   const [mensagens, setMensagens] = useState([])
   const [texto, setTexto] = useState('')
   const [nome, setNome] = useState(identidade?.nome || '')
@@ -37,23 +39,39 @@ export default function Conversa({ token, ehTime = false, sessao = null, identid
   const [erro, setErro] = useState(null)
   const fim = useRef(null)
 
-  const carregar = useCallback(async () => {
-    try {
-      const lista = ehTime
-        ? await lerConversaComoTime(sessao.fb, token)
-        : await lerConversaComoCliente(token)
-      setMensagens(lista)
-      setErro(null)
-    } catch (e) {
-      console.error(e)
-      setErro('Não foi possível carregar a conversa.')
-    } finally {
-      setCarregando(false)
-    }
-  }, [token, ehTime, sessao])
+  useEffect(() => {
+    let vivo = true
+    let cancelar = null
+    ouvirConversa(
+      token,
+      (lista) => {
+        if (!vivo) return
+        setMensagens(lista)
+        setCarregando(false)
+        setErro(null)
+      },
+      (e) => {
+        if (!vivo) return
+        console.error(e)
+        setErro('Não foi possível carregar a conversa.')
+        setCarregando(false)
+      },
+      ehTime ? sessao?.fb : null,
+    ).then((c) => { cancelar = c; if (!vivo) c?.() })
+    // Listener que sobrevive à tela vaza conexão e escreve estado em
+    // componente que já saiu — daí o cancelamento nos dois caminhos.
+    return () => { vivo = false; cancelar?.() }
+  }, [token, ehTime, sessao?.fb])
 
-  useEffect(() => { carregar() }, [carregar])
   useEffect(() => { fim.current?.scrollIntoView({ block: 'nearest' }) }, [mensagens.length])
+
+  // Estar com a conversa na tela É ter visto: marcar aqui evita a bolinha
+  // teimosa que continua acesa depois de a pessoa ter lido tudo.
+  useEffect(() => {
+    if (!ehTime || !mensagens.length) return
+    marcarVisto(sessao?.usuario?.email, `conversa:${token}`, mensagens[mensagens.length - 1].em)
+    aoVerConversa?.()
+  }, [ehTime, mensagens, token, sessao?.usuario?.email])
 
   const enviar = async () => {
     const conteudo = texto.trim()
@@ -71,7 +89,7 @@ export default function Conversa({ token, ehTime = false, sessao = null, identid
         await enviarMensagemDoCliente(token, { texto: conteudo, nome, email })
       }
       setTexto('')
-      await carregar()
+      // Sem recarregar: a escuta traz a mensagem nova sozinha.
     } catch (e) {
       console.error(e)
       setErro(e?.message || 'Não foi possível enviar a mensagem.')
@@ -89,7 +107,7 @@ export default function Conversa({ token, ehTime = false, sessao = null, identid
     <div className="cartao conversa">
       <div className="titulo-secao">
         <h3>{ehTime ? 'Conversa com o cliente' : 'Dúvidas com o time'}</h3>
-        <button className="link" onClick={carregar} disabled={carregando}>atualizar</button>
+        <span className="dica-campo ao-vivo">ao vivo</span>
       </div>
 
       {!ehTime && (
@@ -150,7 +168,7 @@ export default function Conversa({ token, ehTime = false, sessao = null, identid
       <p className="nota">
         As mensagens ficam registradas e não podem ser apagadas nem editadas —
         nem por você, nem pelo time. É o que faz delas um registro confiável.
-        {!ehTime && ' O time não recebe aviso automático, então para algo urgente use também o telefone do atendimento.'}
+        {!ehTime && ' Se alguém do time estiver com o painel aberto, a mensagem aparece na hora; para algo urgente, o telefone continua sendo telefone.'}
       </p>
     </div>
   )

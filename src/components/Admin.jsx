@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { traduzirErroAuth } from '../services/sessao.js'
 import { enviarProva, EXTENSOES_PROVA } from '../services/envio.js'
-import { registrarProva } from '../services/projetos.js'
+import { registrarProva, ouvirEnvios } from '../services/projetos.js'
+import { vistoEm, marcarVisto, dataEmMs } from '../store/visto.js'
 import { feirasVisiveis } from '../core/permissoes.js'
 
 // Artes recebidas: escolhe a feira, vê o que chegou e baixa.
@@ -165,35 +166,30 @@ export default function Admin({ sessao }) {
   const [baixando, setBaixando] = useState(null)
   const [erro, setErro] = useState(null)
 
-  const buscar = useCallback(async () => {
-    if (!fb || !feiraId) { setEnvios([]); return }
+  // Escuta em vez de buscar: arte que chega enquanto o analista está com a
+  // tela aberta aparece sozinha. A consulta filtra por feira no servidor e
+  // ORDENA aqui, de propósito — combinar `where` com `orderBy` exigiria um
+  // índice composto, que só nasce por linha de comando ou por um link escondido
+  // dentro de uma mensagem de erro.
+  const [marca, setMarca] = useState(0)
+  useEffect(() => {
+    if (!fb || !feiraId) { setEnvios([]); return undefined }
     setBuscando(true)
     setErro(null)
-    try {
-      // Filtra por feira no servidor, mas ORDENA aqui no navegador de
-      // propósito. Combinar `where` com `orderBy` exigiria um índice composto
-      // no Firestore — que só nasce rodando `firebase deploy` ou clicando num
-      // link escondido no console do navegador. Como cada feira tem dezenas ou
-      // poucas centenas de envios, ordenar em memória custa nada e poupa a
-      // operação de um erro incompreensível no primeiro acesso.
-      const { getFirestore, collection, getDocs, query, where } = fb.firestore
-      const snap = await getDocs(query(
-        collection(getFirestore(fb.app), 'envios'),
-        where('feiraId', '==', feiraId),
-      ))
-      setEnvios(
-        snap.docs
-          .map((d) => ({ id: d.id, ...d.data() }))
-          .sort((a, b) => (b.criadoEm?.seconds || 0) - (a.criadoEm?.seconds || 0)),
-      )
-    } catch (e) {
-      setErro(traduzirErroAuth(e))
-    } finally {
+    // A marca é lida UMA vez por feira, antes da escuta: se fosse relida a cada
+    // atualização, o contador zeraria no mesmo instante em que acendesse.
+    setMarca(vistoEm(sessao.usuario?.email, `envios:${feiraId}`))
+    const parar = ouvirEnvios(fb, feiraId, (lista) => {
+      setEnvios(lista)
       setBuscando(false)
-    }
-  }, [fb, feiraId])
+    }, (e) => { setErro(traduzirErroAuth(e)); setBuscando(false) })
+    return () => parar()
+  }, [fb, feiraId, sessao.usuario?.email])
 
-  useEffect(() => { buscar() }, [buscar])
+  const novos = useMemo(
+    () => envios.filter((e) => dataEmMs(e.criadoEm) > marca).length,
+    [envios, marca],
+  )
 
   const visiveis = useMemo(() => {
     const t = filtro.trim().toLowerCase()
@@ -211,6 +207,12 @@ export default function Admin({ sessao }) {
   const totalApoio = useMemo(() => envios.filter((e) => e.tipoEnvio === 'avulso').length, [envios])
 
   const nomeDaFeira = feiras.find((f) => f.id === feiraId)?.nome || feiraId
+
+  const marcarTudoVisto = () => {
+    const maisNovo = envios.reduce((m, e) => Math.max(m, dataEmMs(e.criadoEm)), 0)
+    marcarVisto(sessao.usuario?.email, `envios:${feiraId}`, maisNovo || Date.now())
+    setMarca(maisNovo || Date.now())
+  }
 
   const baixarTodas = async () => {
     const comArquivo = visiveis.filter((e) => e.link)
@@ -230,7 +232,17 @@ export default function Admin({ sessao }) {
   return (
     <>
       <div className="cartao">
-        <h2>Artes recebidas</h2>
+        <div className="titulo-secao">
+          <h2>Artes recebidas</h2>
+          <span className="dica-campo ao-vivo">ao vivo</span>
+        </div>
+
+        {novos > 0 && (
+          <div className="faixa-novidade">
+            <strong>{novos} {novos === 1 ? 'arquivo novo' : 'arquivos novos'}</strong> desde a sua última visita.
+            <button className="link" onClick={marcarTudoVisto}>marcar como visto</button>
+          </div>
+        )}
 
         <div className="linha">
           <label className="campo">
@@ -321,7 +333,7 @@ export default function Admin({ sessao }) {
               </thead>
               <tbody>
                 {visiveis.map((e) => (
-                  <tr key={e.id}>
+                  <tr key={e.id} className={dataEmMs(e.criadoEm) > marca ? 'linha-nova' : ''}>
                     <td>
                       <strong>{e.cadastro?.nome}</strong>
                       <br />
