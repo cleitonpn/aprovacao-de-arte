@@ -15,8 +15,32 @@ import { useCallback, useEffect, useState } from 'react'
 import { carregarFirebase, appSecundario } from './firebase.js'
 import { firebaseConfigurado } from '../config.js'
 
-export function traduzirErroAuth(e) {
+/**
+ * @param {Error} e
+ * @param {'acesso'|'gravacao'} contexto onde o erro aconteceu
+ *
+ * O `contexto` existe por causa do `permission-denied`, que significa duas
+ * coisas muito diferentes e mandava o usuário para o lugar errado:
+ *
+ * - na ENTRADA, é conta fora da lista de analistas;
+ * - numa GRAVAÇÃO feita por quem já está com o painel aberto, é o oposto — a
+ *   conta está liberada (senão nem teria chegado ali) e quem recusou foram as
+ *   regras publicadas no Firebase, quase sempre por estarem desatualizadas em
+ *   relação ao que o código grava.
+ *
+ * Dizer "sua conta não está liberada" para um admin que acabou de entrar é
+ * mandá-lo caçar um problema que não existe.
+ */
+export function traduzirErroAuth(e, contexto = 'acesso') {
   const codigo = e?.code || ''
+
+  if (codigo.includes('permission-denied') && contexto === 'gravacao') {
+    return 'As regras de segurança do Firestore recusaram esta gravação. '
+      + 'Se você já está no painel, sua conta está liberada — o mais provável é '
+      + 'que as regras publicadas no Firebase estejam desatualizadas. Republique '
+      + 'o conteúdo do arquivo firestore.rules no console (Firestore → Regras).'
+  }
+
   const mapa = {
     'unauthorized-domain': 'O endereço deste site não está nos domínios autorizados do Firebase. Adicione "cleitonpn.github.io" em Authentication → Settings → Domínios autorizados.',
     'popup-blocked': 'O navegador bloqueou a janela de login. Libere os pop-ups para este site e tente de novo.',

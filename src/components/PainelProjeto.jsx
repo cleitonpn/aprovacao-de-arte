@@ -36,7 +36,7 @@ export default function PainelProjeto({ sessao, projeto, resumo, envios, onFecha
       await onMudou()
     } catch (e) {
       console.error(e)
-      setErro(traduzirErroAuth(e))
+      setErro(traduzirErroAuth(e, 'gravacao'))
     } finally {
       setOcupado(false)
     }

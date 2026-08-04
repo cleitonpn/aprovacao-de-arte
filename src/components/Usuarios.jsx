@@ -74,7 +74,7 @@ export default function Usuarios({ sessao }) {
       setSenha(senhaSugerida())
       await recarregar()
     } catch (erroCriacao) {
-      setErro(traduzirErroAuth(erroCriacao))
+      setErro(traduzirErroAuth(erroCriacao, 'gravacao'))
     } finally {
       setSalvando(false)
     }
@@ -94,7 +94,7 @@ export default function Usuarios({ sessao }) {
       await removerAnalista(fb, alvo)
       await recarregar()
     } catch (e) {
-      setErro(traduzirErroAuth(e))
+      setErro(traduzirErroAuth(e, 'gravacao'))
     }
   }
 

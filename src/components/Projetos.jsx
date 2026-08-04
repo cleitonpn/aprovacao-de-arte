@@ -363,7 +363,7 @@ function FeiraEmEdicao({ sessao, feira, feiraId, novaFeira, onPronto, onCancelar
       }, sessao.usuario?.email)
       await onPronto(id)
     } catch (e) {
-      setErro(traduzirErroAuth(e))
+      setErro(traduzirErroAuth(e, 'gravacao'))
       setGravando(false)
     }
   }
@@ -582,7 +582,7 @@ function Importacao({ sessao, onPronto, onCancelar }) {
         (feito, total) => setGravando({ feito, total }))
       await onPronto()
     } catch (e) {
-      setErro(traduzirErroAuth(e))
+      setErro(traduzirErroAuth(e, 'gravacao'))
       setGravando(null)
     }
   }
@@ -726,7 +726,7 @@ function FormularioProjeto({ inicial, onSalvar, onCancelar }) {
     try {
       await onSalvar(dados)
     } catch (erro) {
-      setFalha(traduzirErroAuth(erro))
+      setFalha(traduzirErroAuth(erro, 'gravacao'))
       setSalvando(false)
     }
   }
