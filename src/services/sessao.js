@@ -32,6 +32,12 @@ import { acessoDe } from '../core/permissoes.js'
  * Dizer "sua conta não está liberada" para um admin que acabou de entrar é
  * mandá-lo caçar um problema que não existe.
  */
+// O endereço de onde a página está sendo servida. Lido do navegador, nunca
+// escrito à mão: com domínio próprio, uma mensagem fixa mandaria autorizar o
+// endereço antigo — e a pessoa faria exatamente isso, sem desconfiar, porque a
+// frase parece específica demais para estar errada.
+const dominioAtual = () => (typeof window === 'undefined' ? 'este endereço' : window.location.hostname)
+
 export function traduzirErroAuth(e, contexto = 'acesso') {
   const codigo = e?.code || ''
 
@@ -43,7 +49,7 @@ export function traduzirErroAuth(e, contexto = 'acesso') {
   }
 
   const mapa = {
-    'unauthorized-domain': 'O endereço deste site não está nos domínios autorizados do Firebase. Adicione "cleitonpn.github.io" em Authentication → Settings → Domínios autorizados.',
+    'unauthorized-domain': `O endereço deste site não está nos domínios autorizados do Firebase. Adicione "${dominioAtual()}" em Authentication → Settings → Domínios autorizados.`,
     'popup-blocked': 'O navegador bloqueou a janela de login. Libere os pop-ups para este site e tente de novo.',
     'popup-closed-by-user': 'A janela de login foi fechada antes de concluir.',
     'invalid-credential': 'E-mail ou senha incorretos.',
