@@ -369,6 +369,7 @@ input[aria-invalid='true'] { border-color: var(--ruim); }
 .pecas-lista { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 8px; }
 .pecas-lista li { display: flex; gap: 10px; align-items: flex-start; font-size: 13px; }
 .pecas-lista li p { margin: 2px 0 0; }
+.pecas-lista li > div { flex: 1; min-width: 0; }
 .pecas-lista li.entregue .marca { background: var(--ok-fundo); color: var(--ok); border-color: var(--ok); }
 .pecas-lista li.pendente .marca { background: var(--alerta-fundo); color: var(--alerta); border-color: var(--alerta); }
 
@@ -431,6 +432,8 @@ textarea { width: 100%; font: inherit; font-size: 13px; padding: 9px 11px; borde
 .bloco-prazo .linha { align-items: flex-end; margin-bottom: 6px; }
 .bloco-prazo .acoes { margin: 0 0 4px; }
 .bloco-prazo input[type='date'] { max-width: 200px; }
+.bloco-prazo.perto { border-color: var(--alerta); background: var(--alerta-fundo); }
+.bloco-prazo.vencido { border-color: var(--ruim); background: var(--ruim-fundo); }
 
 /* ------------------------------------------------------------ prova */
 .prova { border-left: 4px solid var(--alerta); }
@@ -629,6 +632,76 @@ textarea { width: 100%; font: inherit; font-size: 13px; padding: 9px 11px; borde
 
 .lista-permissoes { margin: 10px 0 0; padding-left: 18px; font-size: 12.5px; color: var(--suave); }
 .lista-permissoes li { margin-bottom: 2px; }
+
+/* ==========================================================================
+   Visão geral — a feira inteira numa tela.
+   Nada aqui é decorativo: cada bloco termina num stand clicável. Um painel
+   que só informa vira relatório, e relatório ninguém abre na terça-feira de
+   montagem.
+   ========================================================================== */
+
+.numeros-painel {
+  display: grid; gap: 12px; margin-bottom: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+.numero-cartao {
+  background: var(--cartao); border: 1px solid var(--borda);
+  border-radius: 12px; padding: 16px 18px;
+  display: flex; flex-direction: column; gap: 2px;
+  border-left-width: 4px;
+}
+.numero-cartao strong { font-size: 32px; line-height: 1.05; letter-spacing: -.02em; }
+.numero-cartao span { font-size: 13px; color: var(--suave); }
+.numero-cartao em { font-style: normal; margin-top: 4px; }
+.numero-cartao.ok { border-left-color: var(--ok); }
+.numero-cartao.alerta { border-left-color: var(--alerta); }
+.numero-cartao.ruim { border-left-color: var(--ruim); }
+.numero-cartao.neutro { border-left-color: var(--acento); }
+
+/* A esteira: proporção se lê antes de ler. */
+.esteira { display: flex; gap: 3px; height: 34px; margin: 4px 0 12px; }
+.esteira-faixa {
+  min-width: 28px; border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12.5px; font-weight: 700; color: #fff;
+}
+.esteira-faixa.ok { background: var(--ok); }
+.esteira-faixa.alerta { background: var(--alerta); }
+.esteira-faixa.ruim { background: var(--ruim); }
+.esteira-faixa.neutro { background: var(--suave); }
+
+.esteira-legenda {
+  list-style: none; margin: 0; padding: 0;
+  display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 12.5px; color: var(--suave);
+}
+.esteira-legenda li { display: flex; align-items: center; gap: 6px; }
+.esteira-legenda strong { color: var(--texto); }
+.ponto { width: 9px; height: 9px; border-radius: 50%; background: var(--suave); }
+.ponto.ok { background: var(--ok); }
+.ponto.alerta { background: var(--alerta); }
+.ponto.ruim { background: var(--ruim); }
+.ponto.neutro { background: var(--suave); }
+
+.grade-pendencias {
+  display: grid; gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+.pendencia { border: 1px solid var(--borda); border-radius: 10px; padding: 12px 14px; }
+.pendencia-topo { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+.lista-simples { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; font-size: 13px; }
+.lista-simples a { color: var(--acento); }
+
+/* A barrinha de progresso por stand na lista "quem ainda falta". */
+.barra-mini {
+  flex: 0 0 70px; align-self: center; height: 6px;
+  background: var(--borda); border-radius: 999px; overflow: hidden;
+}
+.barra-mini div { height: 100%; background: var(--acento); border-radius: 999px; }
+
+/* O log de reprovações, na ficha e no painel. */
+.log-reprovacoes.alerta { border-color: var(--ruim); background: var(--ruim-fundo); }
+.log-reprovacoes .pecas-lista { margin-bottom: 8px; }
+.log-reprovacoes a { color: var(--acento); }
 
 /* ------------------------------------------- filtros por fase do envio */
 .filtros-fase { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 12px; }

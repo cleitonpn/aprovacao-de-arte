@@ -1,12 +1,15 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { STATUS, AVISO_EXTRA } from '../core/fluxo.js'
 import {
   liberarNovaVersao, recusarNovaVersao, definirStatusDaPeca, registrarProva, prorrogarPrazo,
+  ouvirReprovacoes,
 } from '../services/projetos.js'
 import { enviarProva, EXTENSOES_PROVA } from '../services/envio.js'
 import { traduzirErroAuth } from '../services/sessao.js'
 import Conversa from './Conversa.jsx'
 import { formatarDataHora as fmtDataHora, paraInputData, fimDoDia } from '../core/datas.js'
+import { motivosMaisComuns, LIMITE_REPROVACOES } from '../core/reprovacoes.js'
+import { marcarVisto } from '../store/visto.js'
 
 // O que o analista faz com um projeto: responder pedidos, mandar a prova de
 // aprovação, marcar o que entrou em impressão e prorrogar prazo caso a caso.
@@ -100,6 +103,8 @@ export default function PainelProjeto({ sessao, projeto, resumo, envios, podeApr
       />}
 
       <ArquivosDeApoio apoio={resumo.apoio} />
+
+      <LogDeReprovacoes sessao={sessao} projeto={projeto} />
 
       <Conversa token={projeto.token} ehTime sessao={sessao} />
 
@@ -443,6 +448,103 @@ function ArquivosDeApoio({ apoio }) {
           </li>
         ))}
       </ul>
+    </div>
+  )
+}
+
+/**
+ * O log de tentativas reprovadas — a ficha de dificuldade do cliente.
+ *
+ * O que ele responde, e nenhuma outra tela respondia: por que este stand está
+ * há dez dias com zero artes. Sem isto, o cliente que tentou oito vezes e
+ * desistiu era indistinguível do que nem abriu o link — os dois apareciam como
+ * "0 de 5", e o time mandava para ambos o mesmo e-mail de cobrança, que é
+ * exatamente o que não ajuda o primeiro.
+ *
+ * A lista vem da subcoleção, que ninguém altera. O contador do documento serve
+ * para a lista de projetos e para o painel; aqui, com o stand já aberto, dá
+ * para ler os fatos.
+ */
+function LogDeReprovacoes({ sessao, projeto }) {
+  const [lista, setLista] = useState([])
+  const [aberto, setAberto] = useState(false)
+
+  useEffect(() => {
+    if (!sessao?.fb || !projeto.token) return undefined
+    return ouvirReprovacoes(sessao.fb, projeto.token, setLista, (e) => {
+      console.warn('não foi possível ler o log de reprovações', e)
+    })
+  }, [sessao?.fb, projeto.token])
+
+  // Marca como visto assim que o analista abre a ficha: o alerta é uma
+  // chamada para agir, e quem já veio ver o caso não precisa continuar sendo
+  // chamado. Uma tentativa nova depois disso acende de novo.
+  useEffect(() => {
+    if (lista.length) marcarVisto(sessao?.usuario?.email, `dificuldade:${projeto.token}`, lista[0].em)
+  }, [lista, projeto.token, sessao?.usuario?.email])
+
+  if (!lista.length) return null
+
+  const comuns = motivosMaisComuns(lista)
+  const alerta = lista.length > LIMITE_REPROVACOES
+  const mostrar = aberto ? lista : lista.slice(0, 3)
+
+  return (
+    <div className={`cartao log-reprovacoes ${alerta ? 'alerta' : ''}`}>
+      <div className="titulo-secao">
+        <h3>Tentativas reprovadas ({lista.length})</h3>
+        {alerta && <span className="tag aviso">precisa de ajuda</span>}
+      </div>
+
+      {alerta
+        ? (
+          <p className="ajuda">
+            Este cliente já teve <strong>{lista.length} arquivos reprovados</strong> pela
+            análise — e arte reprovada não chega até nós. Do lado dele, a tela
+            só diz o que está errado; se ele não souber resolver, o stand fica
+            em zero sem que ninguém perceba. Vale uma ligação antes de mandar
+            outra cobrança.
+          </p>
+        )
+        : (
+          <p className="ajuda">
+            Arquivos que a análise recusou no navegador do cliente e que, por
+            isso, nunca chegaram. Servem para entender onde ele está travando.
+          </p>
+        )}
+
+      {comuns.length > 0 && (
+        <div className="motivo-cliente">
+          <strong>Mais frequente:</strong> {comuns[0].titulo} ({comuns[0].vezes}×)
+          {comuns[0].acao && <> — {comuns[0].acao}</>}
+        </div>
+      )}
+
+      <ul className="pecas-lista">
+        {mostrar.map((r) => (
+          <li key={r.id} className="pendente">
+            <span className="marca" aria-hidden>×</span>
+            <div>
+              <strong>{r.pecaRotulo}</strong>
+              <em className="dica-campo"> · {fmtDataHora(r.em)}</em>
+              <p className="dica-campo">
+                {r.arquivo?.nome || 'arquivo sem nome'}
+                {r.dpi != null && <> · {r.dpi} dpi{r.dpiExigido ? ` (mínimo ${r.dpiExigido})` : ''}</>}
+                {r.versao > 1 && ` · tentando a versão ${r.versao}`}
+              </p>
+              {(r.motivos || []).map((m, i) => (
+                <p className="dica-campo" key={`${r.id}-${i}`}>→ {m.titulo}</p>
+              ))}
+            </div>
+          </li>
+        ))}
+      </ul>
+
+      {lista.length > 3 && (
+        <button className="link" onClick={() => setAberto((v) => !v)}>
+          {aberto ? 'Mostrar só as três últimas' : `Ver todas as ${lista.length} tentativas`}
+        </button>
+      )}
     </div>
   )
 }

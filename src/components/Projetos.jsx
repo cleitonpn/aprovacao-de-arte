@@ -4,7 +4,8 @@ import {
   projetoNovo, pecaNova, validarProjeto, perfilPorTexto, listaDeEmails, MAXIMO_PECAS,
 } from '../data/projeto.js'
 import { importarProjetos, MODELO_CSV } from '../core/importacao.js'
-import { resumoDoProjeto, FASES, filtroDeFase } from '../core/fluxo.js'
+import { FASES, filtroDeFase } from '../core/fluxo.js'
+import { situacaoDoProjeto } from '../core/painel.js'
 import { formatarData as fmtData, paraInputData, fimDoDia } from '../core/datas.js'
 import {
   salvarProjeto, salvarProjetos, apagarProjeto, salvarFeira,
@@ -35,38 +36,8 @@ export function linkDoProjeto(token) {
   return `${origin}${pathname}#/p/${token}`
 }
 
-/**
- * Junta as duas fontes de verdade sobre o projeto.
- *
- * O ESTADO de cada peça (em prova, aprovada, em impressão) sai do documento do
- * projeto. Já o que de fato CHEGOU sai de `envios`, que o expositor não lê nem
- * escreve. É de propósito: se algum dia o espelho do projeto divergir do que
- * foi realmente recebido, o painel mostra o que chegou, não o que alguém
- * declarou ter enviado.
- */
-function situacao(projeto, enviosPorProjeto) {
-  const envios = enviosPorProjeto.get(projeto.token) || []
-  const resumo = resumoDoProjeto(projeto)
-  const comEnvio = new Set(envios.filter((e) => e.pecaId).map((e) => e.pecaId))
-
-  const pecas = resumo.pecas.map((s) => ({ ...s, envios: envios.filter((e) => e.pecaId === s.peca.id) }))
-  const recebidas = pecas.filter((s) => comEnvio.has(s.peca.id)).length
-
-  return {
-    ...resumo,
-    pecas,
-    envios,
-    recebidas,
-    pendentes: pecas.filter((s) => !comEnvio.has(s.peca.id)),
-    apoio: envios.filter((e) => e.tipoEnvio === 'avulso'),
-    // Arte que o cliente mandou por fora da lista: ele digitou a medida à mão.
-    // Precisa aparecer com destaque justamente porque é o único caso em que a
-    // medida voltou a ser palpite dele.
-    extras: envios.filter((e) => e.tipoEnvio !== 'avulso' && !e.pecaId),
-    completo: pecas.length > 0 && recebidas === pecas.length,
-    provasAguardando: pecas.filter((s) => s.status === 'em_prova').length,
-  }
-}
+const situacao = (projeto, enviosPorProjeto) =>
+  situacaoDoProjeto(projeto, enviosPorProjeto.get(projeto.token) || [])
 
 function textoDeCobranca(projeto, sit) {
   const prazo = fmtData(sit.prazo.limite, null)
@@ -94,9 +65,9 @@ function textoDeCobranca(projeto, sit) {
   return linhas.join('\n')
 }
 
-export default function Projetos({ sessao }) {
+export default function Projetos({ sessao, feiraInicial = '', tokenInicial = '' }) {
   const { fb, usuario } = sessao
-  const { feiras, feira, feiraId, setFeiraId, recarregar: recarregarFeiras, erro: erroFeiras } = usarFeiras(fb, sessao.acesso)
+  const { feiras, feira, feiraId, setFeiraId, recarregar: recarregarFeiras, erro: erroFeiras } = usarFeiras(fb, sessao.acesso, feiraInicial)
   const podeCadastrar = pode(sessao.acesso, 'cadastrarProjetos')
   const podeCobrar = pode(sessao.acesso, 'cobrar')
   const podeAprovar = pode(sessao.acesso, 'aprovar')
@@ -105,7 +76,10 @@ export default function Projetos({ sessao }) {
   const [envios, setEnvios] = useState([])
   const [carregando, setCarregando] = useState(false)
   const [erro, setErro] = useState(null)
-  const [painel, setPainel] = useState(null) // null | 'importar' | {projeto} | {detalhe}
+  // Chegando por #/projetos/FEIRA/TOKEN — o atalho da visão geral — a tela já
+  // abre na ficha daquele stand, sem obrigar o analista a achar de novo na
+  // lista o stand em que ele acabou de clicar.
+  const [painel, setPainel] = useState(tokenInicial ? { detalhe: tokenInicial } : null)
   const [filtro, setFiltro] = useState('')
   const [fase, setFase] = useState('todos')
 
@@ -536,6 +510,16 @@ function LinhaProjeto({ projeto, sit, temMensagemNova, podeCadastrar, podeCobrar
             <span className="tag reprovado">{sit.pedidosEmAberto.length} pedido(s)</span>
           )}
           {temMensagemNova && <span className="tag aviso">mensagem nova</span>}
+          {/*
+            O cliente que tenta e é reprovado some do painel: a arte não sobe,
+            então ele fica igualzinho a quem nem abriu o link. Esta etiqueta é
+            a diferença entre mandar mais uma cobrança e ligar para ajudar.
+          */}
+          {sit.dificuldade.alerta && (
+            <span className="tag aviso" title={sit.dificuldade.ultimoMotivo || ''}>
+              {sit.dificuldade.total} reprovações
+            </span>
+          )}
           {sit.provasAguardando > 0 && <em className="dica-campo">{sit.provasAguardando} em prova</em>}
           {sit.emProducao > 0 && <em className="dica-campo">{sit.emProducao} em produção</em>}
           {sit.apoio.length > 0 && <em className="dica-campo">{sit.apoio.length} arquivo(s) de apoio</em>}

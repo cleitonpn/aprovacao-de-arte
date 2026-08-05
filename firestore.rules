@@ -144,10 +144,37 @@ service cloud.firestore {
       // impressa; e não encosta na medida cadastrada — se encostasse, a
       // ferramenta voltaria a aprovar arte contra medida errada, que é o
       // problema que o cadastro veio resolver.
+      // `dificuldade` é o contador de tentativas reprovadas. Ele é escrito
+      // pelo cliente porque é no navegador DELE que a reprovação acontece — a
+      // arte reprovada nunca chega ao servidor, é exatamente esse o ponto. O
+      // pior que ele consegue fazer é inflar ou zerar o próprio contador de
+      // dificuldade, o que não muda nada do que a ferramenta decide; e o
+      // registro de cada tentativa vive na subcoleção abaixo, que ninguém
+      // altera.
       allow update: if ehAdmin()
         || (request.auth != null
             && request.resource.data.diff(resource.data).affectedKeys()
-                 .hasOnly(['entregas', 'pedidos', 'respostasProva', 'conversa']));
+                 .hasOnly(['entregas', 'pedidos', 'respostasProva', 'conversa', 'dificuldade']));
+    }
+
+    // As tentativas que a análise reprovou.
+    //
+    // Existe porque a trava funciona: arte reprovada não sobe, e por isso o
+    // cliente que tentou oito vezes e desistiu era, no painel, idêntico ao que
+    // nunca começou — "0 de 5 artes" nos dois casos, dois problemas
+    // completamente diferentes. Um precisa de cobrança; o outro, de ajuda.
+    //
+    // Criar e nunca alterar, como as mensagens: se o registro servisse para
+    // apagar a própria tentativa, não serviria para nada.
+    match /projetos/{token}/reprovacoes/{id} {
+      allow read: if request.auth != null;
+
+      allow create: if request.auth != null
+        && request.resource.data.em is string
+        && request.resource.data.keys().hasAll(['pecaRotulo', 'motivos', 'em'])
+        && request.resource.data.motivos.size() <= 8;
+
+      allow update, delete: if false;
     }
 
     // A conversa entre o cliente e o time.

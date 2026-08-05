@@ -183,6 +183,36 @@ Sobre custo: parece caro manter conexão aberta e não é. O Firestore cobra a
 leitura inicial de cada documento e, depois, só o que muda — um painel aberto
 oito horas numa feira parada custa o mesmo que abri-lo uma vez.
 
+### Visão geral (`#/visao`)
+
+A feira inteira numa tela, para admin e analista completo: quantas artes
+chegaram, quantos stands fecharam a lista, quem não mandou nada, onde estão as
+peças (a esteira, de "aguardando" a "impressa") e o que está parado esperando o
+time. Tudo é clicável e leva à ficha do stand — o painel existe para virar ação
+na mesma manhã, não para contemplar.
+
+Cadastro e cobrança não têm esta aba: ela mostra reprovações, pedidos e provas,
+decisões que esses papéis não tomam.
+
+### Quem está penando
+
+Arte reprovada **não sobe** — é a trava que dá sentido à ferramenta. O efeito
+colateral é que o cliente que tentou oito vezes e desistiu ficava invisível: no
+painel ele era idêntico ao que nem abriu o link, "0 de 5 artes" nos dois casos.
+São dois problemas opostos — um precisa de cobrança, o outro precisa de ajuda.
+
+Agora cada tentativa recusada fica registrada na ficha do stand (`#/projetos` →
+**Abrir**), com data, peça, arquivo, dpi encontrado e o que travou. Passando de
+**3 tentativas**, o stand vira alerta: etiqueta vermelha na lista, bloco
+próprio na visão geral, bolinha na aba e o filtro **Precisam de ajuda**. A
+ficha mostra o motivo mais frequente — cinco reprovações pelo mesmo motivo é um
+cliente que não entendeu uma coisa; cinco por motivos diferentes é um cliente
+perdido, e a conversa é outra.
+
+O alerta some quando alguém abre a ficha e volta se houver nova tentativa
+reprovada. Para mudar o número, é a constante `LIMITE_REPROVACOES` em
+`src/core/reprovacoes.js`.
+
 ### Conversa com o cliente
 
 Cliente e analista trocam mensagens dentro da ferramenta — na tela do cliente e

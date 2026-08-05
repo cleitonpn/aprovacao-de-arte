@@ -17,6 +17,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { pode, feirasVisiveis } from '../core/permissoes.js'
+import { LIMITE_REPROVACOES } from '../core/reprovacoes.js'
 import { vistoEm, dataEmMs, assinarVisto } from './visto.js'
 
 export function usarAvisos(sessao) {
@@ -71,6 +72,13 @@ export function usarAvisos(sessao) {
     // painel acender por causa da própria resposta do time.
     projetos: projetos.filter((p) => p.conversa?.ultimoAutor === 'cliente'
       && dataEmMs(p.conversa?.ultimaEm) > vistoEm(usuario?.email, `conversa:${p.token}`)).length,
+    // O cliente que está penando some do painel: a arte reprovada não sobe,
+    // então ele fica igual a quem nem começou. Esta é a única bolinha que
+    // avisa de uma coisa que NÃO aconteceu — e é por isso que ela precisa
+    // existir. Some quando alguém abre a ficha dele, e volta se ele tentar de
+    // novo e for reprovado outra vez.
+    visao: projetos.filter((p) => (p.dificuldade?.reprovacoes || 0) > LIMITE_REPROVACOES
+      && dataEmMs(p.dificuldade?.ultimaEm) > vistoEm(usuario?.email, `dificuldade:${p.token}`)).length,
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [envios, projetos, usuario?.email, versaoDoVisto])
 }

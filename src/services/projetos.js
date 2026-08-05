@@ -419,6 +419,62 @@ export async function lerConversaComoTime(fb, token) {
   return ordenar(snap.docs)
 }
 
+// -------------------------------------------------- log de reprovação
+//
+// Arte reprovada não sobe — é a trava que dá sentido à ferramenta. O efeito
+// colateral é que o cliente que tentou oito vezes e desistiu não deixava
+// rastro nenhum: no painel ele era idêntico ao que nem começou. Aqui a
+// tentativa fica registrada mesmo sem o arquivo.
+//
+// Mesma arquitetura da conversa, pelo mesmo motivo: cada tentativa é um
+// documento criado uma vez e nunca alterado, e o documento do projeto guarda
+// só o RESUMO (quantas, quando, por quê) — que é o que a lista e o painel
+// precisam para acender o alerta sem abrir a subcoleção de cada stand.
+
+const REPROVACOES = 'reprovacoes'
+
+export async function registrarReprovacao(token, evento) {
+  const { app, firestore } = await sessaoAnonima()
+  const bd = firestore.getFirestore(app)
+  await firestore.addDoc(
+    firestore.collection(bd, COLECAO, token, REPROVACOES),
+    semIndefinidos(evento),
+  )
+  // `increment` em vez de ler-somar-gravar: o cliente costuma ter a tela
+  // aberta em mais de uma aba, e duas tentativas ao mesmo tempo gravariam o
+  // mesmo número duas vezes.
+  //
+  // Caminho pontilhado, e não um mapa inteiro: `{dificuldade: {…}}` num
+  // `updateDoc` SUBSTITUI o mapa, e a contagem voltaria a zero se um dos
+  // campos faltasse. Com o caminho, cada campo é tocado isoladamente — e, para
+  // as regras, o que mudou continua sendo a chave `dificuldade`.
+  //
+  // Falhar aqui não pode derrubar o registro, que já foi gravado: o espelho é
+  // conveniência da lista, a verdade é a subcoleção.
+  await firestore.updateDoc(firestore.doc(bd, COLECAO, token), {
+    'dificuldade.reprovacoes': firestore.increment(1),
+    'dificuldade.ultimaEm': evento.em,
+    'dificuldade.ultimaPeca': evento.pecaRotulo || null,
+    'dificuldade.ultimoMotivo': evento.motivos?.[0]?.titulo || null,
+  }).catch((e) => console.warn('tentativa registrada, mas o contador não atualizou', e))
+}
+
+/** Ordena aqui, e não na consulta: são poucas dezenas por stand. */
+function ordenarReprovacoes(docs) {
+  return docs
+    .map((d) => ({ id: d.id, ...d.data() }))
+    .sort((a, b) => Date.parse(b.em || 0) - Date.parse(a.em || 0))
+}
+
+export function ouvirReprovacoes(fb, token, aoMudar, aoFalhar) {
+  const { getFirestore, collection, onSnapshot } = fb.firestore
+  return onSnapshot(
+    collection(getFirestore(fb.app), COLECAO, token, REPROVACOES),
+    (snap) => aoMudar(ordenarReprovacoes(snap.docs)),
+    aoFalhar,
+  )
+}
+
 // ---------------------------------------------------- escuta em tempo real
 //
 // `onSnapshot` no lugar de recarregar a página. O analista deixa o painel

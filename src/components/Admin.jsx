@@ -65,7 +65,7 @@ export function baixarTexto(nome, conteudo, tipo) {
  * enxergar a terceira no seletor. Filtrar aqui, num lugar só, é o que impede a
  * lista completa de vazar por uma tela que alguém esqueceu de tratar.
  */
-export function usarFeiras(fb, acesso) {
+export function usarFeiras(fb, acesso, inicial = '') {
   const [feiras, setFeiras] = useState([])
   const [feiraId, setFeiraId] = useState('')
   const [erro, setErro] = useState(null)
@@ -79,11 +79,14 @@ export function usarFeiras(fb, acesso) {
         .map((d) => ({ id: d.id, ...d.data() }))
         .sort((a, b) => (b.atualizadaEm?.seconds || 0) - (a.atualizadaEm?.seconds || 0)))
       setFeiras(lista)
-      setFeiraId((atual) => selecionar || atual || lista[0]?.id || '')
+      // `inicial` só vale se a feira existir e a pessoa alcançar: um atalho
+      // colado de outra feira não pode deixar a tela apontando para o vazio.
+      const pedida = lista.some((f) => f.id === inicial) ? inicial : ''
+      setFeiraId((atual) => selecionar || atual || pedida || lista[0]?.id || '')
     } catch (e) {
       setErro(traduzirErroAuth(e))
     }
-  }, [fb, acesso])
+  }, [fb, acesso, inicial])
 
   useEffect(() => { recarregar() }, [recarregar])
 

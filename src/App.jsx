@@ -15,6 +15,7 @@ import Cadastro from './components/Cadastro.jsx'
 import Acesso from './components/Acesso.jsx'
 import Admin from './components/Admin.jsx'
 import Projetos from './components/Projetos.jsx'
+import Visao from './components/Visao.jsx'
 import Usuarios from './components/Usuarios.jsx'
 import Projeto from './components/Projeto.jsx'
 import { usarSessao } from './services/sessao.js'
@@ -27,9 +28,11 @@ import * as cadastroStore from './data/cadastro.js'
 //
 //   #/            ferramenta aberta (cliente informa as medidas)
 //   #/p/TOKEN     projeto cadastrado (medidas vêm do time) — sem login
-//   #/admin       artes recebidas          ⎫
-//   #/projetos    cadastro de projetos     ⎬ time interno, com login
-//   #/analistas   quem tem acesso          ⎭
+//   #/visao       a feira inteira numa tela  ⎫
+//   #/admin       artes recebidas            ⎪
+//   #/projetos    cadastro de projetos       ⎬ time interno, com login
+//   #/projetos/FEIRA/TOKEN  a ficha de um stand direto  ⎪
+//   #/analistas   quem tem acesso            ⎭
 function usarRota() {
   const ler = () => (typeof window === 'undefined' ? '' : window.location.hash.replace(/^#\/?/, ''))
   const [caminho, setCaminho] = useState(ler)
@@ -41,7 +44,14 @@ function usarRota() {
 
   const partes = caminho.split('/').filter(Boolean)
   if (partes[0] === 'p' && partes[1]) return { tela: 'projeto', token: partes[1] }
-  if (['admin', 'projetos', 'analistas'].includes(partes[0])) return { tela: partes[0] }
+  // A visão geral aponta para stands específicos, e a ficha vive dentro da
+  // tela de projetos — que só carrega UMA feira por vez. Daí a feira vir junto
+  // no endereço: sem ela, o atalho abriria a tela certa com a feira errada e o
+  // stand não estaria lá.
+  if (partes[0] === 'projetos' && partes[1] && partes[2]) {
+    return { tela: 'projetos', feiraId: partes[1], token: partes[2] }
+  }
+  if (['visao', 'admin', 'projetos', 'analistas'].includes(partes[0])) return { tela: partes[0] }
   return { tela: 'ferramenta' }
 }
 
@@ -70,12 +80,13 @@ export default function App() {
     )
   }
 
-  if (rota.tela !== 'ferramenta') return <PainelInterno tela={rota.tela} />
+  if (rota.tela !== 'ferramenta') return <PainelInterno rota={rota} />
 
   return <Ferramenta />
 }
 
-function PainelInterno({ tela }) {
+function PainelInterno({ rota }) {
+  const { tela } = rota
   const sessao = usarSessao()
   const abas = abasDe(sessao.acesso)
   const avisos = usarAvisos(sessao)
@@ -118,8 +129,11 @@ function PainelInterno({ tela }) {
 
       <div className="coluna">
         <Acesso sessao={sessao}>
+          {permitida && tela === 'visao' && pode(sessao.acesso, 'verPainel') && <Visao sessao={sessao} />}
           {permitida && tela === 'admin' && pode(sessao.acesso, 'verArtes') && <Admin sessao={sessao} />}
-          {permitida && tela === 'projetos' && <Projetos sessao={sessao} />}
+          {permitida && tela === 'projetos' && (
+            <Projetos sessao={sessao} feiraInicial={rota.feiraId} tokenInicial={rota.token} />
+          )}
           {permitida && tela === 'analistas' && pode(sessao.acesso, 'gerenciarAnalistas') && <Usuarios sessao={sessao} />}
         </Acesso>
       </div>

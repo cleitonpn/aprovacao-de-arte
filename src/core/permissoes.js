@@ -20,13 +20,13 @@ export const PAPEIS = {
   admin: {
     rotulo: 'Administrador',
     descricao: 'Acesso máximo. Faz tudo, em todas as feiras, e é o único que cadastra e remove analistas.',
-    permissoes: ['verArtes', 'cadastrarProjetos', 'cobrar', 'aprovar', 'gerenciarAnalistas'],
+    permissoes: ['verPainel', 'verArtes', 'cadastrarProjetos', 'cobrar', 'aprovar', 'gerenciarAnalistas'],
     sempreTodasAsFeiras: true,
   },
   completo: {
     rotulo: 'Analista completo',
     descricao: 'Opera as feiras dele de ponta a ponta: cadastra projetos, manda prova, libera reenvio e marca impressão.',
-    permissoes: ['verArtes', 'cadastrarProjetos', 'cobrar', 'aprovar'],
+    permissoes: ['verPainel', 'verArtes', 'cadastrarProjetos', 'cobrar', 'aprovar'],
   },
   cadastro: {
     rotulo: 'Cadastro',
@@ -44,6 +44,7 @@ export const PAPEL_PADRAO = 'admin'
 export const LISTA_DE_PAPEIS = Object.entries(PAPEIS).map(([id, p]) => ({ id, ...p }))
 
 export const ROTULO_PERMISSAO = {
+  verPainel: 'Visão geral da feira',
   verArtes: 'Ver e baixar as artes recebidas',
   cadastrarProjetos: 'Cadastrar feiras, projetos e importar planilha',
   cobrar: 'Cobrar o cliente por e-mail e exportar listas',
@@ -97,6 +98,10 @@ export function feirasVisiveis(acesso, feiras = []) {
  */
 export function abasDe(acesso) {
   const abas = []
+  // A visão geral vem primeiro porque é a tela em que o dia começa: "como está
+  // a feira?" antes de "o que chegou agora?". Como `telaInicial` é a primeira
+  // desta lista, quem tem a permissão abre o painel direto nela.
+  if (pode(acesso, 'verPainel')) abas.push({ id: 'visao', rotulo: 'Visão geral' })
   if (pode(acesso, 'verArtes')) abas.push({ id: 'admin', rotulo: 'Artes recebidas' })
   if (pode(acesso, 'cadastrarProjetos') || pode(acesso, 'cobrar') || pode(acesso, 'aprovar')) {
     abas.push({ id: 'projetos', rotulo: 'Projetos' })

@@ -24,8 +24,8 @@ test('papel desconhecido não vira acesso vazio nem acesso total por acidente', 
 
 test('cada papel pode exatamente o que promete', () => {
   const esperado = {
-    admin: ['verArtes', 'cadastrarProjetos', 'cobrar', 'aprovar', 'gerenciarAnalistas'],
-    completo: ['verArtes', 'cadastrarProjetos', 'cobrar', 'aprovar'],
+    admin: ['verPainel', 'verArtes', 'cadastrarProjetos', 'cobrar', 'aprovar', 'gerenciarAnalistas'],
+    completo: ['verPainel', 'verArtes', 'cadastrarProjetos', 'cobrar', 'aprovar'],
     cadastro: ['verArtes', 'cadastrarProjetos'],
     cobranca: ['verArtes', 'cobrar'],
   }
@@ -90,8 +90,11 @@ test('feira duplicada ou vazia não polui o escopo', () => {
 
 test('as abas somem para quem não pode usá-las', () => {
   const abas = (papel) => abasDe(acessoDe({ papel })).map((x) => x.id)
-  assert.deepEqual(abas('admin'), ['admin', 'projetos', 'analistas'])
-  assert.deepEqual(abas('completo'), ['admin', 'projetos'])
+  // A visão geral é de quem opera a feira inteira. Cadastro e cobrança seguem
+  // sem ela: o painel mostra reprovações, pedidos e provas — decisões que
+  // esses dois papéis não tomam, e ver o que não se pode resolver é ruído.
+  assert.deepEqual(abas('admin'), ['visao', 'admin', 'projetos', 'analistas'])
+  assert.deepEqual(abas('completo'), ['visao', 'admin', 'projetos'])
   assert.deepEqual(abas('cadastro'), ['admin', 'projetos'])
   assert.deepEqual(abas('cobranca'), ['admin', 'projetos'])
 })

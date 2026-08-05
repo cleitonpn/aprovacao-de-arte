@@ -6,8 +6,9 @@ import { resumoDoProjeto, situacaoDaPeca, AVISO_PRAZO, AVISO_EXTRA } from '../co
 import { formatarData as fmtData, formatarDataHora as fmtDataHora } from '../core/datas.js'
 import {
   carregarProjetoPublico, ouvirProjetoPublico, marcarEntrega, pedirNovaVersao,
-  aceitarCustoExtra, responderProva,
+  aceitarCustoExtra, responderProva, registrarReprovacao,
 } from '../services/projetos.js'
+import { eventoDeReprovacao, chaveDaTentativa } from '../core/reprovacoes.js'
 import { usarAnalise } from '../store/usarAnalise.js'
 import Upload from './Upload.jsx'
 import Resultado from './Resultado.jsx'
@@ -701,6 +702,40 @@ function PecaForaDaLista({ bloqueado, onCriar }) {
   )
 }
 
+// Tentativas já registradas nesta visita.
+//
+// Fora do componente de propósito: o cliente vai e volta da lista de peças o
+// tempo todo, e um `useRef` seria zerado a cada volta — a mesma tentativa
+// entraria no log de novo, e o alerta de "cliente com dificuldade" acenderia
+// por causa do vaivém dele, não do problema dele.
+const tentativasRegistradas = new Set()
+
+/**
+ * Registra a tentativa que a análise reprovou.
+ *
+ * Este é o único ponto da ferramenta em que grava-se algo de uma arte que NÃO
+ * foi enviada — e é o ponto inteiro do log. Como a arte reprovada nunca sobe,
+ * o cliente que tentou oito vezes e desistiu não deixava rastro: no painel ele
+ * era idêntico ao que nem tinha começado.
+ *
+ * Falha em silêncio, sempre. O log serve ao time; o cliente está no meio de um
+ * problema e não pode receber por cima dele um erro sobre um registro que não
+ * é da conta dele.
+ */
+function usarLogDeReprovacao(token, peca, versao, resultado) {
+  useEffect(() => {
+    if (!token || !resultado || resultado.veredicto !== 'reprovado') return
+    const chave = chaveDaTentativa(token, peca.id, resultado)
+    if (tentativasRegistradas.has(chave)) return
+    tentativasRegistradas.add(chave)
+    registrarReprovacao(token, eventoDeReprovacao({ peca, resultado, versao }))
+      .catch((e) => {
+        tentativasRegistradas.delete(chave)
+        console.warn('não foi possível registrar a tentativa reprovada', e)
+      })
+  }, [token, peca, versao, resultado])
+}
+
 function PainelDaPeca({ situacao, projeto, resumo, cadastro, perfis, politica, detectorNitidez, onVoltar, onEnviado }) {
   const peca = situacao.peca
   const perfil = perfis.find((p) => p.id === peca.perfilId) || perfis[0]
@@ -713,6 +748,8 @@ function PainelDaPeca({ situacao, projeto, resumo, cadastro, perfis, politica, d
   const analise = usarAnalise({ peca: alvo, perfil, escalaFator, politica, detectorNitidez })
   const spec = especificacao(alvo, perfil, politica)
   const ehExtra = String(peca.id).startsWith('extra_')
+
+  usarLogDeReprovacao(projeto.token, peca, situacao.proximaVersao, analise.resultado)
 
   return (
     <>

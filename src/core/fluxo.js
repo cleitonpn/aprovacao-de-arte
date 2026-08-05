@@ -23,6 +23,7 @@
 // Ela está nas regras do Firestore, não só aqui.
 
 import { emMs } from './datas.js'
+import { LIMITE_REPROVACOES } from './reprovacoes.js'
 
 export const STATUS = {
   aguardando: { rotulo: 'Aguardando arte', ordem: 0, cor: 'neutro' },
@@ -286,6 +287,10 @@ export function resumoDoProjeto(projeto, agora = Date.now()) {
     emProducao: conta((s) => STATUS_DO_TIME.includes(s.status)),
     emImpressao: conta((s) => s.status === 'em_impressao'),
     impressas: conta((s) => s.status === 'impressa'),
+    // Tentativas que a análise reprovou — o cliente que está penando. Vem do
+    // espelho no documento, não da subcoleção: a lista precisa desse número
+    // para trezentos stands de uma vez.
+    reprovacoes: Number(projeto?.dificuldade?.reprovacoes) || 0,
     pedidosEmAberto: pecas.filter((s) => s.pedidoEmAberto),
     prazo: situacaoDoPrazo(projeto, agora),
     completo: pecas.length > 0 && conta((s) => s.status !== 'aguardando') === pecas.length,
@@ -322,6 +327,11 @@ export const FASES = [
     casa: (s) => s.total > 0 && s.recebidas === s.total,
   },
   { id: 'em_impressao', rotulo: 'Em impressão', casa: (s) => s.emImpressao > 0 },
+  {
+    id: 'dificuldade',
+    rotulo: 'Precisam de ajuda',
+    casa: (s) => s.reprovacoes > LIMITE_REPROVACOES,
+  },
   {
     id: 'impressa',
     rotulo: 'Tudo impresso',
