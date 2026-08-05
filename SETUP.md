@@ -82,11 +82,22 @@ a própria prova de aprovação e o documento perderia o valor.
 
 | Para quem | Link |
 |---|---|
-| Cliente **sem** projeto cadastrado | `https://cleitonpn.github.io/aprovacao-de-arte/` |
+| Cliente **sem** projeto cadastrado | `https://sistemastands.com/` |
 | Cliente **com** projeto | gerado na tela *Projetos* — `…/#/p/TOKEN` |
+| Visão geral da feira | `…/#/visao` |
 | Artes recebidas | `…/#/admin` |
 | Cadastro de projetos | `…/#/projetos` |
 | Analistas com acesso | `…/#/analistas` |
+
+O endereço antigo (`cleitonpn.github.io/aprovacao-de-arte/`) continua
+funcionando: o GitHub redireciona para o domínio próprio, e o token do cliente
+vive depois do `#`, que o navegador leva junto no redirecionamento. Os links
+que a tela *Projetos* copia são montados a partir do endereço em que ela está
+aberta — não há nada fixo no código para atualizar.
+
+O domínio fica no arquivo `public/CNAME`. Ele precisa estar ali, e não só na
+tela de Settings do GitHub: cada publicação substitui o site inteiro, e sem o
+arquivo o domínio se perde numa delas.
 
 ---
 
@@ -357,7 +368,7 @@ deve ficar curta, e o campo *liberado por* registra quem liberou quem.
 
 | Sintoma | Causa provável |
 |---|---|
-| `auth/unauthorized-domain` ao entrar | falta `cleitonpn.github.io` em Authentication → Settings → Domínios autorizados |
+| `auth/unauthorized-domain` ao entrar | falta o domínio do site em Authentication → **Configurações** → Domínios autorizados. A mensagem na tela mostra qual endereço adicionar. Vale para o login do time **e** para o envio do cliente, que usa sessão anônima |
 | "Conta ainda não liberada" | o e-mail não está na coleção `admins` — libere em `#/analistas` |
 | Analista novo não entra | ele ainda não clicou no link de confirmação do e-mail |
 | Analista não vê a feira dele | a feira não foi marcada no acesso dele em `#/analistas` |
