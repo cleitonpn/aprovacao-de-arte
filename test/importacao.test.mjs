@@ -163,6 +163,21 @@ test('escala aceita 1:4, 1/4 e 4', () => {
   assert.equal(interpretarEscala('qualquer coisa'), 1)
 })
 
+test('escala sobrevive ao Excel, que transforma "1:10" em hora', () => {
+  // A planilha da operação chega com a coluna escala assim: quem digita 1:10
+  // vê 01:10 na célula, porque o Excel reconheceu como hora. Lido como 1:1, um
+  // arquivo montado em 1:10 passaria a exigir dez vezes mais pixels do que a
+  // peça precisa — e a ferramenta reprovaria arte que o time aprovaria, sem
+  // nada na tela explicando por quê.
+  assert.equal(interpretarEscala('01:10'), 10)
+  assert.equal(interpretarEscala('01:04'), 4)
+  assert.equal(interpretarEscala('01:02'), 2)
+  assert.equal(interpretarEscala('01:01'), 1)
+  assert.equal(interpretarEscala('01:10:00'), 10, 'hora cheia, com segundos')
+  // E não pode inventar escala onde não há.
+  assert.equal(interpretarEscala('14:30'), 1, 'não começa em 1 — não é escala')
+})
+
 test('o tipo de peça sai do texto que o cliente escreve, e o específico vence o genérico', () => {
   assert.equal(perfilPorTexto('Lona de fundo'), 'lona-parede')
   assert.equal(perfilPorTexto('adesivo de painel'), 'adesivo-balcao', 'adesivo vence painel')

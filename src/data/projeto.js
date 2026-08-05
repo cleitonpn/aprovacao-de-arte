@@ -101,11 +101,22 @@ export function interpretarMedida(texto) {
   return { larguraCm, alturaCm, unidadeInformada: Boolean(unidade) }
 }
 
-/** Lê "1:4", "1/4" ou "4" e devolve o fator de escala. */
+/**
+ * Lê "1:4", "1/4" ou "4" e devolve o fator de escala.
+ *
+ * Os zeros à esquerda não são preciosismo: o Excel reconhece "1:10" como HORA
+ * e grava "01:10" na célula. Sem tolerar isso, uma arte montada em 1:10 era
+ * lida como 1:1 — e a ferramenta então cobrava dez vezes mais pixels do que a
+ * peça precisa, reprovando arquivo correto. Falha silenciosa, do tipo que só
+ * aparece como "a ferramenta reprovou uma arte que o time aprovaria".
+ *
+ * "01:01:00" (hora cheia, que o Excel também produz) cai no mesmo lugar: os
+ * segundos são ignorados e sobra a razão.
+ */
 export function interpretarEscala(texto) {
-  const t = String(texto || '').trim()
+  const t = String(texto || '').trim().replace(/:00$/, '')
   if (!t) return 1
-  const m = /^1\s*[:/]\s*(\d+(?:[.,]\d+)?)$/.exec(t) || /^(\d+(?:[.,]\d+)?)$/.exec(t)
+  const m = /^0*1\s*[:/]\s*0*(\d+(?:[.,]\d+)?)$/.exec(t) || /^0*(\d+(?:[.,]\d+)?)$/.exec(t)
   if (!m) return 1
   const fator = Number(m[1].replace(',', '.'))
   return Number.isFinite(fator) && fator >= 1 ? fator : 1

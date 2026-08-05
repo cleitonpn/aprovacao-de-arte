@@ -654,6 +654,19 @@ function Importacao({ sessao, onPronto, onCancelar }) {
         “Arte A”, “Arte B”, “Arte C”. Colunas essenciais: feira, stand, e-mail e
         a descrição das peças com a medida.
       </p>
+      {/*
+        Esta frase existe porque a regra foi lida ao contrário na prática: o
+        modelo tem três linhas do MESMO stand, e o que se entendeu foi três
+        clientes com uma peça cada. Dizer "uma linha por peça" não basta — o
+        que falta é como se juntam de volta.
+      */}
+      <p className="nota">
+        <strong>Stand com várias peças: repita a linha</strong>, não crie
+        colunas. Copie feira, cliente, e-mail e stand igualzinho e mude só a
+        peça, o tipo e a medida — o que tem o mesmo stand na mesma feira vira um
+        projeto só, com todas as peças. Deixe a coluna <em>escala</em> vazia
+        quando a arte é em tamanho real.
+      </p>
 
       <div className="acoes">
         <button className="btn btn-ghost" onClick={() => entrada.current?.click()}>Escolher arquivo CSV</button>
