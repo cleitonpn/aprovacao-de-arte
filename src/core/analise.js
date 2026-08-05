@@ -9,6 +9,7 @@ import { carregarBitmap, amostraReduzida, recortesNativos, fracaoChapada, miniat
 import { paraCinza, blocagem, conteudoNaMargem, bordaUniforme, estatisticasCor } from './metricas.js'
 import { analisarEspectro, classificarDeficit } from './espectro.js'
 import { avaliar } from './regras.js'
+import { fonteDeBitmap, fonteDePdf } from './recorte.js'
 
 const CM_POR_POL = 2.54
 
@@ -138,7 +139,10 @@ export async function analisar(arquivo, peca, perfil, opcoes = {}) {
       larguraPx: r.largura,
       alturaPx: r.altura,
       miniaturaUrl: r.miniaturaUrl,
-      bitmap: r.bitmap,
+      // A fonte do simulador de distância. Uniforme entre JPG e PDF de
+      // propósito: era a divergência entre os dois que deixava a caixa de
+      // zoom sem aparecer em PDF — ou seja, na maioria das artes.
+      fonteVisual: fonteDeBitmap(r.bitmap, r.largura, r.altura),
       inflacao: r.inflacao,
       blocagem: r.blocagem,
       margem: r.margem,
@@ -164,7 +168,9 @@ export async function analisar(arquivo, peca, perfil, opcoes = {}) {
 
 async function medirPdf(buffer, base, peca, perfil, escalaFator) {
   // import dinâmico: o pdf.js é pesado e só entra em cena quando é PDF
-  const { abrirPdf, inspecionarPagina, renderizarPagina, fontesNaoIncorporadas } = await import('./pdf.js')
+  const {
+    abrirPdf, inspecionarPagina, renderizarPagina, fontesNaoIncorporadas, larguraEmPontos,
+  } = await import('./pdf.js')
   const doc = await abrirPdf(buffer)
   const info = await inspecionarPagina(doc, 1)
   const fontesFaltando = await fontesNaoIncorporadas(doc, 1)
@@ -201,6 +207,14 @@ async function medirPdf(buffer, base, peca, perfil, escalaFator) {
     /* pré-visualização é opcional */
   }
 
+  // O documento fica aberto para o simulador recortar depois, na resolução
+  // real. Nada disso vai para o Firestore: o laudo gravado é montado campo a
+  // campo em `laudoJson`, e este não está na lista.
+  const larguraPt = await larguraEmPontos(doc, 1)
+  const fonteVisual = larguraPx && larguraPt
+    ? fonteDePdf(doc, larguraPt, larguraPx, alturaPx)
+    : null
+
   return {
     ...base,
     formatoSuportado: true,
@@ -215,6 +229,7 @@ async function medirPdf(buffer, base, peca, perfil, escalaFator) {
     larguraPx,
     alturaPx,
     miniaturaUrl,
+    fonteVisual,
     tamanhoDeclaradoCm: { largura: declaradoLarguraCm, altura: declaradoAlturaCm },
     escalaSugerida: escalaFator === 1 ? escalaProvavel(info.larguraMm / 10, peca.larguraCm) : null,
     cmyk: false,

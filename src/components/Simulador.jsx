@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { dpiEfetivo } from '../core/regras.js'
+import { recortar } from '../core/recorte.js'
 
 // Acuidade visual de referência: o olho humano resolve cerca de 1 minuto de
 // arco. A 3 m isso equivale a ~0,87 mm — por isso uma lona a 50 dpi (pixel de
@@ -10,8 +11,14 @@ const DIST_REFERENCIA_M = 0.5 // distância típica do olho à tela
 
 const LADO_CANVAS = 300
 
+// Arrastar a barra dispara um recorte por parada do dedo, não por pixel: num
+// PDF cada recorte é uma rasterização de verdade, e trinta delas por segundo
+// travariam a página.
+const ESPERA_MS = 140
+
 export default function Simulador({ medidas, peca, perfil, dpiMin }) {
   const [distancia, setDistancia] = useState(perfil.distanciaM)
+  const [erro, setErro] = useState(false)
   const canvasArte = useRef(null)
   const canvasRef = useRef(null)
 
@@ -26,48 +33,75 @@ export default function Simulador({ medidas, peca, perfil, dpiMin }) {
   const perceptivel = pixelImpressoMm > resolvivelMm
 
   useEffect(() => {
-    const fonte = medidas.bitmap
-    if (!fonte) return
+    const fonte = medidas.fonteVisual
+    if (!fonte) return undefined
 
-    // Quanto de peça (em cm) cabe no quadro, na distância simulada
-    const cssPxPorCm = (CSS_PX_POR_POL / 2.54) * (DIST_REFERENCIA_M / distancia)
-    const regiaoCm = Math.min(peca.larguraCm, LADO_CANVAS / cssPxPorCm)
-    const artePxPorCm = medidas.larguraPx / peca.larguraCm
-    const origemLado = Math.max(4, Math.round(regiaoCm * artePxPorCm))
+    let vivo = true
+    const tarefa = setTimeout(async () => {
+      // Quanto de peça (em cm) cabe no quadro, na distância simulada
+      const cssPxPorCm = (CSS_PX_POR_POL / 2.54) * (DIST_REFERENCIA_M / distancia)
+      const regiaoCm = Math.min(peca.larguraCm, LADO_CANVAS / cssPxPorCm)
+      const artePxPorCm = medidas.larguraPx / peca.larguraCm
+      const origemLado = Math.max(4, Math.round(regiaoCm * artePxPorCm))
+      const origemLadoY = Math.min(origemLado, medidas.alturaPx)
 
-    // centraliza no trecho com mais detalhe, que é onde a diferença aparece
-    const foco = medidas.recortes?.[0]
-    const cx = foco ? foco.x + foco.lado / 2 : medidas.larguraPx / 2
-    const cy = foco ? foco.y + foco.lado / 2 : medidas.alturaPx / 2
-    const sx = Math.max(0, Math.min(medidas.larguraPx - origemLado, Math.round(cx - origemLado / 2)))
-    const sy = Math.max(0, Math.min(medidas.alturaPx - origemLado, Math.round(cy - origemLado / 2)))
-    const origemLadoY = Math.min(origemLado, medidas.alturaPx)
+      // Centraliza no trecho com mais detalhe, que é onde a diferença aparece.
+      // Num PDF não há recortes medidos — aí vale o centro da peça, que é onde
+      // a arte costuma ter o assunto.
+      const foco = medidas.recortes?.[0]
+      const cx = foco ? foco.x + foco.lado / 2 : medidas.larguraPx / 2
+      const cy = foco ? foco.y + foco.lado / 2 : medidas.alturaPx / 2
+      const x = Math.max(0, Math.min(medidas.larguraPx - origemLado, Math.round(cx - origemLado / 2)))
+      const y = Math.max(0, Math.min(medidas.alturaPx - origemLadoY, Math.round(cy - origemLadoY / 2)))
 
-    const pintar = (canvas, dpiAlvo) => {
-      if (!canvas) return
-      const ctx = canvas.getContext('2d')
-      ctx.imageSmoothingEnabled = true
-      ctx.imageSmoothingQuality = 'high'
-      ctx.clearRect(0, 0, LADO_CANVAS, LADO_CANVAS)
+      // Quanto o quadro de referência precisa: os pixels que a peça teria se
+      // estivesse exatamente no mínimo exigido. O recorte não pode vir mais
+      // pobre que isso, senão os dois quadros ficariam iguais e a comparação —
+      // que é o motivo da caixa existir — não mostraria diferença nenhuma.
+      const ladoRef = Math.max(2, Math.round((regiaoCm / 2.54) * dpiMin))
+      const teto = temReferencia ? Math.round(ladoRef * 1.2) : LADO_CANVAS * 2
 
-      if (dpiAlvo) {
-        // reamostra para o DPI de referência antes de exibir — é o que a
-        // gráfica receberia se a arte estivesse exatamente no mínimo
-        const ladoRef = Math.max(2, Math.round((regiaoCm / 2.54) * dpiAlvo))
-        const tmp = document.createElement('canvas')
-        tmp.width = ladoRef
-        tmp.height = ladoRef
-        const tctx = tmp.getContext('2d')
-        tctx.imageSmoothingEnabled = true
-        tctx.drawImage(fonte, sx, sy, origemLado, origemLadoY, 0, 0, ladoRef, ladoRef)
-        ctx.drawImage(tmp, 0, 0, ladoRef, ladoRef, 0, 0, LADO_CANVAS, LADO_CANVAS)
-      } else {
-        ctx.drawImage(fonte, sx, sy, origemLado, origemLadoY, 0, 0, LADO_CANVAS, LADO_CANVAS)
+      let recorte
+      try {
+        recorte = await recortar(fonte, { x, y, largura: origemLado, altura: origemLadoY, teto })
+      } catch (e) {
+        console.warn('não foi possível recortar a arte para a simulação', e)
+        if (vivo) setErro(true)
+        return
       }
-    }
+      if (!vivo || !recorte) return
+      setErro(false)
 
-    pintar(canvasArte.current, null)
-    if (temReferencia) pintar(canvasRef.current, dpiMin)
+      const pintar = (canvas, dpiAlvo) => {
+        if (!canvas) return
+        const ctx = canvas.getContext('2d')
+        ctx.imageSmoothingEnabled = true
+        ctx.imageSmoothingQuality = 'high'
+        ctx.clearRect(0, 0, LADO_CANVAS, LADO_CANVAS)
+
+        // Reamostrar para uma resolução MAIOR que a do recorte seria inventar
+        // detalhe: o resultado é um borrão que faz o mínimo exigido parecer
+        // pior do que é. Nesse caso não há o que reamostrar — desenha direto.
+        if (dpiAlvo && ladoRef < recorte.canvas.width) {
+          // Reamostra para o DPI de referência antes de exibir — é o que a
+          // gráfica receberia se a arte estivesse exatamente no mínimo.
+          const tmp = document.createElement('canvas')
+          tmp.width = ladoRef
+          tmp.height = ladoRef
+          const tctx = tmp.getContext('2d')
+          tctx.imageSmoothingEnabled = true
+          tctx.drawImage(recorte.canvas, 0, 0, ladoRef, ladoRef)
+          ctx.drawImage(tmp, 0, 0, ladoRef, ladoRef, 0, 0, LADO_CANVAS, LADO_CANVAS)
+        } else {
+          ctx.drawImage(recorte.canvas, 0, 0, LADO_CANVAS, LADO_CANVAS)
+        }
+      }
+
+      pintar(canvasArte.current, null)
+      if (temReferencia) pintar(canvasRef.current, dpiMin)
+    }, ESPERA_MS)
+
+    return () => { vivo = false; clearTimeout(tarefa) }
   }, [distancia, medidas, peca, dpiMin, temReferencia])
 
   return (
@@ -77,6 +111,13 @@ export default function Simulador({ medidas, peca, perfil, dpiMin }) {
         Um trecho da peça no tamanho real, como ele apareceria aos olhos de
         quem está a esta distância do stand.
       </p>
+
+      {erro && (
+        <p className="nota">
+          Não foi possível montar a simulação para este arquivo. O laudo acima
+          continua valendo — ele não depende desta caixa.
+        </p>
+      )}
 
       <div className="quadros">
         <figure>

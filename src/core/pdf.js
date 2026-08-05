@@ -72,6 +72,43 @@ export async function renderizarPagina(doc, numero = 1, larguraAlvo = 1400) {
   return { canvas, pagina, escala }
 }
 
+/** Largura da página em pontos, já considerando a rotação. */
+export async function larguraEmPontos(doc, numero = 1) {
+  const pagina = await doc.getPage(numero)
+  return pagina.getViewport({ scale: 1 }).width
+}
+
+/**
+ * Rasteriza só um PEDAÇO da página, na resolução que se pedir.
+ *
+ * Existe por causa do simulador de distância, e é a única forma de ele não
+ * mentir. O simulador mostra um trecho da arte na resolução REAL — é o ponto
+ * dele: ver se o ponto impresso aparece de perto. Rasterizar a página inteira
+ * nessa resolução é impossível: uma lona de 275 cm a 100 dpi dá 10.800 px de
+ * largura, quase meio gigabyte de canvas. Recortando ANTES de rasterizar, o
+ * mesmo trecho custa poucos megabytes.
+ *
+ * `sx`/`sy` e o tamanho vêm em pixels da página já na escala pedida.
+ */
+export async function renderizarRecorte(doc, numero, { escala, sx, sy, largura, altura }) {
+  const pagina = await doc.getPage(numero)
+  const viewport = pagina.getViewport({ scale: escala })
+  const canvas = document.createElement('canvas')
+  canvas.width = Math.max(1, Math.round(largura))
+  canvas.height = Math.max(1, Math.round(altura))
+  const ctx = canvas.getContext('2d')
+  ctx.fillStyle = '#fff'
+  ctx.fillRect(0, 0, canvas.width, canvas.height)
+  // A translação É o recorte: a página inteira é desenhada, mas com a origem
+  // deslocada — o canvas pequeno recebe só a janela que interessa.
+  await pagina.render({
+    canvasContext: ctx,
+    viewport,
+    transform: [1, 0, 0, 1, -Math.round(sx), -Math.round(sy)],
+  }).promise
+  return canvas
+}
+
 /**
  * Levanta a estrutura da página: tamanho, presença de vetor e texto, e a
  * resolução efetiva de cada imagem embutida no tamanho em que foi colocada.

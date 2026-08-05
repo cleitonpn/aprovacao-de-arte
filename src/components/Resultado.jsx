@@ -100,7 +100,17 @@ export default function Resultado({ resultado, modoTecnico, onAceitarRisco, risc
         </div>
       )}
 
-      {medidas.bitmap && !medidas.puroVetor && (
+      {/*
+        A condição olhava `medidas.bitmap`, que só existia no caminho do JPG —
+        então a caixa nunca aparecia em PDF, que é o formato normal em grande
+        formato. Some sem erro nenhum na tela, que é o pior jeito de um recurso
+        não funcionar. Agora as duas origens entregam uma `fonteVisual`.
+
+        Arte puramente vetorial continua de fora, e isso é correto: ela não tem
+        resolução: não há granulação para simular nem "mínimo exigido" com que
+        comparar.
+      */}
+      {medidas.fonteVisual && !medidas.puroVetor && (
         <div className="bloco-simulador">
           <h3>Como esta arte vai ser vista</h3>
           <p className="ajuda">
