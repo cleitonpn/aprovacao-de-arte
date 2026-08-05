@@ -15,6 +15,8 @@ import Resultado from './Resultado.jsx'
 import Gabarito, { BotaoGabarito } from './Gabarito.jsx'
 import Avulsos from './Avulsos.jsx'
 import Conversa from './Conversa.jsx'
+import Tutorial from './Tutorial.jsx'
+import { jaViuTutorial, marcarTutorialVisto } from '../store/tutorial.js'
 
 // A tela do cliente quando o projeto está cadastrado.
 //
@@ -41,6 +43,9 @@ export default function Projeto({ token }) {
   const [erro, setErro] = useState(null)
   const [pecaAtivaId, setPecaAtivaId] = useState(null)
   const [extra, setExtra] = useState(null)
+  // Abre sozinho só na primeira visita a ESTE stand, e num navegador que
+  // nunca viu. Ver `store/tutorial.js` para o porquê de ser por stand.
+  const [tutorial, setTutorial] = useState(false)
 
   const carregar = useCallback(async () => {
     try {
@@ -56,6 +61,35 @@ export default function Projeto({ token }) {
   }, [token])
 
   useEffect(() => { setEstado('carregando'); carregar() }, [carregar])
+
+  // Depois de o projeto abrir, não antes: um tutorial sobre uma tela que ainda
+  // não carregou (ou cujo link está errado) só atrapalha quem já tem problema.
+  useEffect(() => {
+    if (estado === 'pronto' && !jaViuTutorial(token)) setTutorial(true)
+  }, [estado, token])
+
+  const fecharTutorial = useCallback(() => {
+    setTutorial(false)
+    marcarTutorialVisto(token)
+  }, [token])
+
+  // "Me mostre onde fica": fechar e rolar até a caixa de apoio. Descrever a
+  // localização em palavras funciona mal numa página que rola — e é o tipo de
+  // instrução que a pessoa não segue, ela só fecha e desiste.
+  const irParaApoio = useCallback(() => {
+    fecharTutorial()
+    setPecaAtivaId(null)
+    setExtra(null)
+    // Depois do fechamento, para o elemento existir e a rolagem do corpo já
+    // estar destravada.
+    setTimeout(() => {
+      const alvo = document.getElementById('arquivos-de-apoio')
+      if (!alvo) return
+      alvo.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      alvo.classList.add('piscando')
+      setTimeout(() => alvo.classList.remove('piscando'), 2400)
+    }, 60)
+  }, [fecharTutorial])
 
   // Depois da primeira carga, a tela passa a escutar: a prova de aprovação e o
   // status de impressão aparecem sem o cliente recarregar nada. É o mesmo
@@ -147,7 +181,9 @@ export default function Projeto({ token }) {
 
   return (
     <>
-      <Capa projeto={projeto} resumo={resumo} />
+      <Tutorial aberto={tutorial} onFechar={fecharTutorial} onVerApoio={irParaApoio} />
+
+      <Capa projeto={projeto} resumo={resumo} onTutorial={() => setTutorial(true)} />
 
       <AvisoPrazo prazo={resumo.prazo} />
 
@@ -200,7 +236,7 @@ export default function Projeto({ token }) {
  * ainda faltava. Na versão compacta some a frase de boas-vindas — ele já leu —
  * e entra a peça que está sendo enviada, com a saída para a lista.
  */
-function Capa({ projeto, resumo, compacta = false, legenda = null, onVoltar = null }) {
+function Capa({ projeto, resumo, compacta = false, legenda = null, onVoltar = null, onTutorial = null }) {
   return (
     <section className={`capa ${compacta ? 'compacta' : ''}`}>
       <div className="capa-texto">
@@ -220,10 +256,18 @@ function Capa({ projeto, resumo, compacta = false, legenda = null, onVoltar = nu
             </>
           )}
 
-        {(onVoltar || projeto.linkDrive) && (
+        {(onVoltar || onTutorial || projeto.linkDrive) && (
           <div className="capa-acoes">
             {onVoltar && (
               <button className="btn btn-ghost" onClick={onVoltar}>← Todas as peças</button>
+            )}
+            {/*
+              Depois da primeira visita o tutorial vira isto: um botão discreto
+              e sempre no mesmo lugar. Quem já sabe passa reto; quem esqueceu
+              como aceitar uma ressalva não precisa ligar para perguntar.
+            */}
+            {onTutorial && (
+              <button className="btn btn-ghost" onClick={onTutorial}>Como funciona</button>
             )}
             {projeto.linkDrive && (
               <a className="btn btn-drive" href={projeto.linkDrive} target="_blank" rel="noreferrer">

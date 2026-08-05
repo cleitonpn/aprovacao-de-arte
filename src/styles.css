@@ -634,6 +634,97 @@ textarea { width: 100%; font: inherit; font-size: 13px; padding: 9px 11px; borde
 .lista-permissoes li { margin-bottom: 2px; }
 
 /* ==========================================================================
+   Tutorial do cliente — abre sozinho na primeira visita.
+   A caixa rola por dentro, nunca a página: num celular, um modal mais alto
+   que a tela sem rolagem própria trava a leitura no meio e não tem saída.
+   ========================================================================== */
+
+.tutorial-fundo {
+  position: fixed; inset: 0; z-index: 100;
+  background: rgba(8, 10, 14, .72);
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px;
+  animation: surgir .18s ease-out;
+}
+@keyframes surgir { from { opacity: 0 } to { opacity: 1 } }
+
+.tutorial {
+  background: var(--cartao); border: 1px solid var(--borda); border-radius: 16px;
+  width: min(720px, 100%); max-height: min(88vh, 900px);
+  display: flex; flex-direction: column;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, .45);
+}
+.tutorial:focus { outline: none; }
+
+.tutorial-topo {
+  display: flex; align-items: flex-start; gap: 16px;
+  padding: 22px 24px 14px; border-bottom: 1px solid var(--borda);
+}
+.tutorial-topo h2 { margin: 0 0 4px; font-size: 21px; letter-spacing: -.01em; }
+.tutorial-topo .ajuda { margin: 0; }
+
+.tutorial-fechar {
+  margin-left: auto; flex: 0 0 auto;
+  width: 32px; height: 32px; border-radius: 8px; cursor: pointer;
+  background: transparent; border: 1px solid var(--borda);
+  color: var(--suave); font-size: 20px; line-height: 1;
+}
+.tutorial-fechar:hover { color: var(--texto); border-color: var(--suave); }
+
+.tutorial-corpo { overflow-y: auto; padding: 4px 24px 8px; }
+.tutorial-corpo section { padding: 16px 0; border-bottom: 1px solid var(--borda); }
+.tutorial-corpo section:last-child { border-bottom: 0; }
+.tutorial-corpo h3 { margin: 0 0 10px; font-size: 15px; }
+.tutorial-corpo p { margin: 0 0 8px; font-size: 13.5px; line-height: 1.6; color: var(--suave); }
+.tutorial-corpo p:last-child { margin-bottom: 0; }
+
+.tutorial-passos { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
+.tutorial-passos li { display: flex; gap: 12px; align-items: flex-start; }
+.tutorial-passos strong { font-size: 14px; }
+.tutorial-passos p { margin: 3px 0 0; }
+.tutorial-numero {
+  flex: 0 0 24px; width: 24px; height: 24px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: color-mix(in srgb, var(--acento) 14%, transparent);
+  color: var(--acento); font-size: 12.5px; font-weight: 700;
+}
+
+.tutorial-requisitos { margin: 0; display: grid; gap: 10px; }
+.tutorial-requisitos dt { font-size: 13.5px; font-weight: 600; }
+.tutorial-requisitos dd {
+  margin: 2px 0 0; font-size: 13px; line-height: 1.6; color: var(--suave);
+}
+
+.tutorial-apoio .btn { margin-top: 4px; }
+.tutorial-horario {
+  background: color-mix(in srgb, var(--acento) 8%, transparent);
+  border-radius: 8px; padding: 9px 12px;
+}
+
+.tutorial-rodape {
+  padding: 14px 24px 20px; border-top: 1px solid var(--borda);
+  display: flex; justify-content: flex-end;
+}
+
+@media (max-width: 620px) {
+  .tutorial-fundo { padding: 0; align-items: stretch; }
+  .tutorial { max-height: 100vh; border-radius: 0; border: 0; width: 100%; }
+  .tutorial-topo, .tutorial-corpo, .tutorial-rodape { padding-left: 16px; padding-right: 16px; }
+  .tutorial-rodape .btn { width: 100%; }
+}
+
+/* "Me mostre onde fica": a caixa de apoio pisca depois da rolagem. Sem a
+   piscada, a página rola e a pessoa não sabe o que era para ela olhar. */
+.piscando { animation: piscar 2.2s ease-out; }
+@keyframes piscar {
+  0%, 100% { box-shadow: 0 0 0 0 transparent; }
+  15%, 65% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--acento) 45%, transparent); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tutorial-fundo, .piscando { animation: none; }
+}
+
+/* ==========================================================================
    Visão geral — a feira inteira numa tela.
    Nada aqui é decorativo: cada bloco termina num stand clicável. Um painel
    que só informa vira relatório, e relatório ninguém abre na terça-feira de

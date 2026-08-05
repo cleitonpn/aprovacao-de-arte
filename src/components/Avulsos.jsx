@@ -51,7 +51,9 @@ export default function Avulsos({ projeto, cadastro }) {
   }
 
   return (
-    <div className="cartao apoio-destaque">
+    // O id é o alvo do "me mostre onde fica" do tutorial. Descrever a
+    // localização em palavras não funciona numa página que rola.
+    <div className="cartao apoio-destaque" id="arquivos-de-apoio">
       <div className="titulo-secao">
         <h3>Arquivos de apoio</h3>
         <span className="dica-campo">logo, fontes, manual de marca</span>
