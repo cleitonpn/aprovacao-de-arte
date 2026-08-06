@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { traduzirErroAuth } from '../services/sessao.js'
 import { enviarProva, EXTENSOES_PROVA } from '../services/envio.js'
-import { registrarProva, ouvirEnvios } from '../services/projetos.js'
+import { registrarProva, ouvirEnvios, arquivarEnvio } from '../services/projetos.js'
 import { vistoEm, marcarVisto, dataEmMs, assinarVisto } from '../store/visto.js'
 import { feirasVisiveis } from '../core/permissoes.js'
 import { formatarDataHora as fmtData } from '../core/datas.js'
@@ -175,6 +175,7 @@ export default function Admin({ sessao }) {
   // índice composto, que só nasce por linha de comando ou por um link escondido
   // dentro de uma mensagem de erro.
   const [marca, setMarca] = useState(0)
+  const [mostrarArquivados, setMostrarArquivados] = useState(false)
   useEffect(() => {
     if (!fb || !feiraId) { setEnvios([]); return undefined }
     setBuscando(true)
@@ -200,27 +201,78 @@ export default function Admin({ sessao }) {
     [envios, marca],
   )
 
+  const arquivados = useMemo(() => envios.filter((e) => e.arquivado).length, [envios])
+
   const visiveis = useMemo(() => {
     const t = filtro.trim().toLowerCase()
     // `tipoEnvio` só existe nos registros novos: envio antigo sem o campo é
     // arte, que é tudo o que existia antes de os arquivos de apoio nascerem.
     const ehApoio = (e) => e.tipoEnvio === 'avulso'
     return envios
+      .filter((e) => mostrarArquivados || !e.arquivado)
       .filter((e) => tipo === 'todos' || (tipo === 'avulso' ? ehApoio(e) : !ehApoio(e)))
       .filter((e) => !t || [
         e.cadastro?.nome, e.cadastro?.email, e.cadastro?.stand, e.cadastro?.localizacao,
         e.pecaRotulo, e.perfil?.nome, e.protocolo, e.arquivo?.nome,
       ].some((v) => String(v || '').toLowerCase().includes(t)))
-  }, [envios, filtro, tipo])
+  }, [envios, filtro, tipo, mostrarArquivados])
 
   const totalApoio = useMemo(() => envios.filter((e) => e.tipoEnvio === 'avulso').length, [envios])
 
   const nomeDaFeira = feiras.find((f) => f.id === feiraId)?.nome || feiraId
 
-  const marcarTudoVisto = () => {
+  const marcarTudoVisto = useCallback(() => {
     const maisNovo = envios.reduce((m, e) => Math.max(m, dataEmMs(e.criadoEm)), 0)
     marcarVisto(sessao.usuario?.email, `envios:${feiraId}`, maisNovo || Date.now())
-    setMarca(maisNovo || Date.now())
+  }, [envios, feiraId, sessao.usuario?.email])
+
+  /**
+   * Estar com a lista na tela É ter visto.
+   *
+   * Antes disso a marcação só acontecia num clique em "marcar como visto", e o
+   * contador ficava aceso mesmo depois de o analista olhar a tela inteira —
+   * que é o oposto do que uma bolinha de aviso deve fazer. A marca só é
+   * gravada com a lista já carregada e não vazia: marcar durante o
+   * carregamento apagaria o aviso de arte que ainda nem apareceu.
+   *
+   * A leitura de `marca` continua sendo feita UMA vez por feira, antes da
+   * escuta, senão o contador zeraria no mesmo instante em que acendesse.
+   */
+  useEffect(() => {
+    if (buscando || !envios.length) return undefined
+    const relogio = setTimeout(marcarTudoVisto, 1200)
+    return () => clearTimeout(relogio)
+  }, [buscando, envios, marcarTudoVisto])
+
+  /**
+   * O que chegou nas OUTRAS feiras que este analista alcança.
+   *
+   * O contador da aba soma todas as feiras, mas a marca é por feira — então,
+   * sem isto, arte nova numa feira que ninguém abriu deixava a bolinha acesa
+   * para sempre, e o analista não tinha como descobrir de onde vinha o número.
+   */
+  const [novosDeOutras, setNovosDeOutras] = useState(0)
+  useEffect(() => {
+    if (!fb || feiras.length < 2) { setNovosDeOutras(0); return undefined }
+    const { getFirestore, collection, query, where, onSnapshot } = fb.firestore
+    const outras = feiras.map((f) => f.id).filter((id) => id !== feiraId).slice(0, 30)
+    if (!outras.length) { setNovosDeOutras(0); return undefined }
+    return onSnapshot(
+      query(collection(getFirestore(fb.app), 'envios'), where('feiraId', 'in', outras)),
+      (snap) => setNovosDeOutras(snap.docs.filter((d) => {
+        const e = d.data()
+        return dataEmMs(e.criadoEm) > vistoEm(sessao.usuario?.email, `envios:${e.feiraId}`)
+      }).length),
+      () => setNovosDeOutras(0),
+    )
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fb, feiras, feiraId, sessao.usuario?.email, marca])
+
+  const marcarOutrasVistas = () => {
+    for (const f of feiras) {
+      if (f.id !== feiraId) marcarVisto(sessao.usuario?.email, `envios:${f.id}`, Date.now())
+    }
+    setNovosDeOutras(0)
   }
 
   const baixarTodas = async () => {
@@ -249,7 +301,25 @@ export default function Admin({ sessao }) {
         {novos > 0 && (
           <div className="faixa-novidade">
             <strong>{novos} {novos === 1 ? 'arquivo novo' : 'arquivos novos'}</strong> desde a sua última visita.
-            <button className="link" onClick={marcarTudoVisto}>marcar como visto</button>
+            <em className="dica-campo">marcado como visto automaticamente</em>
+          </div>
+        )}
+
+        {arquivados > 0 && (
+          <label className="alternador">
+            <input
+              type="checkbox" checked={mostrarArquivados}
+              onChange={(ev) => setMostrarArquivados(ev.target.checked)}
+            />
+            <span>Mostrar os {arquivados} arquivados</span>
+          </label>
+        )}
+
+        {novosDeOutras > 0 && (
+          <div className="faixa-novidade outras">
+            <strong>{novosDeOutras}</strong> {novosDeOutras === 1 ? 'arquivo novo' : 'arquivos novos'}{' '}
+            em outras feiras — é o que mantém a bolinha da aba acesa.
+            <button className="link" onClick={marcarOutrasVistas}>marcar todas como vistas</button>
           </div>
         )}
 
@@ -338,11 +408,12 @@ export default function Admin({ sessao }) {
                   <th>Enviada em</th>
                   <th>Arquivo</th>
                   <th>Prova de aprovação</th>
+                  <th />
                 </tr>
               </thead>
               <tbody>
                 {visiveis.map((e) => (
-                  <tr key={e.id} className={dataEmMs(e.criadoEm) > marca ? 'linha-nova' : ''}>
+                  <tr key={e.id} className={`${dataEmMs(e.criadoEm) > marca ? 'linha-nova' : ''} ${e.arquivado ? 'linha-arquivada' : ''}`}>
                     <td>
                       <strong>{e.cadastro?.nome}</strong>
                       <br />
@@ -372,6 +443,18 @@ export default function Admin({ sessao }) {
                     </td>
                     <td>
                       <BotaoProva envio={e} sessao={sessao} />
+                    </td>
+                    <td>
+                      <button
+                        className="link"
+                        title={e.arquivado
+                          ? 'Volta a aparecer na lista'
+                          : 'Tira da lista sem apagar o registro — para quando o arquivo já saiu do armazenamento'}
+                        onClick={() => arquivarEnvio(sessao.fb, e.protocolo, sessao.usuario?.email, !e.arquivado)
+                          .catch((erro) => setErro(traduzirErroAuth(erro, 'gravacao')))}
+                      >
+                        {e.arquivado ? 'restaurar' : 'arquivar'}
+                      </button>
                     </td>
                   </tr>
                 ))}

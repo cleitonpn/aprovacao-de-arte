@@ -475,6 +475,26 @@ export function ouvirReprovacoes(fb, token, aoMudar, aoFalhar) {
   )
 }
 
+// ------------------------------------------------- envio fora do ar
+//
+// Arquivar, e não apagar. Um envio é registro histórico: diz que tal arte, com
+// tal veredicto, chegou em tal data — e isso continua verdade mesmo depois de
+// alguém limpar o arquivo do armazenamento para liberar espaço. Apagar o
+// registro junto perderia o histórico e, pior, faria a arte sumir do laudo de
+// uma discussão futura.
+//
+// O que se ganha arquivando é só o que incomoda: o registro sai da lista, e
+// ninguém mais clica num "Baixar" que responde 403.
+
+export function arquivarEnvio(fb, protocolo, por, arquivado = true) {
+  const { getFirestore, doc, updateDoc } = fb.firestore
+  return updateDoc(doc(getFirestore(fb.app), 'envios', protocolo), {
+    arquivado: Boolean(arquivado),
+    arquivadoEm: arquivado ? new Date().toISOString() : null,
+    arquivadoPor: arquivado ? (por ?? null) : null,
+  })
+}
+
 // ---------------------------------------------------- escuta em tempo real
 //
 // `onSnapshot` no lugar de recarregar a página. O analista deixa o painel
