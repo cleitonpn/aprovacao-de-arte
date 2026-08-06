@@ -19,6 +19,7 @@ import { pode } from '../core/permissoes.js'
 import { usarFeiras, baixarTexto } from './Admin.jsx'
 import PainelProjeto from './PainelProjeto.jsx'
 import ImportarProducao from './ImportarProducao.jsx'
+import ListaDePecas from './ListaDePecas.jsx'
 
 // Cadastro e acompanhamento dos projetos: quais peças cada stand precisa
 // entregar, e em que pé está cada uma.
@@ -962,83 +963,20 @@ function FormularioProjeto({ sessao, inicial, onSalvar, onCancelar }) {
       <h3>Peças do stand</h3>
       {erros.pecas && <p className="erro-campo">{erros.pecas}</p>}
 
-      {dados.pecas.map((peca, i) => (
-        <div className="peca-editor" key={peca.id}>
-          <div className="linha">
-            <label className="campo cresce">
-              <span>Nome da peça</span>
-              <input
-                type="text" value={peca.rotulo}
-                placeholder="Lona de fundo"
-                onChange={(e) => alterarPeca(i, {
-                  rotulo: e.target.value,
-                  // Enquanto o tipo não for escolhido à mão, ele acompanha o
-                  // nome: quem digita "adesivo de balcão" não deveria precisar
-                  // repetir a informação no seletor ao lado.
-                  ...(peca.tipoManual ? {} : { perfilId: perfilPorTexto(e.target.value) }),
-                })}
-              />
-            </label>
-            <label className="campo">
-              <span>Tipo</span>
-              <select
-                value={peca.perfilId}
-                onChange={(e) => alterarPeca(i, { perfilId: e.target.value, tipoManual: true })}
-              >
-                {PERFIS_PADRAO.map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}
-              </select>
-            </label>
-          </div>
-          <div className="linha">
-            <label className="campo">
-              <span>Largura (cm)</span>
-              <input
-                type="number" min="1" step="0.1" value={peca.larguraCm || ''}
-                onChange={(e) => alterarPeca(i, { larguraCm: Number(e.target.value) })}
-              />
-            </label>
-            <label className="campo">
-              <span>Altura (cm)</span>
-              <input
-                type="number" min="1" step="0.1" value={peca.alturaCm || ''}
-                onChange={(e) => alterarPeca(i, { alturaCm: Number(e.target.value) })}
-              />
-            </label>
-            <label className="campo">
-              <span>Escala aceita</span>
-              <select value={peca.escalaFator} onChange={(e) => alterarPeca(i, { escalaFator: Number(e.target.value) })}>
-                {ESCALAS.map((s) => <option key={s.id} value={s.fator}>{s.rotulo}</option>)}
-              </select>
-            </label>
-            <button
-              className="btn btn-ghost perigo"
-              type="button"
-              onClick={() => setDados((d) => ({ ...d, pecas: d.pecas.filter((_, j) => j !== i) }))}
-            >
-              Remover
-            </button>
-          </div>
+      <ListaDePecas
+        pecas={dados.pecas}
+        onMudar={(pecas) => setDados((d) => ({ ...d, pecas }))}
+        erros={erros}
+        Gabarito={({ peca, onMudar }) => (
           <EditorGabarito
             sessao={sessao}
             feira={dados.feira}
             stand={dados.stand}
             peca={peca}
-            onMudar={(gabarito) => alterarPeca(i, { gabarito })}
+            onMudar={onMudar}
           />
-          {erros.porPeca?.[i] && <em className="erro-campo">{erros.porPeca[i]}</em>}
-        </div>
-      ))}
-
-      <div className="acoes">
-        <button
-          className="btn btn-ghost"
-          type="button"
-          disabled={dados.pecas.length >= MAXIMO_PECAS}
-          onClick={() => setDados((d) => ({ ...d, pecas: [...d.pecas, pecaNova()] }))}
-        >
-          Adicionar peça
-        </button>
-      </div>
+        )}
+      />
 
       <label className="alternador">
         <input

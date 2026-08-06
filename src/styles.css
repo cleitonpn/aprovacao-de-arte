@@ -900,3 +900,12 @@ textarea { width: 100%; font: inherit; font-size: 13px; padding: 9px 11px; borde
 .linha-producao-topo { margin: 0; }
 .campo-email-producao { margin: 6px 0 2px; max-width: 420px; }
 .campo-email-producao span { font-size: 12px; }
+
+/* Peças na importação: o conjunto comum e o editor por stand. */
+.bloco-pecas-importacao { margin-top: 14px; border-style: dashed; }
+.bloco-pecas-importacao .escolha-modo { margin-bottom: 12px; }
+.pecas-do-stand {
+  margin: 8px 0 4px; padding-left: 10px;
+  border-left: 2px solid var(--borda);
+}
+.pecas-do-stand > .dica-campo { display: block; margin-bottom: 4px; font-weight: 600; }

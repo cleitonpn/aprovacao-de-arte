@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { projetoNovo } from '../data/projeto.js'
+import { projetoNovo, pecaNova } from '../data/projeto.js'
+import ListaDePecas from './ListaDePecas.jsx'
 import { salvarProjetos } from '../services/projetos.js'
 import { lerProducao, lerProjetosParaCruzar, vincularAProducao } from '../services/producao.js'
 import { cruzarComExistentes, feirasDaProducao, pendenciasDe } from '../core/producao.js'
@@ -19,10 +20,12 @@ import { traduzirErroAuth } from '../services/sessao.js'
 // 2. **Nada é sobrescrito.** Quem já está cadastrado aparece marcado e fora
 //    do alcance do clique. Reimportar um stand criaria um segundo link para o
 //    mesmo cliente e dividiria a arte entre duas fichas.
-// 3. **As peças ficam para depois.** O app não sabe o que é lona nem
-//    testeira, e nunca vai saber. O projeto nasce sem peça nenhuma e o
-//    analista cadastra em seguida — exigir as peças aqui seria pedir para
-//    cadastrar 40 stands antes de conseguir salvar o primeiro.
+// 3. **As peças são escolha do admin.** O app não sabe o que é lona nem
+//    testeira, e nunca vai saber — então elas nascem aqui. Dá para definir um
+//    conjunto que vale para todos os marcados (feira de stands padronizados) ou
+//    stand a stand (feira de projetos únicos). Nada é obrigatório: importar sem
+//    peça continua valendo, e o painel marca o stand em vermelho até alguém
+//    cadastrá-las.
 
 export default function ImportarProducao({ sessao, onPronto, onCancelar }) {
   const [dados, setDados] = useState(null)
@@ -34,6 +37,13 @@ export default function ImportarProducao({ sessao, onPronto, onCancelar }) {
   const [marcados, setMarcados] = useState(() => new Set())
   const [emails, setEmails] = useState({})
   const [gravando, setGravando] = useState(null)
+  // Como as peças entram: iguais para todos os marcados, ou uma lista por
+  // stand. A escolha é do admin porque a operação tem os dois casos — feira de
+  // stands padronizados (mesma lona, mesma testeira) e feira de projetos
+  // únicos —, e adivinhar erraria metade das vezes.
+  const [modoPecas, setModoPecas] = useState('todos') // 'todos' | 'individual'
+  const [modelo, setModelo] = useState([])
+  const [pecasPorStand, setPecasPorStand] = useState({})
 
   useEffect(() => {
     let vivo = true
@@ -89,7 +99,7 @@ export default function ImportarProducao({ sessao, onPronto, onCancelar }) {
           stand: c.stand,
           localizacao: c.localizacao,
           linkDrive: c.linkDrive,
-          pecas: [],
+          pecas: pecasDe(c.producaoId),
         }),
         // A chave que liga os dois sistemas. É por causa dela que o app vai
         // conseguir, depois, saber de qual projeto vem a prova e o status.
@@ -105,6 +115,22 @@ export default function ImportarProducao({ sessao, onPronto, onCancelar }) {
       setErro(traduzirErroAuth(e, 'gravacao'))
       setGravando(null)
     }
+  }
+
+  /**
+   * As peças que este stand recebe.
+   *
+   * No modo "todos", cada stand ganha uma CÓPIA do modelo, com ids próprios.
+   * Compartilhar os ids entre projetos faria dois stands diferentes gravarem
+   * entrega e status na mesma chave — cada projeto tem seu próprio mapa de
+   * `entregas` e `controle`, e ids repetidos confundem quem for ler o
+   * histórico depois.
+   */
+  const pecasDe = (producaoId) => {
+    const base = modoPecas === 'todos' ? modelo : (pecasPorStand[producaoId] || [])
+    return base
+      .filter((p) => p.rotulo?.trim() && p.larguraCm > 0 && p.alturaCm > 0)
+      .map((p) => pecaNova({ ...p, id: '' }))
   }
 
   const vincular = async (linha) => {
@@ -129,9 +155,9 @@ export default function ImportarProducao({ sessao, onPronto, onCancelar }) {
           <h2>Importar da produção</h2>
           <p className="ajuda">
             Feira, expositor, stand e localização vêm do app de produção — os
-            mesmos dados, sem redigitar. O que o app não tem é o{' '}
-            <strong>e-mail</strong> (você completa aqui) e as{' '}
-            <strong>peças de arte</strong> (o analista cadastra depois).
+            mesmos dados, sem redigitar. O que o app não tem, e você define
+            aqui: o <strong>e-mail</strong> do expositor e as{' '}
+            <strong>peças de arte</strong> de cada stand.
           </p>
         </div>
         <button className="btn btn-ghost" onClick={onCancelar}>Cancelar</button>
@@ -198,13 +224,24 @@ export default function ImportarProducao({ sessao, onPronto, onCancelar }) {
                 onMarcar={() => alternar(c.producaoId)}
                 onEmail={(v) => setEmails((a) => ({ ...a, [c.producaoId]: v }))}
                 onVincular={() => vincular(c)}
+                pecas={modoPecas === 'individual' ? (pecasPorStand[c.producaoId] || []) : null}
+                onPecas={(pecas) => setPecasPorStand((a) => ({ ...a, [c.producaoId]: pecas }))}
               />
             ))}
           </ul>
 
+          <EscolhaDasPecas
+            modo={modoPecas}
+            onModo={setModoPecas}
+            modelo={modelo}
+            onModelo={setModelo}
+            quantos={selecionados.length}
+          />
+
           <Rodape
             selecionados={selecionados}
             emails={emails}
+            pecasDe={pecasDe}
             gravando={gravando}
             onImportar={importar}
           />
@@ -214,7 +251,7 @@ export default function ImportarProducao({ sessao, onPronto, onCancelar }) {
   )
 }
 
-function LinhaDaProducao({ cliente, marcado, email, onMarcar, onEmail, onVincular }) {
+function LinhaDaProducao({ cliente, marcado, email, onMarcar, onEmail, onVincular, pecas, onPecas }) {
   const faltas = marcado ? pendenciasDe(cliente, email) : []
 
   return (
@@ -262,6 +299,17 @@ function LinhaDaProducao({ cliente, marcado, email, onMarcar, onEmail, onVincula
             {faltas.length > 0 && (
               <em className="dica-campo destaque-pendencia">Falta: {faltas.join(', ')}</em>
             )}
+
+            {pecas && (
+              <div className="pecas-do-stand">
+                <span className="dica-campo">Peças deste stand</span>
+                <ListaDePecas
+                  pecas={pecas}
+                  onMudar={onPecas}
+                  vazio="Sem peças — este stand será importado vazio."
+                />
+              </div>
+            )}
           </>
         )}
       </div>
@@ -269,8 +317,72 @@ function LinhaDaProducao({ cliente, marcado, email, onMarcar, onEmail, onVincula
   )
 }
 
-function Rodape({ selecionados, emails, gravando, onImportar }) {
+/**
+ * Como as peças entram nos stands escolhidos.
+ *
+ * Os dois modos existem porque a operação tem os dois casos, e adivinhar
+ * erraria metade das vezes: feira de stands padronizados, onde 20 stands de
+ * 9 m² levam a mesma lona e a mesma testeira; e feira de projetos únicos, onde
+ * cada stand tem a sua lista.
+ *
+ * Vale dizer o caminho que a tela não força mas permite: para uma feira com
+ * dois padrões, importe em duas rodadas — marque os de 9 m², defina o conjunto
+ * deles, importe; depois os de 3 m². A área aparece na linha de cada stand
+ * justamente para isso.
+ */
+function EscolhaDasPecas({ modo, onModo, modelo, onModelo, quantos }) {
+  return (
+    <div className="cartao bloco-pecas-importacao">
+      <div className="titulo-secao">
+        <h3>Peças destes stands</h3>
+        {quantos > 0 && <span className="dica-campo">{quantos} selecionado(s)</span>}
+      </div>
+
+      <div className="escolha-modo">
+        <label className={modo === 'todos' ? 'ativo' : ''}>
+          <input type="radio" checked={modo === 'todos'} onChange={() => onModo('todos')} />
+          <span>
+            <strong>As mesmas para todos os selecionados</strong>
+            <em>Stands padronizados: cada um recebe uma cópia da lista abaixo.</em>
+          </span>
+        </label>
+        <label className={modo === 'individual' ? 'ativo' : ''}>
+          <input type="radio" checked={modo === 'individual'} onChange={() => onModo('individual')} />
+          <span>
+            <strong>Definir stand a stand</strong>
+            <em>Projetos diferentes: a lista de peças abre dentro de cada stand marcado.</em>
+          </span>
+        </label>
+      </div>
+
+      {modo === 'todos'
+        ? (
+          <>
+            <ListaDePecas
+              pecas={modelo}
+              onMudar={onModelo}
+              vazio="Nenhuma peça no conjunto. Sem peças, os stands são importados vazios e o cliente não tem o que enviar."
+            />
+            <p className="nota">
+              Cada stand recebe uma <strong>cópia</strong> desta lista, com
+              medidas próprias a partir daí — editar um depois não mexe nos
+              outros. Peça sem nome ou sem medida é ignorada.
+            </p>
+          </>
+        )
+        : (
+          <p className="ajuda">
+            Marque um stand na lista acima e a lista de peças dele aparece ali
+            mesmo, abaixo do e-mail.
+          </p>
+        )}
+    </div>
+  )
+}
+
+function Rodape({ selecionados, emails, pecasDe, gravando, onImportar }) {
   const semEmail = selecionados.filter((c) => pendenciasDe(c, emails[c.producaoId]).length)
+  const semPecas = selecionados.filter((c) => !pecasDe(c.producaoId).length)
 
   if (gravando) {
     return (
@@ -295,12 +407,14 @@ function Rodape({ selecionados, emails, gravando, onImportar }) {
           Importar {selecionados.length || ''} {selecionados.length === 1 ? 'stand' : 'stands'}
         </button>
       </div>
-      <p className="nota">
-        Os projetos nascem <strong>sem peças</strong>: o app de produção não
-        conhece as artes do stand. Depois de importar, cadastre as peças de cada
-        um — até lá o link do cliente abre uma lista vazia, e o painel marca
-        esses stands como incompletos.
-      </p>
+      {semPecas.length > 0 && (
+        <p className="nota">
+          {semPecas.length} dos selecionados ficam <strong>sem peça nenhuma</strong>.
+          Podem ser importados assim — o cadastro existe e o link funciona —, mas
+          o cliente abre uma lista vazia e não tem o que enviar. O painel marca
+          esses stands em vermelho até alguém cadastrar as peças.
+        </p>
+      )}
     </>
   )
 }
