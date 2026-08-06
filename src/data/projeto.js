@@ -191,6 +191,11 @@ export function projetoNovo(parcial = {}) {
     // Pasta do projeto no Drive: o cliente consulta planta, memorial e
     // referências sem precisar pedir por e-mail.
     linkDrive: parcial.linkDrive || '',
+    // Elo com o app de produção, quando o projeto veio de lá. É por esta chave
+    // que o app descobre, depois, de qual projeto vêm a prova e o status da
+    // arte — sem ela os dois sistemas não têm como se reconhecer.
+    producaoId: parcial.producaoId || '',
+    producaoFeira: parcial.producaoFeira || '',
     pecas: (parcial.pecas || []).map(pecaNova),
     aceitaAvulsos: parcial.aceitaAvulsos !== false,
   }
@@ -234,6 +239,11 @@ export function normalizarProjeto(p) {
     stand: texto(p.stand, 160),
     localizacao: texto(p.localizacao, 160),
     linkDrive: texto(p.linkDrive, 800),
+    // Esta lista é branca: campo que não está aqui é DESCARTADO na gravação,
+    // em silêncio. O elo com a produção precisa constar, senão a importação
+    // grava um projeto que não se liga a nada e nada na tela denuncia.
+    producaoId: texto(p.producaoId, 200),
+    producaoFeira: texto(p.producaoFeira, 160),
     aceitaAvulsos: p.aceitaAvulsos !== false,
     pecas: (p.pecas || []).map((peca) => ({
       id: peca.id || idDePeca(),

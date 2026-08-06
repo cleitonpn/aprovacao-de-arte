@@ -893,3 +893,10 @@ textarea { width: 100%; font: inherit; font-size: 13px; padding: 9px 11px; borde
 @media (prefers-reduced-motion: reduce) {
   .ao-vivo::before, .btn.pulsa { animation: none; }
 }
+
+/* ------------------------------------------ importação da produção */
+.lista-producao li { padding: 8px 0; border-bottom: 1px solid var(--borda); }
+.lista-producao li:last-child { border-bottom: 0; }
+.linha-producao-topo { margin: 0; }
+.campo-email-producao { margin: 6px 0 2px; max-width: 420px; }
+.campo-email-producao span { font-size: 12px; }

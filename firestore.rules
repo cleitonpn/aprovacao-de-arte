@@ -237,6 +237,28 @@ service cloud.firestore {
       allow delete: if ehAdmin();
     }
 
+    // O espelho do app de produção.
+    //
+    // Quem escreve aqui é a ação agendada do GitHub, com conta de SERVIÇO — e
+    // conta de serviço passa por cima destas regras. Então "ninguém escreve"
+    // abaixo é literal: nenhuma sessão de navegador grava nada, nem a do time.
+    // É a garantia de que o espelho reflete a produção e mais nada; um dado
+    // editado aqui divergiria da origem sem deixar rastro, e ninguém saberia
+    // qual dos dois está certo.
+    //
+    // Ler é só do time: é a carteira de clientes da empresa inteira, com
+    // produtor, atendimento e metragem. Não tem por que chegar ao navegador de
+    // um expositor.
+    match /producao_clientes/{id} {
+      allow read: if ehAdmin();
+      allow write: if false;
+    }
+
+    match /producao_estado/{id} {
+      allow read: if ehAdmin();
+      allow write: if false;
+    }
+
     // Allowlist do painel, agora gerenciada pela tela "Analistas".
     //
     // Quem já tem acesso pode liberar outra pessoa. É uma escolha consciente:

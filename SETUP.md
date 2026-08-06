@@ -101,6 +101,69 @@ arquivo o domínio se perde numa delas.
 
 ---
 
+## Ponte com o app de produção
+
+A ferramenta importa feira, expositor, stand e localização do app de produção
+(`montagem-uset`) em vez de redigitar. São dois projetos Firebase separados e
+continuam separados: uma **ação agendada do GitHub** copia os expositores para
+uma coleção só de leitura deste projeto, e a tela lê daqui.
+
+Nenhum navegador fala com o outro projeto — nem o do cliente, nem o do
+analista. A alternativa seria colocar a credencial do projeto de produção
+dentro deste site.
+
+### O que preparar (uma vez)
+
+**1. Duas contas de serviço.** No console do Google Cloud de cada projeto,
+IAM → Contas de serviço → Criar chave (JSON):
+
+| Projeto | Permissão | Para quê |
+|---|---|---|
+| `montagem-uset` | leitura no Firestore | ler `fair_clients` |
+| `aprovacao-de-arte-49bc3` | escrita no Firestore | gravar o espelho |
+
+**2. Dois secrets neste repositório** (Settings → Secrets and variables →
+Actions → New repository secret). Cole o **JSON inteiro**, com as chaves `{ }`:
+
+| Secret | Conteúdo |
+|---|---|
+| `FIREBASE_SA_PRODUCAO` | JSON da conta de `montagem-uset` |
+| `FIREBASE_SA_ARTE` | JSON da conta deste projeto |
+
+**3. Republique as regras do Firestore** — as coleções `producao_clientes` e
+`producao_estado` precisam constar. Elas são de leitura só para o time e
+**ninguém escreve pelo navegador**: quem grava é a ação agendada, com conta de
+serviço, que passa por cima das regras. Um dado editado à mão ali divergiria da
+origem sem deixar rastro.
+
+**4. Rode a sincronização uma vez à mão** em Actions → *Sincronizar dados da
+produção* → Run workflow. Depois disso ela roda sozinha a cada 15 minutos.
+
+### Como usar
+
+`#/projetos` → **Importar da produção**. Escolha a feira, marque os stands,
+preencha o e-mail de cada um (o app de produção não tem esse dado) e importe.
+
+Três coisas que a tela faz de propósito:
+
+- **Você escolhe o que entra.** Uma feira do app tem stands sem arte nenhuma
+  conosco — montagem só, ou cliente que trouxe a comunicação visual pronta.
+  Importar tudo encheria o painel de stands que nunca vão receber arte, e o
+  "faltam 12 artes" deixaria de significar coisa alguma.
+- **Nada é sobrescrito.** Quem já existe aparece marcado e fora do alcance do
+  clique. Se o stand foi cadastrado à mão antes desta ponte, ela reconhece pelo
+  par feira + stand e oferece **vincular** — o que dá ao app o elo com este
+  projeto sem criar duplicata.
+- **Os projetos nascem sem peças.** O app não conhece as artes do stand e nunca
+  vai conhecer. Cadastre as peças depois de importar; até lá o painel marca
+  esses stands com **sem peças cadastradas** em vermelho, porque o link do
+  cliente abriria uma lista vazia.
+
+O elo que a importação cria (`producaoId`) é o que vai permitir, nas próximas
+etapas, o app mostrar a prova de aprovação e o status da arte de cada stand.
+
+---
+
 ## Como usar, na ordem da operação
 
 ### 1. Cadastrar a feira e o prazo (`#/projetos`)

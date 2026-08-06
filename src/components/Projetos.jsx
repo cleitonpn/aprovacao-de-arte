@@ -18,6 +18,7 @@ import { traduzirErroAuth } from '../services/sessao.js'
 import { pode } from '../core/permissoes.js'
 import { usarFeiras, baixarTexto } from './Admin.jsx'
 import PainelProjeto from './PainelProjeto.jsx'
+import ImportarProducao from './ImportarProducao.jsx'
 
 // Cadastro e acompanhamento dos projetos: quais peças cada stand precisa
 // entregar, e em que pé está cada uma.
@@ -184,6 +185,15 @@ export default function Projetos({ sessao, feiraInicial = '', tokenInicial = '' 
     await recarregar()
   }
 
+  if (painel === 'producao') {
+    return (
+      <ImportarProducao
+        sessao={sessao}
+        onPronto={async () => { setPainel(null); await recarregar() }}
+        onCancelar={() => setPainel(null)}
+      />
+    )
+  }
   if (painel === 'importar') {
     return <Importacao sessao={sessao} onPronto={async () => { setPainel(null); await recarregar() }} onCancelar={() => setPainel(null)} />
   }
@@ -260,6 +270,9 @@ export default function Projetos({ sessao, feiraInicial = '', tokenInicial = '' 
         {podeCadastrar && (
           <div className="acoes">
             <button className="btn" onClick={() => setPainel('importar')}>Importar planilha</button>
+            <button className="btn btn-ghost" onClick={() => setPainel('producao')}>
+              Importar da produção
+            </button>
             <button
               className="btn btn-ghost"
               onClick={() => setPainel({ projeto: projetoNovo({ feira: feiras.find((f) => f.id === feiraId)?.nome || '' }) })}
@@ -524,6 +537,13 @@ function LinhaProjeto({ projeto, sit, temMensagemNova, podeCadastrar, podeCobrar
           {sit.emProducao > 0 && <em className="dica-campo">{sit.emProducao} em produção</em>}
           {sit.apoio.length > 0 && <em className="dica-campo">{sit.apoio.length} arquivo(s) de apoio</em>}
           {sit.prazo.prorrogado && <em className="dica-campo">prazo prorrogado</em>}
+          {/*
+            Projeto importado da produção nasce sem peça: o app de produção não
+            conhece as artes do stand. Enquanto estiver assim, o link do cliente
+            abre uma lista vazia — e é por isso que o aviso é vermelho, não uma
+            nota discreta.
+          */}
+          {sit.total === 0 && <span className="tag reprovado">sem peças cadastradas</span>}
         </div>
       </div>
 

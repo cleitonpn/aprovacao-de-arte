@@ -1,0 +1,42 @@
+name: Sincronizar dados da produção
+
+# Traz os expositores do app de produção para o espelho deste projeto, de onde
+# a tela "Importar da produção" lê.
+#
+# Agendado, e não em tempo real, de propósito: feira e expositor não mudam de
+# minuto a minuto, e a alternativa — o navegador do analista conversando direto
+# com o outro projeto Firebase — colocaria a credencial daquele projeto dentro
+# do nosso site. Quinze minutos de atraso numa lista que muda uma vez por
+# semana é um preço barato por isso.
+#
+# Antes do primeiro uso, dois secrets em Settings → Secrets and variables →
+# Actions:
+#
+#   FIREBASE_SA_PRODUCAO  service account do projeto montagem-uset (leitura)
+#   FIREBASE_SA_ARTE      service account deste projeto (escrita)
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+# Duas execuções ao mesmo tempo escreveriam o mesmo espelho em ordem
+# imprevisível. A segunda espera; nenhuma é cancelada no meio de um lote.
+concurrency:
+  group: sincronizar-producao
+  cancel-in-progress: false
+
+jobs:
+  sincronizar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: node tools/sincronizar-producao.mjs
+        env:
+          FIREBASE_SA_PRODUCAO: ${{ secrets.FIREBASE_SA_PRODUCAO }}
+          FIREBASE_SA_ARTE: ${{ secrets.FIREBASE_SA_ARTE }}
