@@ -112,3 +112,70 @@ export function pendenciasDe(cliente, email) {
 }
 
 const EMAIL_SIMPLES = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
+
+// ------------------------------------------- o que o app de produção vê
+//
+// A ferramenta controla a arte PEÇA a peça; o app precisa de uma linha por
+// stand. Quem lê no app é o produtor no meio da montagem, e a pergunta dele é
+// uma só: "posso contar com essa arte?".
+//
+// Por isso o agregado é o estado MAIS ATRASADO, não o mais avançado nem uma
+// média. Um stand com quatro peças impressas e uma sem arte nenhuma não está
+// 80% pronto — está esperando o cliente, e é isso que o produtor precisa
+// enxergar. O contador ao lado é o que separa "falta uma" de "falta tudo".
+
+export const ESTADOS_ARTE = {
+  sem_pecas: { rotulo: 'Artes não cadastradas', cor: 'cinza' },
+  aguardando: { rotulo: 'Aguardando cliente', cor: 'vermelho' },
+  em_analise: { rotulo: 'Em análise na CV', cor: 'laranja' },
+  aprovada: { rotulo: 'Aprovada', cor: 'verde' },
+  em_impressao: { rotulo: 'Em impressão', cor: 'azul' },
+  impressa: { rotulo: 'Impressa', cor: 'verde' },
+}
+
+/**
+ * O estado da arte de um stand, do jeito que o app mostra.
+ *
+ * `resumo` é o de `resumoDoProjeto` — passado de fora para esta função ficar
+ * pura e o script de sincronização usar exatamente o mesmo motor que a tela do
+ * analista. Duas implementações do mesmo estado divergiriam em uma semana, e o
+ * produtor veria no app um status que o analista não reconhece.
+ */
+export function estadoDaArte(resumo) {
+  if (!resumo || !resumo.total) return 'sem_pecas'
+  // A ordem É a regra: o primeiro que casar vence, e eles estão do mais
+  // atrasado para o mais adiantado.
+  if (resumo.aguardandoCliente > 0) return 'aguardando'
+  const recebidasSemProva = resumo.pecas.filter((p) => p.status === 'recebida').length
+  if (recebidasSemProva > 0) return 'em_analise'
+  if (resumo.impressas === resumo.total) return 'impressa'
+  const aprovadasParadas = resumo.pecas.filter((p) => p.status === 'aprovada').length
+  if (aprovadasParadas > 0) return 'aprovada'
+  if (resumo.emImpressao > 0) return 'em_impressao'
+  return 'aprovada'
+}
+
+/** A prova mais recente que tem arquivo — é ela que vale no app. */
+export function provaVigente(provas = []) {
+  const comArquivo = provas.filter((p) => p?.arquivo?.link)
+  if (!comArquivo.length) return null
+  const p = comArquivo[0] // `provasDoProjeto` já vem da mais nova para a mais velha
+  return { link: p.arquivo.link, em: p.enviadaEm || null, id: p.id }
+}
+
+/** O documento que a ferramenta publica para o app ler. */
+export function statusParaProducao(projeto, resumo, provas) {
+  const estado = estadoDaArte(resumo)
+  const prova = provaVigente(provas)
+  return {
+    producaoId: projeto.producaoId,
+    fairName: projeto.producaoFeira || projeto.feira || '',
+    token: projeto.token,
+    estado,
+    rotulo: ESTADOS_ARTE[estado].rotulo,
+    recebidas: resumo?.recebidas ?? 0,
+    total: resumo?.total ?? 0,
+    linkProva: prova?.link || '',
+    provaEm: prova?.em || '',
+  }
+}

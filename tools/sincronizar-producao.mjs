@@ -7,24 +7,34 @@
 // nosso site. Aqui as duas credenciais ficam em secrets do repositório e nunca
 // saem do runner.
 //
-// O sentido é UM só: produção → ferramenta, e só leitura do lado de lá. Este
-// script não escreve nada no projeto do app. Quando chegar a vez do status da
-// arte e da prova irem para o app, será uma segunda função aqui, explícita, e
-// não um efeito colateral desta.
+// São dois sentidos, e eles não se misturam:
+//
+//   produção → ferramenta   os expositores, para a tela de importação
+//   ferramenta → produção   o status da arte e a prova, para o app mostrar
+//
+// O segundo sentido só toca stands que foram importados (têm `producaoId`) e
+// escreve numa coleção própria, `cv_status`. Nunca em `fair_clients`: aquela é
+// o espelho da planilha do app e não é nossa para alterar.
 //
 // Secrets necessários no repositório (Settings → Secrets → Actions):
 //
 //   FIREBASE_SA_PRODUCAO  — service account do projeto do app (montagem-uset),
-//                           com permissão de LEITURA no Firestore
-//   FIREBASE_SA_ARTE      — service account deste projeto, com escrita
+//                           com LEITURA em fair_clients e ESCRITA em cv_status
+//   FIREBASE_SA_ARTE      — service account deste projeto
 //
 // Sem eles o script sai com uma mensagem clara em vez de uma pilha de erro.
 
 import { initializeApp, cert } from 'firebase-admin/app'
 import { getFirestore, FieldValue } from 'firebase-admin/firestore'
+// O MESMO motor que a tela do analista usa. Recalcular o estado aqui, com
+// outra implementação, garantiria que em uma semana o app mostrasse um status
+// que o analista não reconhece.
+import { resumoDoProjeto, provasDoProjeto } from '../src/core/fluxo.js'
+import { statusParaProducao } from '../src/core/producao.js'
 
 const COLECAO_ORIGEM = 'fair_clients'
 const COLECAO_ESPELHO = 'producao_clientes'
+const COLECAO_STATUS = 'cv_status'
 const DOC_ESTADO = 'producao_estado/atual'
 
 // O Firestore aceita 500 operações por lote. 400 deixa folga para o documento
@@ -72,13 +82,8 @@ function paraEspelho(id, d) {
 /** Assinatura do conteúdo, para regravar só o que mudou. */
 const assinatura = (o) => JSON.stringify(o)
 
-async function principal() {
-  const saProducao = credencial('FIREBASE_SA_PRODUCAO')
-  const saArte = credencial('FIREBASE_SA_ARTE')
-
-  const producao = getFirestore(initializeApp({ credential: cert(saProducao) }, 'producao'))
-  const arte = getFirestore(initializeApp({ credential: cert(saArte) }, 'arte'))
-
+/** produção → ferramenta: os expositores, para a tela de importação. */
+async function espelharExpositores(producao, arte, saProducao) {
   console.log(`Lendo ${COLECAO_ORIGEM} de ${saProducao.project_id}…`)
   const origem = await producao.collection(COLECAO_ORIGEM).get()
   console.log(`  ${origem.size} expositores.`)
@@ -139,6 +144,75 @@ async function principal() {
   })
 
   console.log(`Espelho atualizado: ${gravados} gravados, ${removidos} removidos, ${origem.size} no total.`)
+}
+
+/**
+ * ferramenta → produção: o status da arte e a prova de aprovação.
+ *
+ * Só stands importados entram — os que têm `producaoId`. Um projeto cadastrado
+ * à mão, sem elo, não tem para onde ir, e inventar a correspondência pelo nome
+ * aqui seria arriscar escrever o status de um stand na ficha de outro.
+ */
+async function publicarStatusDaArte(producao, arte) {
+  console.log('Calculando o status da arte dos stands importados…')
+  const snap = await arte.collection('projetos').where('producaoId', '!=', '').get()
+  console.log(`  ${snap.size} projetos ligados à produção.`)
+
+  const destino = producao.collection(COLECAO_STATUS)
+  const jaLa = await destino.get()
+  const assinaturas = new Map(jaLa.docs.map((d) => [d.id, d.data().assinatura || '']))
+
+  let gravados = 0
+  let lote = producao.batch()
+  let noLote = 0
+  const vistos = new Set()
+
+  for (const doc of snap.docs) {
+    const projeto = { token: doc.id, ...doc.data() }
+    if (!projeto.producaoId) continue
+
+    // O mesmo motor da tela do analista, sem segunda implementação.
+    const resumo = resumoDoProjeto(projeto)
+    const dados = statusParaProducao(projeto, resumo, provasDoProjeto(projeto))
+    vistos.add(projeto.producaoId)
+
+    const marca = assinatura(dados)
+    if (assinaturas.get(projeto.producaoId) === marca) continue
+
+    lote.set(destino.doc(projeto.producaoId), {
+      ...dados,
+      assinatura: marca,
+      atualizadoEm: FieldValue.serverTimestamp(),
+    })
+    gravados += 1
+    noLote += 1
+    if (noLote >= POR_LOTE) { await lote.commit(); lote = producao.batch(); noLote = 0 }
+  }
+
+  // Projeto apagado aqui some do app. Sem isto, o app mostraria para sempre o
+  // último status de um stand que não existe mais.
+  let removidos = 0
+  for (const d of jaLa.docs) {
+    if (vistos.has(d.id)) continue
+    lote.delete(d.ref)
+    removidos += 1
+    noLote += 1
+    if (noLote >= POR_LOTE) { await lote.commit(); lote = producao.batch(); noLote = 0 }
+  }
+
+  if (noLote) await lote.commit()
+  console.log(`Status publicado: ${gravados} gravados, ${removidos} removidos.`)
+}
+
+async function principal() {
+  const saProducao = credencial('FIREBASE_SA_PRODUCAO')
+  const saArte = credencial('FIREBASE_SA_ARTE')
+
+  const producao = getFirestore(initializeApp({ credential: cert(saProducao) }, 'producao'))
+  const arte = getFirestore(initializeApp({ credential: cert(saArte) }, 'arte'))
+
+  await espelharExpositores(producao, arte, saProducao)
+  await publicarStatusDaArte(producao, arte)
 }
 
 principal().catch((e) => {

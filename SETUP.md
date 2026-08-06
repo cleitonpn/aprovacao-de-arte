@@ -119,7 +119,7 @@ IAM → Contas de serviço → Criar chave (JSON):
 
 | Projeto | Permissão | Para quê |
 |---|---|---|
-| `montagem-uset` | leitura no Firestore | ler `fair_clients` |
+| `montagem-uset` | leitura **e escrita** no Firestore | ler `fair_clients`, gravar `cv_status` |
 | `aprovacao-de-arte-49bc3` | escrita no Firestore | gravar o espelho |
 
 **2. Dois secrets neste repositório** (Settings → Secrets and variables →
@@ -159,8 +159,25 @@ Três coisas que a tela faz de propósito:
   esses stands com **sem peças cadastradas** em vermelho, porque o link do
   cliente abriria uma lista vazia.
 
-O elo que a importação cria (`producaoId`) é o que vai permitir, nas próximas
-etapas, o app mostrar a prova de aprovação e o status da arte de cada stand.
+### O que volta para o app
+
+A mesma ação agendada leva de volta, para os stands importados, o que o app
+mostra na ficha:
+
+- **A prova de aprovação**, que passa a ter prioridade sobre o print colado na
+  planilha. São o mesmo documento com idades diferentes: o da planilha
+  envelhece na primeira arte corrigida. A planilha continua valendo como
+  reserva, para o stand que ainda não foi importado.
+- **O status da arte**: aguardando cliente, em análise na CV, aprovada, em
+  impressão ou impressa, com o contador ("3 de 5 artes").
+
+O status é sempre o estado **mais atrasado** das peças do stand. Quatro peças
+impressas e uma sem arte não é quase pronto — é esperando o cliente, e é isso
+que quem monta precisa ver.
+
+Do lado do app, isso exige o APK novo (versão 1.0.89+90) e rodar lá o workflow
+de regras do Firestore, para `cv_status` ficar protegida contra escrita do
+cliente.
 
 ---
 
