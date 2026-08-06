@@ -137,12 +137,22 @@ serviço, que passa por cima das regras. Um dado editado à mão ali divergiria 
 origem sem deixar rastro.
 
 **4. Rode a sincronização uma vez à mão** em Actions → *Sincronizar dados da
-produção* → Run workflow. Depois disso ela roda sozinha a cada 15 minutos.
+produção* → Run workflow.
+
+Depois disso ela roda sozinha, mas **não conte com o horário**: o agendamento
+do GitHub é melhor esforço, e na medição real deu 23 minutos entre uma execução
+e a seguinte e 2h23 entre as outras duas. É por isso que a tela de importação
+lê **ao vivo** do app de produção, e o agendamento ficou só com dois papéis:
+levar o status da arte para o app e manter o espelho como reserva.
 
 ### Como usar
 
 `#/projetos` → **Importar da produção**. Escolha a feira, marque os stands,
 preencha o e-mail de cada um (o app de produção não tem esse dado) e importe.
+
+A lista vem **direto do app de produção**, sem esperar sincronização — a linha
+de resumo diz de onde veio. Se aparecer "do espelho", o projeto da produção não
+respondeu e você está vendo dados de antes; **Atualizar agora** tenta de novo.
 
 Três coisas que a tela faz de propósito:
 

@@ -3,11 +3,18 @@ name: Sincronizar dados da produção
 # Traz os expositores do app de produção para o espelho deste projeto, de onde
 # a tela "Importar da produção" lê.
 #
-# Agendado, e não em tempo real, de propósito: feira e expositor não mudam de
-# minuto a minuto, e a alternativa — o navegador do analista conversando direto
-# com o outro projeto Firebase — colocaria a credencial daquele projeto dentro
-# do nosso site. Quinze minutos de atraso numa lista que muda uma vez por
-# semana é um preço barato por isso.
+# O que este agendamento AINDA faz, depois que a tela passou a ler ao vivo:
+#
+# 1. leva o status da arte e a prova para o app de produção — este caminho
+#    escreve no outro projeto e não vai para o navegador de ninguém;
+# 2. mantém o espelho como RESERVA da tela de importação, para quando o
+#    projeto da produção não responder.
+#
+# Não é mais o caminho principal da importação, e por um motivo medido: o
+# agendamento do GitHub é "melhor esforço". Um `*/15` real deu 23 minutos entre
+# a primeira e a segunda execução e 2h23 entre a segunda e a terceira — em
+# horário de pico a tarefa entra numa fila compartilhada e atrasa ou é pulada.
+# Baixar o intervalo não adianta: é a mesma fila.
 #
 # Antes do primeiro uso, dois secrets em Settings → Secrets and variables →
 # Actions:

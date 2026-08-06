@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { projetoNovo, pecaNova } from '../data/projeto.js'
 import ListaDePecas from './ListaDePecas.jsx'
 import { salvarProjetos } from '../services/projetos.js'
 import { lerProducao, lerProjetosParaCruzar, vincularAProducao } from '../services/producao.js'
+import { lerProducaoAoVivo } from '../services/producaoDireta.js'
 import { cruzarComExistentes, feirasDaProducao, pendenciasDe } from '../core/producao.js'
 import { formatarDataHora } from '../core/datas.js'
 import { traduzirErroAuth } from '../services/sessao.js'
@@ -44,27 +45,51 @@ export default function ImportarProducao({ sessao, onPronto, onCancelar }) {
   const [modoPecas, setModoPecas] = useState('todos') // 'todos' | 'individual'
   const [modelo, setModelo] = useState([])
   const [pecasPorStand, setPecasPorStand] = useState({})
+  const [atualizando, setAtualizando] = useState(false)
 
-  useEffect(() => {
-    let vivo = true
-    ;(async () => {
-      try {
-        const [p, existentes] = await Promise.all([
-          lerProducao(sessao.fb),
-          lerProjetosParaCruzar(sessao.fb),
-        ])
-        if (!vivo) return
-        setDados(p)
-        setProjetos(existentes)
-        setFeira((atual) => atual || feirasDaProducao(p.clientes)[0]?.nome || '')
-      } catch (e) {
-        if (vivo) setErro(traduzirErroAuth(e))
-      } finally {
-        if (vivo) setCarregando(false)
-      }
-    })()
-    return () => { vivo = false }
+  /**
+   * Os expositores da produção, o mais fresco possível.
+   *
+   * Tenta a leitura AO VIVO primeiro e só cai para o espelho se ela falhar. A
+   * ordem é essa porque o espelho depende do agendamento do GitHub, que na
+   * medição real levou de 23 minutos a 2h23 entre uma execução e outra — quem
+   * está cadastrando uma feira não pode esperar isso por um stand que já
+   * existe no app.
+   *
+   * O espelho não é inútil: ele é a reserva para quando o outro projeto não
+   * responder, e continua sendo o que a sincronização agendada mantém para o
+   * caminho de volta (o status da arte indo para o app).
+   */
+  const buscar = useCallback(async ({ silencioso = false } = {}) => {
+    if (!silencioso) setCarregando(true)
+    try {
+      const [aoVivo, existentes] = await Promise.all([
+        lerProducaoAoVivo().catch((e) => {
+          console.warn('leitura ao vivo da produção falhou; usando o espelho', e)
+          return null
+        }),
+        lerProjetosParaCruzar(sessao.fb),
+      ])
+      const p = aoVivo || await lerProducao(sessao.fb)
+      setDados(p)
+      setProjetos(existentes)
+      setFeira((atual) => atual || feirasDaProducao(p.clientes)[0]?.nome || '')
+      setErro(null)
+      return p
+    } catch (e) {
+      setErro(traduzirErroAuth(e))
+      return null
+    } finally {
+      setCarregando(false)
+    }
   }, [sessao.fb])
+
+  useEffect(() => { buscar() }, [buscar])
+
+  const atualizarAgora = async () => {
+    setAtualizando(true)
+    try { await buscar({ silencioso: true }) } finally { setAtualizando(false) }
+  }
 
   const feiras = useMemo(() => feirasDaProducao(dados?.clientes || []), [dados])
 
@@ -167,11 +192,9 @@ export default function ImportarProducao({ sessao, onPronto, onCancelar }) {
 
       {!feiras.length && !erro && (
         <p className="nota">
-          O espelho da produção está vazio. Ele é preenchido por uma ação
-          agendada a cada 15 minutos — se acabou de ser configurada, aguarde a
-          primeira execução. Se persistir, confira os secrets{' '}
-          <code>FIREBASE_SA_PRODUCAO</code> e <code>FIREBASE_SA_ARTE</code> no
-          repositório.
+          Nenhum expositor veio da produção. Tente <strong>Atualizar agora</strong>;
+          se continuar vazio, o projeto da produção pode estar fora do ar ou o
+          domínio deste site pode não estar autorizado nele.
         </p>
       )}
 
@@ -195,13 +218,27 @@ export default function ImportarProducao({ sessao, onPronto, onCancelar }) {
           <p className="ajuda resumo-admin">
             <strong>{linhas.length}</strong> expositores nesta feira ·{' '}
             <strong>{novos.length}</strong> ainda não cadastrados ·{' '}
-            {linhas.length - novos.length} já existem aqui
-            {dados?.estado?.atualizadoEm && (
-              <> · dados de {formatarDataHora(dados.estado.atualizadoEm)}</>
-            )}
+            {linhas.length - novos.length} já existem aqui ·{' '}
+            {/*
+              De onde vieram os dados, sempre à vista. Sem isto, uma leitura
+              que caiu para o espelho pareceria igual a uma ao vivo — e o
+              analista cadastraria achando que viu tudo, sem o stand que
+              entrou no app há dez minutos.
+            */}
+            {dados?.aoVivo
+              ? <span className="dica-campo ao-vivo">direto do app de produção</span>
+              : (
+                <em className="dica-campo destaque-pendencia">
+                  do espelho{dados?.estado?.atualizadoEm && `, de ${formatarDataHora(dados.estado.atualizadoEm)}`}
+                  {' '}— o app de produção não respondeu
+                </em>
+              )}
           </p>
 
           <div className="acoes">
+            <button className="btn btn-ghost" onClick={atualizarAgora} disabled={atualizando}>
+              {atualizando ? 'Atualizando…' : 'Atualizar agora'}
+            </button>
             <button
               className="btn btn-ghost"
               onClick={() => setMarcados(new Set(novos.map((c) => c.producaoId)))}
