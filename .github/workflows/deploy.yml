@@ -10,9 +10,21 @@ permissions:
   pages: write
   id-token: write
 
+# Uma publicação por vez, e NUNCA cancelar a que está em andamento.
+#
+# Estava `cancel-in-progress: true`, e isso custou um dia. Publicação do Pages
+# cancelada no meio deixa o deployment preso do lado do GitHub, e as seguintes
+# ficam em `deployment_queued` até estourar o tempo — dez minutos por
+# tentativa, falhando em sequência. Quatro commits empurrados em seguida
+# bastaram para travar a fila e deixar no ar uma versão de véspera, enquanto as
+# correções pareciam publicadas.
+#
+# É também o que o workflow oficial do GitHub Pages usa, e pelo mesmo motivo:
+# publicação em produção deve terminar. Os pushes intermediários são pulados,
+# não cancelados — o último da fila publica e ele já contém os anteriores.
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build:
