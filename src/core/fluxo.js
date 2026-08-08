@@ -31,6 +31,12 @@ export const STATUS = {
   em_prova: { rotulo: 'Prova aguardando sua aprovação', ordem: 2, cor: 'alerta' },
   aprovada: { rotulo: 'Prova aprovada', ordem: 3, cor: 'ok' },
   reprovada: { rotulo: 'Prova reprovada — refazer', ordem: 4, cor: 'ruim' },
+  // Segunda camada: a análise automática aprovou o arquivo, mas quem recebe a
+  // arte para produzir achou problema. São coisas diferentes e precisam de
+  // rótulos diferentes — "reprovada" já significa que o CLIENTE recusou a
+  // nossa prova, e trocar o sentido da palavra no meio do fluxo confundiria as
+  // duas telas de uma vez.
+  devolvida: { rotulo: 'Recusada pelo time — refazer', ordem: 4, cor: 'ruim' },
   em_impressao: { rotulo: 'Em impressão', ordem: 5, cor: 'ok' },
   impressa: { rotulo: 'Impressa', ordem: 6, cor: 'ok' },
 }
@@ -38,7 +44,7 @@ export const STATUS = {
 export const STATUS_DO_TIME = ['em_impressao', 'impressa']
 
 /** Estados em que a peça está com o cliente, esperando ação dele. */
-export const PRECISA_DO_CLIENTE = ['aguardando', 'em_prova', 'reprovada']
+export const PRECISA_DO_CLIENTE = ['aguardando', 'em_prova', 'reprovada', 'devolvida']
 
 const mapa = (v) => (v && typeof v === 'object' ? v : {})
 
@@ -110,10 +116,25 @@ export function situacaoDaPeca(projeto, peca, agora = Date.now()) {
     ? controle.recusa
     : null
 
+  // A devolução fala de UMA versão, como a prova. Quando a arte corrigida
+  // chega, ela deixa de valer sozinha — senão a peça ficaria vermelha e
+  // escrita "refazer" justamente depois de o cliente ter refeito.
+  const devolucao = controle?.devolucao
+    && Number(controle.devolucao.paraVersao) === versaoRecebida
+    ? controle.devolucao
+    : null
+
   // O status do time vence: se a peça já está na impressora, nada do que o
   // cliente faça na tela dele muda isso.
   let status
-  if (STATUS_DO_TIME.includes(statusDoTime)) status = statusDoTime
+  // A devolução vem antes de tudo de propósito: ela é o time dizendo, DEPOIS
+  // de já ter recebido a arte, que aquela versão não serve. Se ficasse abaixo
+  // da resposta da prova, o caso que a motivou — comunicação visual achar erro
+  // numa arte já aprovada — apareceria como "aprovada" para o cliente, que é
+  // exatamente a tela errada. Quem devolve também tira a peça da produção
+  // (ver `devolverArte`), então não há contradição com "em impressão".
+  if (devolucao) status = 'devolvida'
+  else if (STATUS_DO_TIME.includes(statusDoTime)) status = statusDoTime
   else if (resposta?.decisao === 'aprovada') status = 'aprovada'
   else if (resposta && ehReprovada(resposta, peca.id)) status = 'reprovada'
   else if (resposta) status = 'aprovada' // reprovação parcial que não incluiu esta peça
@@ -126,6 +147,10 @@ export function situacaoDaPeca(projeto, peca, agora = Date.now()) {
     status, pedido: pedidoVigente, recusa: recusaVigente, prazo, versaoRecebida, liberadoAte, proximaVersao,
   })
 
+  // O motivo escrito pelo analista, para a tela do cliente mostrar. Sem isto o
+  // cliente veria "refazer" sem saber o quê — que é pior do que não devolver.
+  const motivoDaDevolucao = devolucao?.motivo || null
+
   return {
     peca,
     status,
@@ -133,6 +158,8 @@ export function situacaoDaPeca(projeto, peca, agora = Date.now()) {
     cor: STATUS[status]?.cor || 'neutro',
     entrega,
     pedido: pedidoVigente,
+    devolucao,
+    motivoDaDevolucao,
     controle,
     provaAtual,
     provas,
@@ -206,7 +233,11 @@ function motivoDeBloqueio({ status, pedido, recusa, prazo, versaoRecebida, liber
   // permissão para atender ao nosso próprio pedido seria absurdo — e o prazo,
   // pelo mesmo motivo, não se aplica: ele está corrigindo por causa da nossa
   // volta, não por ter se atrasado.
-  if (status === 'reprovada') return null
+  //
+  // Arte devolvida pelo time é o mesmo caso, com ainda menos margem para
+  // dúvida: fomos nós que recusamos. Pedir que ele peça licença para consertar
+  // o que nós apontamos travaria o cliente por um bloqueio nosso.
+  if (status === 'reprovada' || status === 'devolvida') return null
 
   const precisaDeLiberacao = versaoRecebida >= 1 && !liberado
 

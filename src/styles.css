@@ -465,6 +465,10 @@ textarea { width: 100%; font: inherit; font-size: 13px; padding: 9px 11px; borde
 .bloqueio.em_producao { background: var(--ruim-fundo); }
 .bloqueio.recusado { background: var(--ruim-fundo); }
 .bloqueio.prazo { background: var(--alerta-fundo); }
+/* Devolução não é parede: é recusa, mas com o envio liberado logo abaixo. A
+   barra à esquerda a distingue dos bloqueios de verdade. */
+.bloqueio.devolvida { background: var(--ruim-fundo); border-left: 3px solid var(--ruim); }
+.bloqueio.devolvida p:first-of-type { color: var(--texto); font-style: italic; }
 
 .destaque-extra { border-color: var(--alerta); background: var(--alerta-fundo); }
 .destaque-extra p { font-size: 13px; line-height: 1.55; }

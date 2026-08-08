@@ -501,6 +501,21 @@ function CartaoPeca({ situacao, perfis, politica, projeto, onEscolher, onAtualiz
           )
           : <p className="dica-campo">Mínimo {fmt(spec.minimo.largura)} × {fmt(spec.minimo.altura)} px ({spec.minimo.dpi} dpi)</p>}
 
+        {/* A devolução não é bloqueio — é o contrário, ela destrava o envio.
+            Por isso tem bloco próprio: o cliente precisa ler o motivo e ver o
+            botão de enviar logo abaixo, não um aviso que parece uma parede. */}
+        {situacao.devolucao && (
+          <div className="bloqueio devolvida">
+            <strong>O time recusou esta arte</strong>
+            <p>“{situacao.devolucao.motivo}”</p>
+            <p className="dica-campo">
+              Recusada em {fmtDataHora(situacao.devolucao.em)}. Envie a versão{' '}
+              {situacao.proximaVersao} corrigida — não precisa pedir liberação, e o prazo
+              não conta contra você nesta correção.
+            </p>
+          </div>
+        )}
+
         {bloqueio && (
           <div className={`bloqueio ${bloqueio.tipo}`}>
             <strong>{bloqueio.titulo}</strong>
@@ -552,8 +567,13 @@ function CartaoPeca({ situacao, perfis, politica, projeto, onEscolher, onAtualiz
           className="btn btn-ghost"
         />
         {situacao.podeEnviar && (
-          <button className={`btn ${entrega ? 'btn-ghost' : ''}`} onClick={onEscolher}>
-            {status === 'reprovada' ? 'Enviar arte corrigida' : entrega ? 'Enviar versão nova' : 'Enviar arte'}
+          <button
+            className={`btn ${entrega && status !== 'devolvida' ? 'btn-ghost' : ''}`}
+            onClick={onEscolher}
+          >
+            {status === 'reprovada' || status === 'devolvida'
+              ? `Enviar arte corrigida (v${situacao.proximaVersao})`
+              : entrega ? 'Enviar versão nova' : 'Enviar arte'}
           </button>
         )}
         {!situacao.podeEnviar && bloqueio?.podePedir && !painel && (
@@ -821,6 +841,15 @@ function PainelDaPeca({ situacao, projeto, resumo, cadastro, perfis, politica, d
             Esta peça foi reprovada na prova de aprovação. Envie a arte
             corrigida — o prazo não conta contra você nesta correção.
             {situacao.resposta?.observacao && <> Observação do seu retorno: <em>{situacao.resposta.observacao}</em></>}
+          </p>
+        )}
+
+        {/* O motivo tem que estar visível ENQUANTO ele monta o arquivo novo.
+            Deixá-lo só no cartão anterior obrigaria a voltar para reler. */}
+        {situacao.status === 'devolvida' && (
+          <p className="nota destaque-correcao">
+            O time recebeu esta arte e recusou: <em>“{situacao.devolucao.motivo}”</em> Envie a
+            versão corrigida — o prazo não conta contra você nesta correção.
           </p>
         )}
       </div>

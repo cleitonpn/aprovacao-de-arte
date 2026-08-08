@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { STATUS, AVISO_EXTRA } from '../core/fluxo.js'
 import {
   liberarNovaVersao, recusarNovaVersao, definirStatusDaPeca, registrarProva, prorrogarPrazo,
-  ouvirReprovacoes,
+  ouvirReprovacoes, devolverArte, desfazerDevolucao,
 } from '../services/projetos.js'
 import { enviarProva, EXTENSOES_PROVA } from '../services/envio.js'
 import { traduzirErroAuth } from '../services/sessao.js'
@@ -128,6 +128,14 @@ export default function PainelProjeto({ sessao, projeto, resumo, envios, podeApr
               por: sessao.usuario?.email,
               limparStatus,
             }))}
+            onDevolver={(motivo) => rodar(() => devolverArte(sessao.fb, projeto.token, s.peca.id, {
+              motivo,
+              paraVersao: s.versaoRecebida,
+              por: sessao.usuario?.email,
+            }))}
+            onDesfazerDevolucao={() => rodar(
+              () => desfazerDevolucao(sessao.fb, projeto.token, s.peca.id),
+            )}
           />
         ))}
       </div>
@@ -549,9 +557,16 @@ function LogDeReprovacoes({ sessao, projeto }) {
   )
 }
 
-function PecaDoTime({ situacao, envios, ocupado, podeAprovar, onStatus, onLiberar }) {
-  const { peca, status, rotulo, cor, controle } = situacao
+function PecaDoTime({
+  situacao, envios, ocupado, podeAprovar, onStatus, onLiberar, onDevolver, onDesfazerDevolucao,
+}) {
+  const { peca, status, rotulo, cor, controle, devolucao } = situacao
   const emProducao = status === 'em_impressao' || status === 'impressa'
+  const [devolvendo, setDevolvendo] = useState(false)
+  const [motivo, setMotivo] = useState('')
+
+  // Só faz sentido devolver o que já chegou. Sem arte não há o que recusar.
+  const podeDevolver = podeAprovar && situacao.versaoRecebida >= 1 && !devolucao
 
   return (
     <div className="peca-time">
@@ -583,7 +598,68 @@ function PecaDoTime({ situacao, envios, ocupado, podeAprovar, onStatus, onLibera
         </p>
       )}
 
+      {devolucao && (
+        <div className="bloqueio devolvida">
+          <strong>Arte devolvida ao cliente (v{devolucao.paraVersao})</strong>
+          <p>“{devolucao.motivo}”</p>
+          <p className="dica-campo">
+            Em {fmtDataHora(devolucao.em)} por {devolucao.por || '—'}. O cliente está vendo
+            este motivo e pode enviar a v{situacao.proximaVersao} sem pedir liberação.
+          </p>
+          {podeAprovar && (
+            <button className="btn btn-ghost" disabled={ocupado} onClick={onDesfazerDevolucao}>
+              Desfazer devolução
+            </button>
+          )}
+        </div>
+      )}
+
+      {devolvendo && (
+        <>
+          <label className="campo">
+            <span>Motivo da recusa — o cliente vai ler isto</span>
+            <textarea
+              rows={3}
+              maxLength={800}
+              autoFocus
+              value={motivo}
+              onChange={(e) => setMotivo(e.target.value)}
+              placeholder="Ex.: o logo está na versão antiga e o telefone do rodapé mudou."
+            />
+          </label>
+          <p className="dica-campo">
+            Escreva o que ele precisa corrigir, não o nome técnico do problema — é este
+            texto, exatamente, que aparece na tela dele.
+          </p>
+          <div className="acoes compactas">
+            <button
+              className="btn btn-primario"
+              disabled={ocupado || !motivo.trim()}
+              onClick={() => {
+                onDevolver(motivo.trim())
+                setMotivo('')
+                setDevolvendo(false)
+              }}
+            >
+              Devolver a arte ao cliente
+            </button>
+            <button
+              className="btn btn-ghost"
+              disabled={ocupado}
+              onClick={() => { setDevolvendo(false); setMotivo('') }}
+            >
+              Cancelar
+            </button>
+          </div>
+        </>
+      )}
+
       <div className="acoes compactas">
+        {podeDevolver && !devolvendo && (
+          <button className="btn btn-ghost perigo" disabled={ocupado} onClick={() => setDevolvendo(true)}>
+            Recusar arte (devolver ao cliente)
+          </button>
+        )}
         {podeAprovar && status !== 'aguardando' && status !== 'em_impressao' && status !== 'impressa' && (
           <button className="btn btn-ghost" disabled={ocupado} onClick={() => onStatus('em_impressao')}>
             Marcar “em impressão”

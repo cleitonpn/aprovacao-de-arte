@@ -420,3 +420,78 @@ test('fase desconhecida não esconde a lista — cai em "todos"', () => {
   assert.equal(fatia('inventada', s), true)
   assert.equal(FASES[0].id, 'todos')
 })
+
+// ------------------------------------------------- devolução pelo time
+//
+// A segunda camada de aprovação: a análise automática mede o arquivo, mas quem
+// recebe a arte para produzir vê o que só olho humano pega — logo antigo,
+// telefone desatualizado, arquivo trocado. Antes disto não havia por onde essa
+// recusa voltar ao cliente, e a peça seguia "aprovada" na tela dele.
+
+const devolvida = (motivo, paraVersao = 1, em = '2026-08-05T10:00:00Z') => ({
+  pecas: { p_lona: { devolucao: { motivo, paraVersao, em, por: 'ana@x.com' } } },
+})
+
+test('arte devolvida pelo time libera o envio sem pedido', () => {
+  const p = projeto({
+    entregas: entregue('p_lona'),
+    controle: devolvida('O logo está na versão antiga.'),
+  })
+  const s = situacaoDaPeca(p, lona, AGORA)
+  assert.equal(s.status, 'devolvida')
+  assert.equal(s.podeEnviar, true)
+  assert.equal(s.bloqueio, null)
+  assert.equal(s.proximaVersao, 2)
+  assert.equal(s.motivoDaDevolucao, 'O logo está na versão antiga.')
+})
+
+// Sem isto a peça ficaria vermelha e escrita "refazer" justamente depois de o
+// cliente ter refeito — acusando um erro que ele já corrigiu.
+test('devolução deixa de valer quando a arte corrigida chega', () => {
+  const p = projeto({
+    entregas: entregue('p_lona', 2),
+    controle: devolvida('O logo está na versão antiga.', 1),
+  })
+  const s = situacaoDaPeca(p, lona, AGORA)
+  assert.notEqual(s.status, 'devolvida')
+  assert.equal(s.devolucao, null)
+  assert.equal(s.motivoDaDevolucao, null)
+})
+
+// O caso que motivou a funcionalidade: a comunicação visual acha o erro DEPOIS
+// de a prova já ter sido aprovada pelo cliente.
+test('devolução vence uma prova já aprovada pelo cliente', () => {
+  const p = projeto({
+    entregas: entregue('p_lona'),
+    respostasProva: { pr1: { decisao: 'aprovada', em: '2026-08-03T10:00:00Z' } },
+    controle: {
+      provas: { pr1: { pecaIds: ['p_lona'], versoes: { p_lona: 1 }, enviadaEm: '2026-08-02T10:00:00Z' } },
+      pecas: { p_lona: { devolucao: { motivo: 'Cor fora da identidade.', paraVersao: 1, em: '2026-08-05T10:00:00Z' } } },
+    },
+  })
+  const s = situacaoDaPeca(p, lona, AGORA)
+  assert.equal(s.status, 'devolvida')
+  assert.equal(s.podeEnviar, true)
+})
+
+// O prazo vencido não pode barrar uma correção que o próprio time pediu.
+test('prazo vencido não bloqueia a correção de uma arte devolvida', () => {
+  const p = projeto({
+    entregas: entregue('p_lona'),
+    prazoEnvio: AGORA - 5 * DIA,
+    controle: devolvida('Arquivo é o da peça vizinha.'),
+  })
+  const s = situacaoDaPeca(p, lona, AGORA)
+  assert.equal(s.status, 'devolvida')
+  assert.equal(s.podeEnviar, true)
+})
+
+test('peça devolvida conta como aguardando o cliente no resumo', () => {
+  const p = projeto({
+    entregas: { ...entregue('p_lona'), ...entregue('p_test') },
+    controle: devolvida('O logo está na versão antiga.'),
+  })
+  const r = resumoDoProjeto(p, AGORA)
+  assert.equal(r.aguardandoCliente, 1)
+  assert.equal(r.recebidas, 2)
+})

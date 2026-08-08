@@ -261,6 +261,45 @@ export function recusarNovaVersao(fb, token, pecaId, { motivo, exigeExtra, por }
   })
 }
 
+/**
+ * Devolve ao cliente uma arte que o time recusou.
+ *
+ * A aprovação da ferramenta é a primeira camada: ela confere o que dá para
+ * conferir por software — resolução, medida, sangria, formato. O que ela não
+ * vê é o resto — logo errado, texto desatualizado, cor fora da identidade,
+ * arquivo do stand do vizinho. Quem vê isso é quem produz, e antes disto não
+ * havia por onde essa recusa voltar ao cliente: o analista descobria o erro,
+ * ligava, e a peça continuava "aprovada" na tela dele.
+ *
+ * `paraVersao` amarra a devolução à versão recusada. É o que faz o aviso sumir
+ * sozinho quando a arte corrigida chega, em vez de ficar acusando um erro que
+ * já foi resolvido.
+ *
+ * Zerar o status é parte da mesma decisão: devolver uma peça e deixá-la
+ * marcada como "em impressão" seria a tela afirmando duas coisas contrárias ao
+ * mesmo tempo.
+ */
+export function devolverArte(fb, token, pecaId, { motivo, paraVersao, por }) {
+  return escreverComoTime(fb, token, {
+    [`controle.pecas.${pecaId}.devolucao`]: semIndefinidos({
+      motivo: String(motivo || '').trim().slice(0, 800),
+      paraVersao: Number(paraVersao) || 1,
+      em: new Date().toISOString(),
+      por: por ?? null,
+    }),
+    [`controle.pecas.${pecaId}.status`]: null,
+    [`controle.pecas.${pecaId}.statusEm`]: new Date().toISOString(),
+    [`controle.pecas.${pecaId}.statusPor`]: por ?? null,
+  })
+}
+
+/** Desfaz a devolução — o analista clicou errado, ou a recusa não procedia. */
+export function desfazerDevolucao(fb, token, pecaId) {
+  return escreverComoTime(fb, token, {
+    [`controle.pecas.${pecaId}.devolucao`]: null,
+  })
+}
+
 export function definirStatusDaPeca(fb, token, pecaId, status, por) {
   return escreverComoTime(fb, token, {
     [`controle.pecas.${pecaId}.status`]: status || null,

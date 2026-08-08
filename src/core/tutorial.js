@@ -44,6 +44,10 @@ export const PASSOS = [
     texto: 'Ressalva quer dizer que imprime, mas com perda perceptível. Você lê o que vai acontecer e decide: ou manda um arquivo melhor, ou assume e autoriza — com nome e e-mail, porque este link circula entre várias pessoas e o registro precisa dizer quem autorizou.',
   },
   {
+    titulo: 'Aprovado aqui não é a palavra final',
+    texto: 'A conferência desta tela é a primeira camada: ela mede o que dá para medir no arquivo — resolução, tamanho, sangria, formato. O que ela não enxerga é o conteúdo. Quando a arte chega ao time de comunicação visual, pode ser que eles achem algo que só olho humano pega: logo numa versão antiga, telefone desatualizado, cor fora da sua identidade, arquivo trocado com o de outra peça. Aí eles recusam e devolvem a arte, com o motivo escrito aqui mesmo, e você manda a versão corrigida no mesmo lugar.',
+  },
+  {
     titulo: 'Aprove a prova antes de imprimir',
     texto: 'Com a arte recebida, o time monta a prova de aprovação e ela aparece nesta mesma tela. Você aprova tudo, reprova tudo ou aprova em partes. Nada vai para a impressora sem esse aceite.',
   },
