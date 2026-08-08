@@ -265,11 +265,14 @@ export function recusarNovaVersao(fb, token, pecaId, { motivo, exigeExtra, por }
  * Devolve ao cliente uma arte que o time recusou.
  *
  * A aprovação da ferramenta é a primeira camada: ela confere o que dá para
- * conferir por software — resolução, medida, sangria, formato. O que ela não
- * vê é o resto — logo errado, texto desatualizado, cor fora da identidade,
- * arquivo do stand do vizinho. Quem vê isso é quem produz, e antes disto não
- * havia por onde essa recusa voltar ao cliente: o analista descobria o erro,
- * ligava, e a peça continuava "aprovada" na tela dele.
+ * conferir por software — resolução, medida, sangria, formato. A segunda é a
+ * análise TÉCNICA de quem produz, e pega o que só se vê abrindo o arquivo na
+ * produção: fonte que não converte, elemento que cai atrás do perfil, cor que
+ * não fecha, arquivo da peça vizinha. Não é revisão de conteúdo — texto,
+ * telefone e preço são do cliente, e o tutorial diz isso a ele.
+ *
+ * Antes disto essa recusa não tinha por onde voltar: o analista descobria o
+ * erro, ligava, e a peça continuava "aprovada" na tela do cliente.
  *
  * `paraVersao` amarra a devolução à versão recusada. É o que faz o aviso sumir
  * sozinho quando a arte corrigida chega, em vez de ficar acusando um erro que

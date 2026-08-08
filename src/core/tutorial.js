@@ -45,7 +45,7 @@ export const PASSOS = [
   },
   {
     titulo: 'Aprovado aqui não é a palavra final',
-    texto: 'A conferência desta tela é a primeira camada: ela mede o que dá para medir no arquivo — resolução, tamanho, sangria, formato. O que ela não enxerga é o conteúdo. Quando a arte chega ao time de comunicação visual, pode ser que eles achem algo que só olho humano pega: logo numa versão antiga, telefone desatualizado, cor fora da sua identidade, arquivo trocado com o de outra peça. Aí eles recusam e devolvem a arte, com o motivo escrito aqui mesmo, e você manda a versão corrigida no mesmo lugar.',
+    texto: 'A conferência desta tela é a primeira camada. Depois dela, o time de comunicação visual recebe o arquivo e faz uma segunda análise, agora técnica: se o arquivo abre e fecha na produção, se a arte se sustenta na medida real da peça, se algum elemento cai na dobra ou atrás da estrutura, se a cor tem como sair na impressão. Se algo ali não fechar, eles devolvem a arte com o motivo escrito nesta mesma tela, e você envia a versão corrigida no mesmo lugar. Essa segunda análise é técnica e só técnica — o conteúdo continua sendo seu.',
   },
   {
     titulo: 'Aprove a prova antes de imprimir',
@@ -56,6 +56,38 @@ export const PASSOS = [
     texto: 'Depois de aprovada a peça passa a "em impressão" e depois "impressa", aqui mesmo. Trocar a arte depois que entrou em produção significa reimprimir, e aí há custo extra — por isso a prova existe.',
   },
 ]
+
+/**
+ * O que a segunda análise cobre — e o que ela não cobre.
+ *
+ * Esta lista existe para evitar uma expectativa cara: o cliente que entende
+ * "o time confere a arte" como "o time revisa a arte" manda o material sem
+ * reler, o telefone errado é impresso em 40 stands, e a conversa sobre quem
+ * paga a reimpressão acontece com a peça já na parede.
+ *
+ * A fronteira não é arbitrária, e o motivo dela precisa aparecer junto: o time
+ * de comunicação visual passa por centenas de peças por feira. Nesse volume dá
+ * para conferir o que é técnico e verificável na peça; não dá para revisar o
+ * texto de cada expositor, nem haveria como — ninguém aqui sabe qual é o
+ * telefone certo da empresa do cliente.
+ */
+export const CONFERENCIA_DO_TIME = {
+  confere: [
+    'Se o arquivo abre e processa na produção — fontes, transparências, camadas.',
+    'Se a resolução se sustenta no tamanho real da peça montada.',
+    'Se algum elemento importante cai na dobra, no corte ou atrás da estrutura.',
+    'Se a cor tem como sair na impressão, e o que muda se não tiver.',
+    'Se o arquivo enviado é mesmo o daquela peça, e não o de outra.',
+  ],
+  naoConfere: [
+    'Ortografia, gramática e redação.',
+    'Telefone, e-mail, site, endereço, CNPJ e QR code.',
+    'Preços, nomes de produto, datas e qualquer informação do seu negócio.',
+    'Se o logo enviado é a versão vigente da sua marca.',
+  ],
+  porque: 'São centenas de peças por feira. Nesse volume dá para conferir o que é técnico e verificável na peça — não dá para revisar o conteúdo de cada arte, e não teríamos como saber qual informação está certa.',
+  responsabilidade: 'Confira o texto antes de enviar. Depois de impresso, corrigir significa refazer a peça.',
+}
 
 /** Os requisitos, com os números que o motor de fato aplica. */
 export const REQUISITOS = [

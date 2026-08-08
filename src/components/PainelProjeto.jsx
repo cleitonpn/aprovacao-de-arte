@@ -624,12 +624,14 @@ function PecaDoTime({
               autoFocus
               value={motivo}
               onChange={(e) => setMotivo(e.target.value)}
-              placeholder="Ex.: o logo está na versão antiga e o telefone do rodapé mudou."
+              placeholder="Ex.: o texto do rodapé está a 3 cm da borda e some atrás do perfil de alumínio. Suba pelo menos 8 cm."
             />
           </label>
           <p className="dica-campo">
             Escreva o que ele precisa corrigir, não o nome técnico do problema — é este
-            texto, exatamente, que aparece na tela dele.
+            texto, exatamente, que aparece na tela dele. A devolução aqui é por{' '}
+            <strong>motivo técnico</strong> da peça; conteúdo (texto, telefone, preço) é
+            responsabilidade do cliente e o tutorial diz isso a ele.
           </p>
           <div className="acoes compactas">
             <button

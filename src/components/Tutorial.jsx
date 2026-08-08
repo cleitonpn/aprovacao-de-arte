@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { PASSOS, REQUISITOS, SUPORTE } from '../core/tutorial.js'
+import { CONFERENCIA_DO_TIME, PASSOS, REQUISITOS, SUPORTE } from '../core/tutorial.js'
 
 // O tutorial que abre sozinho na primeira visita.
 //
@@ -96,6 +96,33 @@ export default function Tutorial({ aberto, onFechar, onVerApoio }) {
                 </div>
               ))}
             </dl>
+          </section>
+
+          <section className="tutorial-conferencia">
+            <h3>Até onde vai a conferência do time</h3>
+            <p>
+              Depois desta tela, a comunicação visual faz uma segunda análise —{' '}
+              <strong>técnica</strong>. Vale saber exatamente o que ela alcança, porque o
+              que está fora dela continua sendo seu.
+            </p>
+            <div className="tutorial-fronteira">
+              <div className="confere">
+                <strong>O time confere</strong>
+                <ul>
+                  {CONFERENCIA_DO_TIME.confere.map((t) => <li key={t}>{t}</li>)}
+                </ul>
+              </div>
+              <div className="nao-confere">
+                <strong>O time não confere</strong>
+                <ul>
+                  {CONFERENCIA_DO_TIME.naoConfere.map((t) => <li key={t}>{t}</li>)}
+                </ul>
+              </div>
+            </div>
+            <p className="ajuda">{CONFERENCIA_DO_TIME.porque}</p>
+            <p className="tutorial-responsabilidade">
+              <strong>{CONFERENCIA_DO_TIME.responsabilidade}</strong>
+            </p>
           </section>
 
           <section className="tutorial-apoio">

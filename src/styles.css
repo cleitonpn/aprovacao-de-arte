@@ -699,6 +699,24 @@ textarea { width: 100%; font: inherit; font-size: 13px; padding: 9px 11px; borde
   margin: 2px 0 0; font-size: 13px; line-height: 1.6; color: var(--suave);
 }
 
+/* As duas colunas da fronteira lado a lado: a comparação é o conteúdo. Uma
+   embaixo da outra, "não confere" vira rodapé e é justamente a que precisa
+   ser lida. No celular empilham, mas mantêm as cores que as separam. */
+.tutorial-fronteira { display: grid; gap: 10px; grid-template-columns: 1fr 1fr; }
+@media (max-width: 560px) { .tutorial-fronteira { grid-template-columns: 1fr; } }
+.tutorial-fronteira > div { border-radius: 8px; padding: 10px 12px; }
+.tutorial-fronteira strong { display: block; font-size: 13px; margin-bottom: 5px; }
+.tutorial-fronteira ul { margin: 0; padding-left: 16px; }
+.tutorial-fronteira li { font-size: 12.5px; line-height: 1.55; color: var(--suave); }
+.tutorial-fronteira .confere { background: var(--ok-fundo); }
+.tutorial-fronteira .confere strong { color: var(--ok); }
+.tutorial-fronteira .nao-confere { background: var(--ruim-fundo); }
+.tutorial-fronteira .nao-confere strong { color: var(--ruim); }
+.tutorial-responsabilidade {
+  background: color-mix(in srgb, var(--alerta) 12%, transparent);
+  border-radius: 8px; padding: 9px 12px;
+}
+
 .tutorial-apoio .btn { margin-top: 4px; }
 .tutorial-horario {
   background: color-mix(in srgb, var(--acento) 8%, transparent);
