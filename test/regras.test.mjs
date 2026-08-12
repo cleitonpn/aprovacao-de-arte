@@ -306,3 +306,75 @@ test('o veredicto é sempre o pior achado', () => {
   assert.equal(veredictoDe([{ nivel: 'ok' }, { nivel: 'ressalva' }]), 'ressalva')
   assert.equal(veredictoDe([{ nivel: 'ressalva' }, { nivel: 'bloqueante' }]), 'reprovado')
 })
+
+// ------------------------------------------------- dois tamanhos certos
+//
+// O cadastro guarda a medida de CORTE, mas o gabarito e o cartão da peça
+// mandam o designer montar COM a sangria. Aceitar só o corte era a ferramenta
+// mandar fazer de um jeito e barrar quem fizesse.
+
+test('arquivo montado com a sangria não é acusado de medida errada', () => {
+  // Peça de 110 × 275 com 10 cm de sangria por lado = 130 × 295.
+  const peca = { larguraCm: 110, alturaCm: 275 }
+  const r = avaliar({
+    peca,
+    perfil: lona,
+    medidas: {
+      formato: 'pdf', formatoSuportado: true, puroVetor: true, paginas: 1,
+      tamanhoDeclaradoCm: { largura: 130, altura: 295 },
+    },
+  })
+  assert.equal(achado(r, 'dimensao'), undefined)
+  assert.equal(r.veredicto, 'aprovado')
+})
+
+test('arquivo montado no corte continua aceito', () => {
+  const peca = { larguraCm: 110, alturaCm: 275 }
+  const r = avaliar({
+    peca,
+    perfil: lona,
+    medidas: {
+      formato: 'pdf', formatoSuportado: true, puroVetor: true, paginas: 1,
+      tamanhoDeclaradoCm: { largura: 110, altura: 275 },
+    },
+  })
+  assert.equal(achado(r, 'dimensao'), undefined)
+})
+
+// A sangria não pode virar desculpa para qualquer medida passar: o que não é
+// nem o corte nem o corte + sangria continua sendo erro.
+test('medida que não é nem corte nem sangria segue reprovando', () => {
+  const peca = { larguraCm: 110, alturaCm: 275 }
+  const r = avaliar({
+    peca,
+    perfil: lona,
+    medidas: {
+      formato: 'pdf', formatoSuportado: true, puroVetor: true, paginas: 1,
+      tamanhoDeclaradoCm: { largura: 200, altura: 400 },
+    },
+  })
+  const a = achado(r, 'dimensao')
+  assert.ok(a, 'medida fora das duas referências precisa ser apontada')
+  assert.equal(a.nivel, 'bloqueante')
+  // A mensagem precisa dizer os DOIS tamanhos aceitos — senão o designer
+  // remonta no corte e recebe a mesma ressalva de volta.
+  assert.match(a.detalhe, /110 × 275/)
+  assert.match(a.detalhe, /130 × 295/)
+  assert.equal(a.dados.aceitos.length, 2)
+})
+
+// O caso que tornava o defeito grave: sangria grande em peça estreita passava
+// de 20% de desvio e o envio virava bloqueante.
+test('sangria grande em peça estreita não bloqueia o envio', () => {
+  const peca = { larguraCm: 60, alturaCm: 200 }
+  const r = avaliar({
+    peca,
+    perfil: lona,
+    medidas: {
+      formato: 'pdf', formatoSuportado: true, puroVetor: true, paginas: 1,
+      tamanhoDeclaradoCm: { largura: 80, altura: 220 },
+    },
+  })
+  assert.equal(achado(r, 'dimensao'), undefined)
+  assert.notEqual(r.veredicto, 'reprovado')
+})

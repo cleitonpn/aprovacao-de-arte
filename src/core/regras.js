@@ -346,18 +346,43 @@ export function avaliar(ctx) {
   if (medidas.tamanhoDeclaradoCm && (medidas.formato === 'pdf' || medidas.formato === 'ai')) {
     const dl = medidas.tamanhoDeclaradoCm.largura
     const da = medidas.tamanhoDeclaradoCm.altura
-    const desvio = Math.max(
-      Math.abs(dl - peca.larguraCm) / peca.larguraCm,
-      Math.abs(da - peca.alturaCm) / peca.alturaCm,
-    )
+
+    // DOIS tamanhos são certos, não um.
+    //
+    // O cadastro guarda a medida de CORTE — 110 × 275 é a peça que fica na
+    // parede. Mas o gabarito que a ferramenta entrega já vem com sangria, e o
+    // cartão da peça diz, com todas as letras, "com sangria 130 × 295 cm". O
+    // designer que seguir a instrução manda 130 × 295, que é o certo.
+    //
+    // Comparar só contra o corte acusava justamente esse arquivo de estar na
+    // medida errada. Com sangria grande em peça estreita o desvio passava de
+    // 20% e virava bloqueante: a ferramenta mandava fazer de um jeito e
+    // barrava quem fizesse. A regra de proporção logo acima já aceitava as
+    // duas leituras; era esta que estava fora de passo.
+    const sangriaCm = sangriaMm / 10
+    const alvos = [
+      { rotulo: 'no corte', l: peca.larguraCm, a: peca.alturaCm },
+      { rotulo: 'com sangria', l: peca.larguraCm + 2 * sangriaCm, a: peca.alturaCm + 2 * sangriaCm },
+    ]
+    const desvioDe = (t) => Math.max(Math.abs(dl - t.l) / t.l, Math.abs(da - t.a) / t.a)
+    const melhor = alvos.reduce((m, t) => (desvioDe(t) < desvioDe(m) ? t : m))
+    const desvio = desvioDe(melhor)
+
     if (desvio > 0.03) {
+      const comSangria = alvos[1]
+      const aceitos = sangriaCm > 0
+        ? `${num(peca.larguraCm)} × ${num(peca.alturaCm)} cm (no corte) ou ${num(comSangria.l)} × ${num(comSangria.a)} cm (com a sangria de ${num(sangriaCm)} cm por lado)`
+        : `${num(peca.larguraCm)} × ${num(peca.alturaCm)} cm`
       add({
         id: 'dimensao',
         nivel: desvio > 0.2 ? 'bloqueante' : 'ressalva',
         titulo: 'O tamanho do arquivo não bate com o da peça',
-        detalhe: `A peça é ${num(peca.larguraCm)} × ${num(peca.alturaCm)} cm e o arquivo foi montado em ${num(dl)} × ${num(da)} cm${ctx.escalaFator > 1 ? ` (já considerando a escala 1:${ctx.escalaFator})` : ''}.`,
-        acao: `Remonte o arquivo em ${num(peca.larguraCm)} × ${num(peca.alturaCm)} cm — ou confirme a escala de trabalho, se a arte foi feita reduzida.`,
-        dados: { declarado: { largura: dl, altura: da } },
+        detalhe: `O arquivo foi montado em ${num(dl)} × ${num(da)} cm${ctx.escalaFator > 1 ? ` (já considerando a escala 1:${ctx.escalaFator})` : ''}. Para esta peça vale ${aceitos}.`,
+        acao: `Remonte o arquivo em ${aceitos} — ou confirme a escala de trabalho, se a arte foi feita reduzida.`,
+        dados: {
+          declarado: { largura: dl, altura: da },
+          aceitos: alvos.map((t) => ({ rotulo: t.rotulo, largura: t.l, altura: t.a })),
+        },
       })
     }
   }
