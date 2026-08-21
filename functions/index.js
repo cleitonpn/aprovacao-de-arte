@@ -17,7 +17,7 @@
 
 import { onDocumentWritten } from 'firebase-functions/v2/firestore'
 import { onSchedule } from 'firebase-functions/v2/scheduler'
-import { defineSecret, defineString } from 'firebase-functions/params'
+import { defineSecret } from 'firebase-functions/params'
 import { logger } from 'firebase-functions'
 import { initializeApp } from 'firebase-admin/app'
 import { getFirestore } from 'firebase-admin/firestore'
@@ -25,13 +25,22 @@ import { getFirestore } from 'firebase-admin/firestore'
 import { avisosPendentes } from './nucleo/avisos.js'
 import { enviarEmail } from './src/correio.js'
 
+// A chave do Resend é o único valor secreto aqui, e o único que merece o
+// Secret Manager: ela dá poder de mandar e-mail em nome do domínio.
 const CHAVE_RESEND = defineSecret('RESEND_API_KEY')
-// `nao-responda` porque o domínio de fato não recebe e-mail — não há MX na
-// raiz — e porque toda a tratativa com o cliente acontece dentro do sistema,
-// onde fica registrada junto com as artes do stand. Um remetente que parece
-// aceitar resposta e engole a mensagem é pior do que um que avisa que não.
-const REMETENTE = defineString('REMETENTE', { default: 'Sistema Stands <nao-responda@sistemastands.com>' })
-const ENDERECO_SITE = defineString('ENDERECO_SITE', { default: 'https://sistemastands.com' })
+
+// Constantes, não parâmetros configuráveis.
+//
+// Eu tinha declarado os dois como parâmetros, e o deploy passou a exigir um
+// valor para cada um a cada publicação. Configurabilidade custa alguma coisa,
+// e aqui não comprava nada: trocar o remetente ou o endereço do site sem
+// mexer no código não é um cenário real — o texto dos e-mails, o CNAME e
+// estes valores mudam juntos ou não mudam.
+//
+// `nao-responda` porque o domínio de fato não recebe e-mail (não há MX na
+// raiz) e porque toda a tratativa com o cliente acontece dentro do sistema.
+const REMETENTE = 'Sistema Stands <nao-responda@sistemastands.com>'
+const ENDERECO_SITE = 'https://sistemastands.com'
 
 // Ajustável no deploy: o gatilho do Firestore precisa acompanhar a região do
 // banco. Se o deploy reclamar de região, é só mudar a variável no workflow —
@@ -91,7 +100,7 @@ async function despachar(token, projetoCru, { agora = Date.now() } = {}) {
   const projeto = await comPrazoDaFeira(projetoCru)
   const pendentes = avisosPendentes({ ...projeto, token }, {
     agora,
-    base: ENDERECO_SITE.value(),
+    base: ENDERECO_SITE,
   })
   if (!pendentes.length) return 0
 
@@ -116,7 +125,7 @@ async function despachar(token, projetoCru, { agora = Date.now() } = {}) {
     try {
       const id = await enviarEmail({
         chaveApi: CHAVE_RESEND.value(),
-        de: REMETENTE.value(),
+        de: REMETENTE,
         para: aviso.para,
         assunto: aviso.assunto,
         texto: aviso.texto,
