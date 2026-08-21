@@ -26,8 +26,11 @@ import { avisosPendentes } from './nucleo/avisos.js'
 import { enviarEmail } from './src/correio.js'
 
 const CHAVE_RESEND = defineSecret('RESEND_API_KEY')
-const REMETENTE = defineString('REMETENTE', { default: 'Sistema Stands <artes@sistemastands.com>' })
-const RESPONDER_PARA = defineString('RESPONDER_PARA', { default: '' })
+// `nao-responda` porque o domínio de fato não recebe e-mail — não há MX na
+// raiz — e porque toda a tratativa com o cliente acontece dentro do sistema,
+// onde fica registrada junto com as artes do stand. Um remetente que parece
+// aceitar resposta e engole a mensagem é pior do que um que avisa que não.
+const REMETENTE = defineString('REMETENTE', { default: 'Sistema Stands <nao-responda@sistemastands.com>' })
 const ENDERECO_SITE = defineString('ENDERECO_SITE', { default: 'https://sistemastands.com' })
 
 // Ajustável no deploy: o gatilho do Firestore precisa acompanhar a região do
@@ -114,7 +117,6 @@ async function despachar(token, projetoCru, { agora = Date.now() } = {}) {
       const id = await enviarEmail({
         chaveApi: CHAVE_RESEND.value(),
         de: REMETENTE.value(),
-        responderPara: RESPONDER_PARA.value() || undefined,
         para: aviso.para,
         assunto: aviso.assunto,
         texto: aviso.texto,

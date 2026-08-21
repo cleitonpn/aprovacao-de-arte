@@ -62,7 +62,8 @@ function corpo({ saudacao, paragrafos, acao, link }) {
     '',
     `${acao}: ${link}`,
     '',
-    `Dúvidas? Responda este e-mail ou use a caixa "Dúvidas com o time" na própria página. Atendimento ${SUPORTE.texto}.`,
+    `Dúvidas? Use a caixa "Dúvidas com o time" na própria página — a conversa fica registrada junto com as artes deste stand. Atendimento ${SUPORTE.texto}.`,
+    'Este endereço não recebe respostas.',
   ].join('\n')
 
   const html = `<div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-size:15px;line-height:1.6;color:#1a1a1a;max-width:520px">
@@ -72,7 +73,8 @@ ${paragrafos.map((p) => `<p>${escapar(p)}</p>`).join('\n')}
 <a href="${escapar(link)}" style="background:#111827;color:#fff;text-decoration:none;padding:12px 20px;border-radius:8px;display:inline-block;font-weight:600">${escapar(acao)}</a>
 </p>
 <p style="font-size:13px;color:#666">Se o botão não abrir, copie este endereço: <br>${escapar(link)}</p>
-<p style="font-size:13px;color:#666">Dúvidas? Responda este e-mail ou use a caixa “Dúvidas com o time” na própria página. Atendimento ${escapar(SUPORTE.texto)}.</p>
+<p style="font-size:13px;color:#666">Dúvidas? Use a caixa “Dúvidas com o time” na própria página — a conversa fica registrada junto com as artes deste stand. Atendimento ${escapar(SUPORTE.texto)}.</p>
+<p style="font-size:12px;color:#999">Este endereço não recebe respostas.</p>
 </div>`
 
   return { texto, html }

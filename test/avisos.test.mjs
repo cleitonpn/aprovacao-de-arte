@@ -44,6 +44,22 @@ test('o link leva direto ao stand', () => {
   assert.equal(linkDoStand('abc123'), 'https://sistemastands.com/#/p/abc123')
 })
 
+test('o e-mail não convida a responder — o domínio não recebe', () => {
+  // Não há MX na raiz de sistemastands.com: uma resposta voltaria com erro de
+  // entrega, e o cliente ficaria achando que falou com alguém. Toda a
+  // tratativa é dentro do sistema, onde fica registrada junto com as artes.
+  const p = projeto({
+    entregas: entregue('p_lona'),
+    controle: { provas: { pr1: { pecaIds: ['p_lona'], versoes: { p_lona: 1 }, enviadaEm: '2026-08-05T10:00:00Z' } } },
+  })
+  const [a] = avisosPendentes(p, { agora: AGORA })
+  for (const corpo of [a.texto, a.html]) {
+    assert.doesNotMatch(corpo, /responda este e-?mail/i)
+    assert.match(corpo, /não recebe respostas/i)
+    assert.match(corpo, /Dúvidas com o time/)
+  }
+})
+
 // ------------------------------------------------------------------ prova
 
 test('prova esperando aceite gera um aviso', () => {

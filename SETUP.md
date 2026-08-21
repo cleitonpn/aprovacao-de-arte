@@ -155,6 +155,12 @@ Scheduler Admin. Sem eles o deploy falha com "permission denied" no meio.
 workflow. Ele publica e grava a chave do Resend no Secret Manager do Google —
 a chave nunca fica no código nem no repositório.
 
+O remetente é `nao-responda@sistemastands.com` e o texto diz que aquele
+endereço não recebe respostas. É a verdade: não há MX na raiz do domínio, e
+toda a tratativa com o cliente acontece dentro do sistema, onde fica
+registrada junto com as artes do stand. Não existe caixa de entrada para
+criar nem para alguém esquecer de ler.
+
 ### Se algo não chegar
 
 Os **Logs** do Resend mostram cada envio, com o motivo de quem não recebeu.

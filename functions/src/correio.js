@@ -11,7 +11,7 @@ const ENDERECO = 'https://api.resend.com/emails'
  * Manda um e-mail. Devolve o id do envio, que é o que aparece nos Logs do
  * Resend — sem ele, investigar "o cliente diz que não recebeu" vira adivinhação.
  */
-export async function enviarEmail({ chaveApi, de, responderPara, para, assunto, texto, html }) {
+export async function enviarEmail({ chaveApi, de, para, assunto, texto, html }) {
   if (!chaveApi) throw new Error('RESEND_API_KEY não configurada.')
   if (!para?.length) throw new Error('Nenhum destinatário.')
 
@@ -27,8 +27,6 @@ export async function enviarEmail({ chaveApi, de, responderPara, para, assunto, 
       subject: assunto,
       text: texto,
       html,
-      // Cliente que responde ao aviso tem que cair em alguém, não no vazio.
-      ...(responderPara ? { reply_to: responderPara } : {}),
     }),
   })
 
