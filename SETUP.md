@@ -101,6 +101,74 @@ arquivo o domínio se perde numa delas.
 
 ---
 
+## Avisos por e-mail
+
+O cliente não abre o link sozinho. A prova ficava pronta e parada porque
+ninguém contava a ele — quem descobria era o analista, ligando três dias
+depois. Três e-mails fecham isso:
+
+| Quando | O que o cliente recebe |
+|---|---|
+| O analista sobe a prova | "Sua prova de impressão está pronta", com as peças que ela cobre |
+| O time devolve uma arte | O motivo escrito pelo analista, e o número da próxima versão |
+| Faltam 7 e 2 dias do prazo | Quantas peças faltam e a data limite |
+
+Os dois primeiros saem em segundos, porque reagem à gravação do analista. O
+de prazo roda uma vez por dia, às 9h de Brasília — não há mudança nenhuma
+para reagir quando o tempo passa.
+
+Quem já mandou tudo **não** recebe o lembrete de prazo. Cobrar quem não deve é
+como se ensina o cliente a ignorar os nossos e-mails, e aí o aviso que importa
+também não é lido.
+
+**Notificação do navegador não foi usada, de propósito.** No iPhone ela só
+funciona se a pessoa instalar o site na tela de início, o que ninguém que abre
+um link do WhatsApp vai fazer. E a permissão fica presa a um aparelho, enquanto
+o link circula entre marketing, agência e quem assina — o aviso iria para quem
+clicou "permitir", que muitas vezes não é quem decide.
+
+### O que preparar (uma vez)
+
+**1. Plano Blaze no Firebase.** Console → Configurações → Uso e faturamento →
+Modificar plano. Cloud Functions exige cartão cadastrado; no volume desta
+operação o consumo fica dentro da cota gratuita mensal. Vale colocar um
+orçamento com alerta, na mesma tela.
+
+**2. Conta no [Resend](https://resend.com).** Em **Domains**, adicione
+`sistemastands.com`. Ele mostra os registros (SPF, DKIM, DMARC) para colar no
+painel da Hostinger, em Domínios → DNS. **Esse passo não é opcional**: sem ele
+o remetente só pode ser `onboarding@resend.dev`, que entrega apenas no seu
+próprio e-mail — e para o cliente cairia em spam.
+
+**3. Em Settings → Secrets and variables → Actions** do repositório:
+
+| Secret | O que é |
+|---|---|
+| `RESEND_API_KEY` | A chave criada em **API keys** no Resend |
+| `FIREBASE_SA_ARTE` | O mesmo secret que a sincronização já usa |
+
+A conta de serviço precisa dos papéis de deploy: Cloud Functions Admin,
+Service Account User, Cloud Build Editor, Artifact Registry Admin e Cloud
+Scheduler Admin. Sem eles o deploy falha com "permission denied" no meio.
+
+**4. Rode o workflow "Publicar as funções de aviso"** em Actions → Run
+workflow. Ele publica e grava a chave do Resend no Secret Manager do Google —
+a chave nunca fica no código nem no repositório.
+
+### Se algo não chegar
+
+Os **Logs** do Resend mostram cada envio, com o motivo de quem não recebeu.
+No Firebase, em Functions → Registros, cada e-mail sai com o `envioId` que
+casa com aquela tela.
+
+Três erros valem reconhecer pelo número: **422** é domínio ainda não
+verificado, **403** é chave sem permissão, **429** é a cota do dia estourada
+(o plano gratuito dá 100 e-mails por dia).
+
+O sistema grava o que já avisou em `projetos/{token}/avisos`. É isso que
+impede o cliente de receber o mesmo e-mail duas vezes — e é onde olhar para
+saber se um aviso saiu. Apagar um documento de lá faz o aviso ser reenviado.
+
 ## Ponte com o app de produção
 
 A ferramenta importa feira, expositor, stand e localização do app de produção

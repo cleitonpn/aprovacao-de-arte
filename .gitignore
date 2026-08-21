@@ -9,3 +9,8 @@ dist
 .env.local
 .firebase
 functions/.env
+
+# Cópia mecânica de src/core/ feita no deploy das funções. Não versionar: um
+# núcleo duplicado no repositório é um núcleo que alguém edita por engano, e aí
+# as duas metades do sistema passam a discordar em silêncio.
+functions/nucleo/

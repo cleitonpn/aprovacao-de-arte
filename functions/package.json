@@ -1,0 +1,14 @@
+{
+  "name": "avisos-aprovacao-de-arte",
+  "description": "Avisos por e-mail: prova pronta, arte devolvida e prazo chegando.",
+  "type": "module",
+  "private": true,
+  "main": "index.js",
+  "engines": {
+    "node": "20"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.7.0",
+    "firebase-functions": "^6.1.1"
+  }
+}

@@ -4,5 +4,10 @@
   },
   "storage": {
     "rules": "storage.rules"
+  },
+  "functions": {
+    "source": "functions",
+    "predeploy": ["node functions/scripts/copiar-nucleo.mjs"],
+    "ignore": ["node_modules", ".git", "firebase-debug.log", "firebase-debug.*.log"]
   }
 }

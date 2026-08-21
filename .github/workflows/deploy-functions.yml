@@ -1,0 +1,82 @@
+name: Publicar as funções de aviso
+
+# Publica as Cloud Functions que mandam os e-mails do cliente: prova pronta,
+# arte devolvida e prazo chegando.
+#
+# Roda sozinho quando algo que as funções usam muda, e à mão pelo botão "Run
+# workflow" — porque haverá o dia em que você quer republicar sem ter mudado
+# nada (chave nova, região trocada, deploy que falhou pela metade).
+#
+# Antes do primeiro uso, em Settings → Secrets and variables → Actions:
+#
+#   FIREBASE_SA_ARTE   service account deste projeto, o MESMO que a sincronização
+#                      já usa. Precisa dos papéis de deploy de função (Cloud
+#                      Functions Admin, Service Account User, Cloud Build
+#                      Editor, Artifact Registry Admin, Cloud Scheduler Admin).
+#   RESEND_API_KEY     a chave criada no painel do Resend.
+#
+# A chave do Resend NÃO fica no código nem no `firebase.json`: ela é gravada no
+# Secret Manager do Google e a função a lê em tempo de execução. Trocar a chave
+# depois é rodar este workflow de novo com o secret novo.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'functions/**'
+      - 'src/core/**'
+      - 'firebase.json'
+      - '.github/workflows/deploy-functions.yml'
+  workflow_dispatch:
+
+# Dois deploys ao mesmo tempo brigam pelo mesmo recurso no Google. O segundo
+# espera; nenhum é cancelado no meio — publicação interrompida deixa a função
+# num estado que ninguém consegue explicar depois.
+concurrency:
+  group: deploy-functions
+  cancel-in-progress: false
+
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    env:
+      # A região precisa acompanhar a do banco do Firestore. Se o deploy
+      # reclamar de região, troque aqui — não no código.
+      REGIAO_FUNCOES: us-central1
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      # Os testes cobrem a regra de quem avisar. Publicar uma função que manda
+      # o e-mail errado é pior do que não publicar: e-mail não se desfaz.
+      - run: npm ci
+      - run: npm test
+
+      - name: Gravar a credencial
+        run: |
+          printf '%s' "$FIREBASE_SA_ARTE" > "$RUNNER_TEMP/sa.json"
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/sa.json" >> "$GITHUB_ENV"
+          node -e "console.log('projeto:', require(process.env.RUNNER_TEMP + '/sa.json').project_id)"
+        env:
+          FIREBASE_SA_ARTE: ${{ secrets.FIREBASE_SA_ARTE }}
+          RUNNER_TEMP: ${{ runner.temp }}
+
+      - name: Guardar a chave do Resend no Secret Manager
+        run: |
+          printf '%s' "$RESEND_API_KEY" \
+            | npx --yes firebase-tools@13 functions:secrets:set RESEND_API_KEY --data-file - --force
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+
+      - name: Publicar
+        run: npx --yes firebase-tools@13 deploy --only functions --non-interactive --force
+
+      - name: Apagar a credencial
+        if: always()
+        run: rm -f "$RUNNER_TEMP/sa.json"
+        env:
+          RUNNER_TEMP: ${{ runner.temp }}
