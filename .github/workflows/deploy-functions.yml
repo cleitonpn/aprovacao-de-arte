@@ -56,6 +56,12 @@ jobs:
       - run: npm ci
       - run: npm test
 
+      # As dependências da FUNÇÃO, que são outras — `functions/` tem o próprio
+      # package.json. O `npm ci` acima instala as do site, e sem este passo o
+      # CLI falha ao ler os gatilhos: ele carrega o index.js localmente para
+      # descobrir o que publicar, e aí não acha o `firebase-functions`.
+      - run: npm ci --prefix functions
+
       # A credencial autentica, mas não diz ao CLI em qual projeto trabalhar —
       # sem `--project` ele para com "No currently active project". O id sai do
       # próprio arquivo da credencial de propósito: escrever o nome do projeto
