@@ -201,3 +201,46 @@ test('quem tentou e foi reprovado não se confunde com quem não começou', () =
   assert.equal(p.acoes.dificuldade.length, 1, 'e o painel sabe distinguir os dois')
   assert.equal(p.acoes.dificuldade[0].projeto.stand, 'I')
 })
+
+// ------------------------------------------- a esteira como ponto de partida
+//
+// A barra respondia "quantas" e parava aí. "De quem?" é sempre a pergunta
+// seguinte, e ela levava a abrir a lista inteira e conferir stand por stand.
+
+test('cada faixa carrega os stands que a compõem, do maior para o menor', () => {
+  const entregue = { protocolo: 'AP', versao: 1, em: '2026-08-01T10:00:00Z' }
+  const umaPeca = stand('A', { entregas: { p_lona: entregue } })
+  const duasPecas = stand('B', { entregas: { p_lona: entregue, p_test: entregue } })
+
+  const p = panorama([
+    linha(umaPeca, [envio('p_lona')]),
+    linha(duasPecas, [envio('p_lona'), envio('p_test')]),
+  ])
+  const recebida = p.esteira.find((f) => f.id === 'recebida')
+
+  assert.equal(recebida.n, 3)
+  assert.equal(recebida.stands.length, 2)
+  assert.equal(recebida.stands[0].projeto.stand, 'B', 'quem tem mais peças vem primeiro')
+  assert.deepEqual(recebida.stands[0].pecas, ['Lona de fundo', 'Testeira'])
+  assert.deepEqual(recebida.stands[1].pecas, ['Lona de fundo'])
+
+  // Um stand só entra na faixa em que de fato tem peça.
+  const aguardando = p.esteira.find((f) => f.id === 'aguardando')
+  assert.deepEqual(aguardando.stands.map((s) => s.projeto.stand), ['A'])
+})
+
+// O rótulo do cliente diz "sua aprovação" — no painel do time isso apontaria
+// para o analista, que é o contrário de quem está sendo esperado.
+test('a esteira usa o rótulo do time, não o do cliente', () => {
+  const comProva = stand('E', {
+    entregas: { p_lona: { protocolo: 'AP-1', versao: 1, em: '2026-08-01T10:00:00Z' } },
+    controle: {
+      provas: { pr1: { pecaIds: ['p_lona'], versoes: { p_lona: 1 }, enviadaEm: '2026-08-02T10:00:00Z' } },
+    },
+  })
+  const p = panorama([linha(comProva, [envio('p_lona')])], { agora: AGORA })
+  const faixa = p.esteira.find((f) => f.id === 'em_prova')
+
+  assert.equal(faixa.rotulo, 'Prova aguardando o cliente')
+  assert.doesNotMatch(faixa.rotulo, /sua/i, 'no painel, "sua" apontaria para o analista')
+})

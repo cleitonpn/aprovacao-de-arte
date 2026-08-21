@@ -110,7 +110,7 @@ export default function Visao({ sessao }) {
       {!carregando && projetos.length > 0 && (
         <>
           <Numeros cenario={cenario} />
-          <Esteira cenario={cenario} />
+          <Esteira cenario={cenario} feiraId={feiraId} />
           <PrecisaDeVoce cenario={cenario} feiraId={feiraId} />
           <Dificuldade linhas={cenario.acoes.dificuldade} feiraId={feiraId} />
           <QuemFalta cenario={cenario} feiraId={feiraId} />
@@ -210,34 +210,86 @@ function Cartao({ valor, rotulo, detalhe, cor }) {
  * empilhado esperando o cliente ou já foi para a impressora?" — e proporção se
  * lê antes de ler.
  */
-function Esteira({ cenario }) {
+function Esteira({ cenario, feiraId }) {
+  // Uma faixa aberta de cada vez. Abrir várias empurraria o resto do painel
+  // para fora da tela, e ele vale justamente por caber numa olhada.
+  const [aberta, setAberta] = useState(null)
+
   if (!cenario.pecasTotal) return null
+
+  const faixa = cenario.esteira.find((f) => f.id === aberta) || null
+  const alternar = (id) => setAberta((atual) => (atual === id ? null : id))
+
   return (
     <div className="cartao">
       <div className="titulo-secao">
         <h3>Onde estão as peças</h3>
         <span className="dica-campo">{cenario.pecasTotal} peças no total</span>
       </div>
-      <div className="esteira" role="img" aria-label={cenario.esteira.map((f) => `${f.n} ${f.rotulo}`).join(', ')}>
+
+      {/* Cada faixa é um botão. O número sozinho respondia "quantas" e deixava
+          "quem" para uma busca à mão na lista de stands — e "de quem?" é
+          sempre a pergunta seguinte. */}
+      <div className="esteira">
         {cenario.esteira.map((f) => (
-          <div
+          <button
+            type="button"
             key={f.id}
-            className={`esteira-faixa ${f.cor}`}
+            className={`esteira-faixa ${f.cor}${aberta === f.id ? ' aberta' : ''}`}
             style={{ flexGrow: f.n }}
-            title={`${f.rotulo}: ${f.n}`}
+            onClick={() => alternar(f.id)}
+            aria-expanded={aberta === f.id}
+            aria-label={`${f.n} ${f.rotulo} — ver em quais stands`}
+            title={`${f.rotulo}: ${f.n} — clique para ver os stands`}
           >
             {f.n}
-          </div>
+          </button>
         ))}
       </div>
+
       <ul className="esteira-legenda">
         {cenario.esteira.map((f) => (
           <li key={f.id}>
-            <span className={`ponto ${f.cor}`} aria-hidden />
-            {f.rotulo} <strong>{f.n}</strong>
+            <button
+              type="button"
+              className={`legenda-item${aberta === f.id ? ' aberta' : ''}`}
+              onClick={() => alternar(f.id)}
+              aria-expanded={aberta === f.id}
+            >
+              <span className={`ponto ${f.cor}`} aria-hidden />
+              {f.rotulo} <strong>{f.n}</strong>
+            </button>
           </li>
         ))}
       </ul>
+
+      {faixa && (
+        <div className="esteira-detalhe">
+          <div className="titulo-secao">
+            <h4>{faixa.rotulo}</h4>
+            <button type="button" className="btn btn-ghost" onClick={() => setAberta(null)}>
+              Fechar
+            </button>
+          </div>
+          <p className="ajuda">
+            {faixa.n} {faixa.n === 1 ? 'peça' : 'peças'} em {faixa.stands.length}{' '}
+            {faixa.stands.length === 1 ? 'stand' : 'stands'}, do que tem mais para o que tem menos.
+          </p>
+          <ul className="pecas-lista">
+            {faixa.stands.map(({ projeto, pecas }) => (
+              <li key={projeto.token} className="pendente">
+                <div>
+                  <strong>
+                    <a href={linkDaFicha(feiraId, projeto.token)}>{projeto.stand}</a>
+                  </strong>
+                  <em className="dica-campo"> · {projeto.expositor} · {pecas.length}</em>
+                  <p className="dica-campo">{pecas.join(' · ')}</p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   )
 }

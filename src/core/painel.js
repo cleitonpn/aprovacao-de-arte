@@ -9,7 +9,7 @@
 // consulta nova, não há contador guardado no banco para sair de sincronia: o
 // painel é uma leitura diferente dos mesmos dados que a lista mostra.
 
-import { resumoDoProjeto, STATUS, situacaoDoPrazo } from './fluxo.js'
+import { resumoDoProjeto, STATUS, rotuloParaOTime, situacaoDoPrazo } from './fluxo.js'
 import { dificuldadeDoProjeto } from './reprovacoes.js'
 
 /**
@@ -65,13 +65,32 @@ export function panorama(linhas = [], { feira = null, agora = Date.now() } = {})
   const total = soma((s) => s.total)
   const recebidas = soma((s) => s.recebidas)
 
+  // Cada faixa carrega os STANDS que a compõem, não só o número.
+  //
+  // Sem isso a barra respondia "onde estão as peças?" e parava aí — o número
+  // certo e nenhum caminho até ele. "11 provas esperando o cliente" é uma
+  // informação incompleta: a pergunta seguinte é sempre "de quem?", e ela
+  // levava a abrir a lista inteira e conferir stand por stand.
   const pecas = sits.flatMap((s) => s.pecas)
-  const esteira = ESTEIRA.map((id) => ({
-    id,
-    rotulo: STATUS[id]?.rotulo || id,
-    cor: STATUS[id]?.cor || 'neutro',
-    n: pecas.filter((p) => p.status === id).length,
-  })).filter((f) => f.n > 0)
+  const esteira = ESTEIRA.map((id) => {
+    const stands = linhas
+      .map(({ projeto, sit }) => ({
+        projeto,
+        pecas: sit.pecas.filter((p) => p.status === id).map((p) => p.peca.rotulo),
+      }))
+      .filter((l) => l.pecas.length > 0)
+      .sort((a, b) => b.pecas.length - a.pecas.length)
+
+    return {
+      id,
+      // O rótulo do TIME: esta barra é do painel, e "sua aprovação" aqui
+      // apontaria para o analista em vez do cliente.
+      rotulo: rotuloParaOTime(id),
+      cor: STATUS[id]?.cor || 'neutro',
+      n: pecas.filter((p) => p.status === id).length,
+      stands,
+    }
+  }).filter((f) => f.n > 0)
 
   // "Precisa de você" é a lista do que só anda com uma ação do time. Não é um
   // resumo do que existe — é a fila de trabalho, e por isso mistura coisas de

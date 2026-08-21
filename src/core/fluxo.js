@@ -25,20 +25,46 @@
 import { emMs } from './datas.js'
 import { LIMITE_REPROVACOES } from './reprovacoes.js'
 
+// Os rótulos são escritos na SEGUNDA pessoa, para o cliente: é a tela dele que
+// os usa o tempo todo. Onde "seu" e "você" mudariam de dono no painel do time,
+// existe um `paraOTime` — sem ele, "Prova aguardando sua aprovação" no painel
+// diz ao analista que ele é quem precisa aprovar, que é o contrário do que
+// está acontecendo. Uma frase só não serve a dois leitores opostos.
 export const STATUS = {
   aguardando: { rotulo: 'Aguardando arte', ordem: 0, cor: 'neutro' },
   recebida: { rotulo: 'Arte recebida', ordem: 1, cor: 'ok' },
-  em_prova: { rotulo: 'Prova aguardando sua aprovação', ordem: 2, cor: 'alerta' },
+  em_prova: {
+    rotulo: 'Prova aguardando sua aprovação',
+    paraOTime: 'Prova aguardando o cliente',
+    ordem: 2,
+    cor: 'alerta',
+  },
   aprovada: { rotulo: 'Prova aprovada', ordem: 3, cor: 'ok' },
-  reprovada: { rotulo: 'Prova reprovada — refazer', ordem: 4, cor: 'ruim' },
+  reprovada: {
+    rotulo: 'Prova reprovada — refazer',
+    paraOTime: 'Prova reprovada pelo cliente',
+    ordem: 4,
+    cor: 'ruim',
+  },
   // Segunda camada: a análise automática aprovou o arquivo, mas quem recebe a
   // arte para produzir achou problema. São coisas diferentes e precisam de
   // rótulos diferentes — "reprovada" já significa que o CLIENTE recusou a
   // nossa prova, e trocar o sentido da palavra no meio do fluxo confundiria as
   // duas telas de uma vez.
-  devolvida: { rotulo: 'Recusada pelo time — refazer', ordem: 4, cor: 'ruim' },
+  devolvida: {
+    rotulo: 'Recusada pelo time — refazer',
+    paraOTime: 'Devolvida, aguardando correção',
+    ordem: 4,
+    cor: 'ruim',
+  },
   em_impressao: { rotulo: 'Em impressão', ordem: 5, cor: 'ok' },
   impressa: { rotulo: 'Impressa', ordem: 6, cor: 'ok' },
+}
+
+/** O rótulo de um estado como o TIME o lê. Cai no do cliente quando é o mesmo. */
+export function rotuloParaOTime(id) {
+  const s = STATUS[id]
+  return s?.paraOTime || s?.rotulo || id
 }
 
 export const STATUS_DO_TIME = ['em_impressao', 'impressa']
