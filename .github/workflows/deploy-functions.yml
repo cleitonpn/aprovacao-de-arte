@@ -56,11 +56,22 @@ jobs:
       - run: npm ci
       - run: npm test
 
+      # A credencial autentica, mas não diz ao CLI em qual projeto trabalhar —
+      # sem `--project` ele para com "No currently active project". O id sai do
+      # próprio arquivo da credencial de propósito: escrever o nome do projeto
+      # aqui também criaria um segundo lugar para ele ficar errado, e o dia em
+      # que os dois discordarem o deploy vai para o projeto errado sem avisar.
       - name: Gravar a credencial
         run: |
           printf '%s' "$FIREBASE_SA_ARTE" > "$RUNNER_TEMP/sa.json"
           echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/sa.json" >> "$GITHUB_ENV"
-          node -e "console.log('projeto:', require(process.env.RUNNER_TEMP + '/sa.json').project_id)"
+          PROJETO=$(node -p "require('$RUNNER_TEMP/sa.json').project_id")
+          if [ -z "$PROJETO" ] || [ "$PROJETO" = "undefined" ]; then
+            echo "A credencial FIREBASE_SA_ARTE não tem project_id." >&2
+            exit 1
+          fi
+          echo "FIREBASE_PROJETO=$PROJETO" >> "$GITHUB_ENV"
+          echo "Publicando no projeto: $PROJETO"
         env:
           FIREBASE_SA_ARTE: ${{ secrets.FIREBASE_SA_ARTE }}
           RUNNER_TEMP: ${{ runner.temp }}
@@ -68,12 +79,15 @@ jobs:
       - name: Guardar a chave do Resend no Secret Manager
         run: |
           printf '%s' "$RESEND_API_KEY" \
-            | npx --yes firebase-tools@13 functions:secrets:set RESEND_API_KEY --data-file - --force
+            | npx --yes firebase-tools@13 functions:secrets:set RESEND_API_KEY \
+                --project "$FIREBASE_PROJETO" --data-file -
         env:
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
 
       - name: Publicar
-        run: npx --yes firebase-tools@13 deploy --only functions --non-interactive --force
+        run: |
+          npx --yes firebase-tools@13 deploy --only functions \
+            --project "$FIREBASE_PROJETO" --non-interactive --force
 
       - name: Apagar a credencial
         if: always()
