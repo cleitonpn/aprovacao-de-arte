@@ -206,3 +206,48 @@ test('os três avisos convivem sem se atrapalhar', () => {
   })
   assert.deepEqual(tipos(avisosPendentes(p, { agora: AGORA })), ['devolucao', 'prazo', 'prova'])
 })
+
+// ------------------------------------------------------------ boas-vindas
+//
+// Substitui o e-mail que o atendimento manda à mão a cada cadastro. Numa feira
+// de trezentos expositores isso é um dia de trabalho — e é onde o link se
+// perde, chega sem as medidas, ou não chega.
+
+test('cadastro novo recebe boas-vindas com peças, prazo e link', () => {
+  const p = projeto({ prazoEnvio: AGORA + 20 * DIA })
+  const avisos = avisosPendentes(p, { agora: AGORA, novo: true })
+  const a = avisos.find((x) => x.tipo === 'boas_vindas')
+
+  assert.ok(a, 'um cadastro novo precisa avisar o cliente')
+  assert.equal(a.chave, 'boas_vindas:abc123abc123')
+  assert.deepEqual(a.para, ['marketing@kemin.com', 'agencia@x.com'])
+  assert.match(a.assunto, /KEMIN 2026/)
+  // as peças com as medidas, que é o que o atendimento digitava à mão
+  assert.match(a.texto, /Lona de fundo — 275 × 275 cm/)
+  assert.match(a.texto, /Testeira — 150 × 50 cm/)
+  assert.match(a.texto, /2 peças/)
+  assert.match(a.texto, /30\/08\/2026/)
+  assert.match(a.texto, /abc123abc123/)
+})
+
+// A trava que impede o primeiro dia no ar de mandar "bem-vindo, envie suas
+// artes" para a base inteira, incluindo quem já imprimiu.
+test('sem `novo`, projeto existente nunca recebe boas-vindas', () => {
+  const p = projeto({ prazoEnvio: AGORA + 20 * DIA })
+  assert.deepEqual(avisosPendentes(p, { agora: AGORA }), [])
+  assert.equal(
+    avisosPendentes(p, { agora: AGORA, novo: false }).some((x) => x.tipo === 'boas_vindas'),
+    false,
+  )
+})
+
+test('cadastro sem peças ainda não tem o que pedir', () => {
+  const p = projeto({ pecas: [] })
+  assert.equal(avisosPendentes(p, { agora: AGORA, novo: true }).length, 0)
+})
+
+test('sem prazo definido, o texto não inventa uma data', () => {
+  const [a] = avisosPendentes(projeto(), { agora: AGORA, novo: true })
+  assert.match(a.texto, /prazo de envio será informado/)
+  assert.doesNotMatch(a.texto, /Invalid Date|NaN/)
+})

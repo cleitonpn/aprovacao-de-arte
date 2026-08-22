@@ -1,14 +1,15 @@
 // Os avisos por e-mail do cliente.
 //
-// Três coisas que o cliente precisava saber e não sabia:
+// Quatro coisas que o cliente precisava saber e não sabia:
 //
-//   1. a prova de impressão está pronta e esperando o aceite dele;
-//   2. o time devolveu uma arte e precisa da versão corrigida;
-//   3. o prazo de envio está acabando e faltam peças.
+//   1. o stand dele foi cadastrado, com estas peças e este prazo;
+//   2. a prova de impressão está pronta e esperando o aceite dele;
+//   3. o time devolveu uma arte e precisa da versão corrigida;
+//   4. o prazo de envio está acabando e faltam peças.
 //
-// As duas primeiras são reações a uma mudança no projeto, então rodam num
+// As três primeiras são reações a uma mudança no projeto, então rodam num
 // gatilho do Firestore — o e-mail sai em segundos, no momento em que o
-// analista clica. A terceira não tem mudança nenhuma para reagir (o tempo
+// analista clica. A última não tem mudança nenhuma para reagir (o tempo
 // passa, o documento fica parado), então roda uma vez por dia.
 //
 // A REGRA de quem avisar não mora aqui: mora em `nucleo/avisos.js`, que é o
@@ -96,11 +97,12 @@ async function comPrazoDaFeira(projeto) {
  * serviço de e-mail silenciaria aquele aviso para sempre — o pior desfecho
  * possível, porque ninguém fica sabendo que ninguém foi avisado.
  */
-async function despachar(token, projetoCru, { agora = Date.now() } = {}) {
+async function despachar(token, projetoCru, { agora = Date.now(), novo = false } = {}) {
   const projeto = await comPrazoDaFeira(projetoCru)
   const pendentes = avisosPendentes({ ...projeto, token }, {
     agora,
     base: ENDERECO_SITE,
+    novo,
   })
   if (!pendentes.length) return 0
 
@@ -155,7 +157,12 @@ export const avisarAoMudarProjeto = onDocumentWritten(
   async (evento) => {
     const depois = evento.data?.after
     if (!depois?.exists) return
-    await despachar(evento.params.token, depois.data())
+    // Só a criação manda boas-vindas. É o gatilho que sabe disso — a varredura
+    // diária não, e é bom que não saiba: se soubesse, o primeiro dia no ar
+    // mandaria "bem-vindo, envie suas artes" para a base inteira, incluindo
+    // quem já imprimiu.
+    const novo = evento.data?.before?.exists === false
+    await despachar(evento.params.token, depois.data(), { novo })
   },
 )
 

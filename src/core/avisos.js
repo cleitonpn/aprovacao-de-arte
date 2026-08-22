@@ -82,6 +82,9 @@ ${paragrafos.map((p) => `<p>${escapar(p)}</p>`).join('\n')}
 
 const nomeDoStand = (p) => p?.expositor || p?.stand || 'seu stand'
 
+/** Medida sem casa decimal inútil: 275 e não 275,0. */
+const fmt = (v) => Number(v).toLocaleString('pt-BR', { maximumFractionDigits: 1 })
+
 /**
  * Tudo que este projeto precisa avisar AGORA.
  *
@@ -91,7 +94,9 @@ const nomeDoStand = (p) => p?.expositor || p?.stand || 'seu stand'
  * gatilho de Firestore roda "pelo menos uma vez" — repetir é normal, e sem
  * chave o cliente receberia o aviso em duplicata.
  */
-export function avisosPendentes(projeto, { agora = Date.now(), base = ENDERECO_PADRAO, dias = DIAS_DE_LEMBRETE } = {}) {
+export function avisosPendentes(projeto, {
+  agora = Date.now(), base = ENDERECO_PADRAO, dias = DIAS_DE_LEMBRETE, novo = false,
+} = {}) {
   const para = destinatarios(projeto)
   if (!para.length || !projeto?.token) return []
 
@@ -100,6 +105,44 @@ export function avisosPendentes(projeto, { agora = Date.now(), base = ENDERECO_P
   const stand = nomeDoStand(projeto)
   const feira = projeto.feira ? ` — ${projeto.feira}` : ''
   const avisos = []
+
+  // ------------------------------------------------------------ boas-vindas
+  //
+  // O trabalho humano que isto substitui: hoje alguém do atendimento manda o
+  // link a cada cadastro, escrevendo à mão quais peças aquele stand tem e até
+  // quando. Numa feira de trezentos expositores isso é um dia de trabalho — e
+  // é onde o link se perde, chega sem as medidas ou não chega.
+  //
+  // `novo` vem de quem chama, e só a criação do documento no gatilho do
+  // Firestore o liga. Sem isso, publicar esta função mandaria "bem-vindo,
+  // envie suas artes" para toda a base no primeiro dia — inclusive para quem
+  // já está no meio do processo, ou já imprimiu.
+  if (novo && resumo.total > 0) {
+    const lista = projeto.pecas.map((p) => `• ${p.rotulo} — ${fmt(p.larguraCm)} × ${fmt(p.alturaCm)} cm`)
+    const prazo = resumo.prazo
+    const quando = prazo.temPrazo
+      ? `O prazo para enviar vai até ${new Date(prazo.limite).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })}.`
+      : 'O prazo de envio será informado em breve.'
+
+    avisos.push({
+      chave: `boas_vindas:${projeto.token}`,
+      tipo: 'boas_vindas',
+      para,
+      assunto: `Suas artes do ${stand}${feira}`,
+      ...corpo({
+        saudacao: `Olá! O ${stand} está cadastrado${projeto.feira ? ` na ${projeto.feira}` : ''} e a página para enviar as artes já está no ar.`,
+        paragrafos: [
+          `São ${resumo.total} ${resumo.total === 1 ? 'peça' : 'peças'}:`,
+          ...lista,
+          quando,
+          'Cada peça já está na página com a medida certa e um gabarito para baixar — o seu designer não precisa perguntar tamanho a ninguém. A conferência é na hora, no seu próprio navegador: em segundos você sabe se o arquivo serve.',
+          'Guarde este link. É por ele que você envia, acompanha e aprova a prova de impressão.',
+        ],
+        acao: 'Abrir a página das minhas artes',
+        link,
+      }),
+    })
+  }
 
   // ------------------------------------------------------ prova esperando
   //

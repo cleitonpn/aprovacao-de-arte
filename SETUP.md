@@ -109,13 +109,20 @@ depois. Três e-mails fecham isso:
 
 | Quando | O que o cliente recebe |
 |---|---|
+| O stand é cadastrado | Boas-vindas com a lista de peças e medidas, o prazo e o link |
 | O analista sobe a prova | "Sua prova de impressão está pronta", com as peças que ela cobre |
 | O time devolve uma arte | O motivo escrito pelo analista, e o número da próxima versão |
 | Faltam 7 e 2 dias do prazo | Quantas peças faltam e a data limite |
 
-Os dois primeiros saem em segundos, porque reagem à gravação do analista. O
+Os três primeiros saem em segundos, porque reagem à gravação do analista. O
 de prazo roda uma vez por dia, às 9h de Brasília — não há mudança nenhuma
 para reagir quando o tempo passa.
+
+O de boas-vindas substitui o e-mail que o atendimento manda à mão a cada
+cadastro, com as medidas digitadas uma a uma. Ele sai **só na criação** do
+stand: um projeto que já existia nunca recebe, nem quando é editado. Sem essa
+trava, o primeiro dia no ar mandaria "bem-vindo, envie suas artes" para a base
+inteira — incluindo quem já imprimiu.
 
 Quem já mandou tudo **não** recebe o lembrete de prazo. Cobrar quem não deve é
 como se ensina o cliente a ignorar os nossos e-mails, e aí o aviso que importa
