@@ -153,6 +153,7 @@ próprio e-mail — e para o cliente cairia em spam.
 |---|---|
 | `RESEND_API_KEY` | A chave criada em **API keys** no Resend |
 | `FIREBASE_SA_ARTE` | O mesmo secret que a sincronização já usa |
+| `RESEND_WEBHOOK_SECRET` | Opcional agora — veja *Ligar o retorno do Resend*, mais abaixo. Só existe depois do primeiro deploy |
 
 A conta de serviço precisa dos papéis de deploy: Cloud Functions Admin,
 Service Account User, Cloud Build Editor, Artifact Registry Admin e Cloud
@@ -181,6 +182,37 @@ verificado, **403** é chave sem permissão, **429** é a cota do dia estourada
 O sistema grava o que já avisou em `projetos/{token}/avisos`. É isso que
 impede o cliente de receber o mesmo e-mail duas vezes — e é onde olhar para
 saber se um aviso saiu. Apagar um documento de lá faz o aviso ser reenviado.
+
+### Ligar o retorno do Resend (e-mail que voltou)
+
+Mandar sem saber se chegou é meio caminho. Um endereço com erro de digitação —
+e a importação da produção está cheia deles — fica indistinguível de cliente
+relapso: o stand fica quieto e o analista cobra por três dias alguém que nunca
+recebeu nada. Ligado o retorno, o painel mostra **"E-mail voltou"** e o stand
+entra na lista **Ligar hoje**.
+
+A ordem importa, porque o webhook aponta para um endereço que só existe depois
+do deploy:
+
+1. Rode o workflow **Publicar as funções de aviso**. Ele cria a função
+   `retornoDoCorreio` — o endereço aparece no fim do log e em Firebase →
+   Functions, no formato
+   `https://us-central1-aprovacao-de-arte-49bc3.cloudfunctions.net/retornoDoCorreio`.
+2. No Resend, **Webhooks → Add Webhook**, cole esse endereço e marque os
+   eventos `email.delivered`, `email.bounced` e `email.complained`.
+3. O Resend mostra um **Signing Secret** (começa com `whsec_`). Guarde-o em
+   Settings → Secrets and variables → Actions como `RESEND_WEBHOOK_SECRET`.
+4. Rode o workflow **de novo**, para o segredo chegar ao Secret Manager.
+
+Enquanto o passo 4 não acontecer, a função **recusa todos os retornos** com
+401. É de propósito: esse endereço é público, e sem conferir a assinatura
+qualquer pessoa na internet poderia marcar o e-mail de um cliente como
+inválido — o que faria a equipe ligar para quem está tranquilo e parar de
+ligar para quem precisa. Dado inventado no painel é pior do que dado nenhum.
+
+Se um retorno for recusado, aparece em Functions → Registros como "retorno
+recusado: assinatura inválida". A causa quase sempre é o segredo do passo 3
+não ter subido ainda, ou ter sido trocado no Resend sem atualizar o secret.
 
 ## Ponte com o app de produção
 
@@ -394,6 +426,39 @@ perdido, e a conversa é outra.
 O alerta some quando alguém abre a ficha e volta se houver nova tentativa
 reprovada. Para mudar o número, é a constante `LIMITE_REPROVACOES` em
 `src/core/reprovacoes.js`.
+
+### Por que o stand está calado
+
+"0 de 5 artes" era o mesmo número para quatro situações que pedem quatro ações
+opostas. O painel agora separa:
+
+| O que aparece | O que significa | O que fazer |
+|---|---|---|
+| **E-mail voltou** | O endereço está errado; ele nunca soube | Achar outro contato, hoje |
+| **Nunca abriu o link** | Não começou nada | Ligar e entender |
+| **Abriu, não baixou o gabarito** | Viu, mas o designer não recebeu | Confirmar quem vai fazer a arte |
+| **Baixou o gabarito** | Está sendo produzido | Cobrar perto do prazo |
+| **Tentando enviar, sem conseguir** | Travou na ferramenta | Ajuda técnica, não cobrança |
+
+O sinal que faz a diferença é o **gabarito**: para desenhar a arte o designer
+precisa dele, e ele só existe na página do stand. Quem não baixou não começou —
+não é palpite, é uma dependência do processo.
+
+Quem cai em **Ligar hoje** (bloco próprio na visão geral): e-mail que voltou, a
+qualquer momento — porque o canal está quebrado e o aviso da prova pronta
+também não vai chegar —, ou silêncio com **7 dias ou menos** de prazo. Com
+trinta dias pela frente ninguém entra: alarme que toca cedo demais é alarme que
+se aprende a ignorar.
+
+**A visita do time não conta.** O analista abre o link do cliente para
+conferir; se isso carimbasse, o stand apareceria como "acessado" e a equipe
+deixaria de ligar justamente para quem mais precisa. O que distingue é a
+sessão: o cliente é anônimo, o time é logado.
+
+Não se registra **quem** abriu — o link circula entre marketing, agência e quem
+assina, e é o que se quer. São dois carimbos de tempo e um contador, por stand.
+Para mudar o limiar de dias, é a constante `DIAS_DE_INTERVENCAO` em
+`src/core/contato.js`.
 
 ### Conversa com o cliente
 

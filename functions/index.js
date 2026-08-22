@@ -18,6 +18,7 @@
 
 import { onDocumentWritten } from 'firebase-functions/v2/firestore'
 import { onSchedule } from 'firebase-functions/v2/scheduler'
+import { onRequest } from 'firebase-functions/v2/https'
 import { defineSecret } from 'firebase-functions/params'
 import { logger } from 'firebase-functions'
 import { initializeApp } from 'firebase-admin/app'
@@ -25,10 +26,16 @@ import { getFirestore } from 'firebase-admin/firestore'
 
 import { avisosPendentes } from './nucleo/avisos.js'
 import { enviarEmail } from './src/correio.js'
+import { assinaturaConfere, lerEvento } from './src/retorno.js'
 
 // A chave do Resend é o único valor secreto aqui, e o único que merece o
 // Secret Manager: ela dá poder de mandar e-mail em nome do domínio.
 const CHAVE_RESEND = defineSecret('RESEND_API_KEY')
+
+// O segredo com que o Resend assina os avisos de entrega. Sem ele o endereço
+// do retorno seria uma porta aberta na internet para qualquer um marcar o
+// e-mail de qualquer cliente como "voltou".
+const SEGREDO_RETORNO = defineSecret('RESEND_WEBHOOK_SECRET')
 
 // Constantes, não parâmetros configuráveis.
 //
@@ -134,6 +141,16 @@ async function despachar(token, projetoCru, { agora = Date.now(), novo = false }
         html: aviso.html,
       })
       await marca.set({ envioId: id ?? null }, { merge: true })
+      // O caminho de volta: quando o Resend avisar que este e-mail voltou, ele
+      // manda o id do envio e mais nada que ligue ao stand. Uma consulta por
+      // grupo de coleção resolveria, ao custo de um índice a criar à mão no
+      // console — e um índice esquecido só aparece no dia do primeiro retorno,
+      // como erro. Um documento chato de uma linha evita a classe inteira.
+      if (id) {
+        await bd.doc(`correio/${id}`)
+          .set({ token, chave: aviso.chave, tipo: aviso.tipo, em: new Date().toISOString() })
+          .catch((erro) => logger.warn('não foi possível indexar o envio', { id, erro: String(erro) }))
+      }
       enviados += 1
       logger.info('aviso enviado', { token, tipo: aviso.tipo, chave: aviso.chave, envioId: id })
     } catch (erro) {
@@ -163,6 +180,76 @@ export const avisarAoMudarProjeto = onDocumentWritten(
     // quem já imprimiu.
     const novo = evento.data?.before?.exists === false
     await despachar(evento.params.token, depois.data(), { novo })
+  },
+)
+
+/**
+ * O que o Resend devolve sobre um e-mail já enviado.
+ *
+ * A lacuna que isto fecha: mandamos quatro avisos automáticos e não sabíamos se
+ * algum chegou. Um endereço com erro de digitação — e a importação da produção
+ * está cheia deles — era indistinguível de cliente relapso: o stand ficava
+ * quieto e o analista cobrava por três dias alguém que nunca recebeu nada.
+ *
+ * O endereço é público (é o Resend que chama, sem credencial nossa), então a
+ * assinatura é a única coisa que separa um evento verdadeiro de qualquer pessoa
+ * na internet marcando o e-mail de um cliente como inválido. Ela é conferida
+ * sobre o corpo CRU: reserializar o JSON muda um byte e derruba todo evento
+ * legítimo.
+ *
+ * Responde 200 para quase tudo, inclusive para o que não entendeu. É de
+ * propósito: erro faz o Resend reenviar, e reenviar um evento que nunca vamos
+ * saber processar é ruído infinito. Só a assinatura inválida responde 401 —
+ * essa precisa aparecer.
+ */
+export const retornoDoCorreio = onRequest(
+  { region: REGIAO, secrets: [SEGREDO_RETORNO], cors: false, maxInstances: 5 },
+  async (req, resposta) => {
+    if (req.method !== 'POST') { resposta.status(405).send('método não permitido'); return }
+
+    const cru = req.rawBody ? req.rawBody.toString('utf8') : JSON.stringify(req.body ?? {})
+    const ok = assinaturaConfere({
+      segredo: SEGREDO_RETORNO.value(),
+      id: req.get('svix-id'),
+      timestamp: req.get('svix-timestamp'),
+      assinatura: req.get('svix-signature'),
+      corpo: cru,
+    })
+    if (!ok) {
+      logger.warn('retorno recusado: assinatura inválida', { id: req.get('svix-id') })
+      resposta.status(401).send('assinatura inválida')
+      return
+    }
+
+    let evento = null
+    try {
+      evento = lerEvento(JSON.parse(cru))
+    } catch (erro) {
+      logger.warn('retorno com corpo ilegível', { erro: String(erro) })
+    }
+    if (!evento) { resposta.status(200).send('ignorado'); return }
+
+    const indice = await bd.doc(`correio/${evento.envioId}`).get()
+    if (!indice.exists) {
+      // E-mail que este sistema não mandou, ou mandou antes de o índice existir.
+      logger.info('retorno sem stand correspondente', { envioId: evento.envioId })
+      resposta.status(200).send('sem correspondência')
+      return
+    }
+
+    const { token, chave } = indice.data()
+    await bd.doc(`projetos/${token}`).set({
+      correio: {
+        estado: evento.estado,
+        em: evento.em || new Date().toISOString(),
+        para: evento.para?.[0] || null,
+        motivo: evento.motivo,
+        chave: chave || null,
+      },
+    }, { merge: true })
+
+    logger.info('retorno registrado', { token, estado: evento.estado, envioId: evento.envioId })
+    resposta.status(200).send('ok')
   },
 )
 

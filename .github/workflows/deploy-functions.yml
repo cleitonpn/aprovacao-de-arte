@@ -14,6 +14,10 @@ name: Publicar as funções de aviso
 #                      Functions Admin, Service Account User, Cloud Build
 #                      Editor, Artifact Registry Admin, Cloud Scheduler Admin).
 #   RESEND_API_KEY     a chave criada no painel do Resend.
+#   RESEND_WEBHOOK_SECRET  o segredo do webhook (Resend → Webhooks). Só existe
+#                      DEPOIS do primeiro deploy, porque o webhook aponta para
+#                      o endereço da função. Enquanto não estiver preenchido,
+#                      a função recusa todo retorno — nunca aceita sem conferir.
 #
 # A chave do Resend NÃO fica no código nem no `firebase.json`: ela é gravada no
 # Secret Manager do Google e a função a lê em tempo de execução. Trocar a chave
@@ -89,6 +93,22 @@ jobs:
                 --project "$FIREBASE_PROJETO" --data-file -
         env:
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+
+      # O segredo que assina os avisos de entrega do Resend.
+      #
+      # O valor de reserva existe por uma ordem de operações inevitável: o
+      # segredo só é criado no painel do Resend DEPOIS que o endereço da função
+      # existe, e o endereço só existe depois de publicar. Sem reserva, o
+      # primeiro deploy falharia pedindo um segredo que ainda não tem como
+      # existir. Com ela o deploy passa e a função recusa todo retorno até o
+      # segredo verdadeiro entrar — que é o lado certo para errar.
+      - name: Guardar o segredo do retorno no Secret Manager
+        run: |
+          printf '%s' "${RESEND_WEBHOOK_SECRET:-ainda-nao-configurado}" \
+            | npx --yes firebase-tools@13 functions:secrets:set RESEND_WEBHOOK_SECRET \
+                --project "$FIREBASE_PROJETO" --data-file -
+        env:
+          RESEND_WEBHOOK_SECRET: ${{ secrets.RESEND_WEBHOOK_SECRET }}
 
       - name: Publicar
         run: |

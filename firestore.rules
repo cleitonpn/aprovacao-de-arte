@@ -280,6 +280,15 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // O caminho de volta do serviço de e-mail: id do envio → stand que o
+    // recebeu. Quem escreve e lê é a função na nuvem, com conta de serviço, que
+    // passa por cima destas regras — então "ninguém" aqui é literal, nem o
+    // time. Nenhum navegador tem o que fazer com isto, e o que ele mostraria
+    // (a lista de tudo que já foi disparado) não é informação de tela.
+    match /correio/{envioId} {
+      allow read, write: if false;
+    }
+
     // Allowlist do painel, agora gerenciada pela tela "Analistas".
     //
     // Quem já tem acesso pode liberar outra pessoa. É uma escolha consciente:
