@@ -34,6 +34,17 @@ export const HORAS_ENTRE_VISITAS = 6
 /** A partir de quantos dias do prazo o silêncio vira caso de telefonema. */
 export const DIAS_DE_INTERVENCAO = 7
 
+/**
+ * Quando o registro de acesso passou a existir.
+ *
+ * Antes desta data ninguém carimbava nada, então "nunca abriu" num stand antigo
+ * pode significar as duas coisas: nunca abriu mesmo, ou abriu em julho e a
+ * ferramenta não estava olhando. Sem essa distinção na tela, a primeira semana
+ * no ar seria uma lista de telefonemas para clientes que já mandaram tudo —
+ * e a equipe aprenderia, com razão, a não confiar no sinal.
+ */
+export const INICIO_DO_REGISTRO = Date.parse('2026-08-22T00:00:00Z')
+
 const HORA = 60 * 60 * 1000
 const emMs = (v) => {
   if (!v) return null
@@ -118,7 +129,17 @@ export const SINAL = {
 export function sinalDeContato(projeto, sit = {}) {
   const acesso = projeto?.acesso || null
   const desde = emMs(acesso?.primeiraEm)
-  const base = (id) => ({ id, ...SINAL[id], desde, visitas: Number(acesso?.visitas) || 0 })
+  const base = (id) => ({
+    id,
+    ...SINAL[id],
+    desde,
+    visitas: Number(acesso?.visitas) || 0,
+    gabaritoEm: emMs(acesso?.gabaritoEm),
+    // Sem carimbo nenhum, a ausência não prova ausência: pode ser um stand que
+    // o cliente abriu antes de existir registro. Quem mostra na tela precisa
+    // saber a diferença para não mandar o time ligar à toa.
+    semHistorico: !acesso,
+  })
 
   if (sit.recebidas > 0) return base('enviando')
   if (sit.dificuldade?.alerta) return base('travado')
@@ -144,7 +165,47 @@ export const CORREIO = {
 export function correioDoProjeto(projeto) {
   const c = projeto?.correio || null
   const estado = CORREIO[c?.estado] ? c.estado : 'desconhecido'
+
+  // Retorno de um endereço que não está mais no cadastro é retorno vencido.
+  //
+  // É o que faz o alerta se resolver sozinho no caminho certo: o analista
+  // descobre que o e-mail voltou, liga, consegue o endereço bom e corrige o
+  // cadastro — e o aviso some porque o problema acabou, não porque alguém o
+  // dispensou. Sem isto, "e-mail voltou" ficaria grudado no stand para sempre,
+  // apontando para um endereço que ninguém mais usa.
+  const lista = (projeto?.emails?.length ? projeto.emails : [projeto?.email])
+    .filter(Boolean).map((e) => String(e).trim().toLowerCase())
+  const alvo = c?.para ? String(c.para).trim().toLowerCase() : null
+  const vencido = estado !== 'desconhecido' && alvo && lista.length > 0 && !lista.includes(alvo)
+  if (vencido) return { estado: 'desconhecido', ...CORREIO.desconhecido, em: null, para: null, motivo: null }
+
   return { estado, ...CORREIO[estado], em: emMs(c?.em), para: c?.para || null, motivo: c?.motivo || null }
+}
+
+// -------------------------------------------------------- "já falei com ele"
+//
+// Todo alerta precisa de uma saída, ou ele deixa de ser alerta.
+//
+// O de dificuldade some quando alguém ABRE a ficha — e isso é local, do
+// navegador de quem abriu: volta para o resto do time no dia seguinte. Na
+// prática o stand ficava marcado para sempre, mesmo depois de o analista ter
+// resolvido por telefone. Alerta que não se apaga vira paisagem, e aí o
+// próximo caso de verdade também não é visto.
+
+/** Quanto tempo o silêncio fica perdoado depois de uma conversa. */
+export const DIAS_DE_SILENCIO_APOS_CONTATO = 7
+
+export function contatoDoProjeto(projeto) {
+  const c = projeto?.controle?.contato || null
+  return {
+    houve: Boolean(c?.em),
+    em: emMs(c?.em),
+    por: c?.por || null,
+    observacao: c?.observacao || null,
+    // Quantas reprovações o stand tinha quando a conversa aconteceu. É o que
+    // faz o alerta voltar na tentativa SEGUINTE, e não antes.
+    reprovacoesAte: Number(c?.reprovacoesAte) || 0,
+  }
 }
 
 /**
@@ -159,8 +220,20 @@ export function correioDoProjeto(projeto) {
  *   dias pela frente não é problema; com 4 dias, é o problema mais caro que a
  *   feira tem, porque ainda dá tempo — mas só hoje.
  */
-export function precisaDeIntervencao({ sinal, correio, prazo, sit }, { dias = DIAS_DE_INTERVENCAO } = {}) {
+export function precisaDeIntervencao(
+  { sinal, correio, prazo, sit, contato },
+  { dias = DIAS_DE_INTERVENCAO, agora = Date.now() } = {},
+) {
   if (sit?.total > 0 && sit.recebidas >= sit.total) return false
+
+  // Conversa recente cala o alerta.
+  //
+  // Por TEMPO, e não para sempre, porque aqui não existe evento novo para
+  // reabrir: o estado é "silêncio", e silêncio não muda sozinho. Uma semana
+  // depois, se ele continua sem abrir e o prazo continua chegando, a conversa
+  // não resolveu e o time precisa saber de novo.
+  if (contato?.houve && agora - contato.em < DIAS_DE_SILENCIO_APOS_CONTATO * 24 * 60 * 60 * 1000) return false
+
   if (correio?.estado === 'voltou' || correio?.estado === 'reclamou') return true
   if (!prazo?.temPrazo || prazo.vencido) return false
   if (prazo.diasRestantes > dias) return false

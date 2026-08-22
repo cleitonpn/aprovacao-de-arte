@@ -89,6 +89,21 @@ test('quem tentou e não conseguiu não é caso de cobrança', () => {
   assert.match(s.acao, /Ajuda técnica/)
 })
 
+test('sem carimbo nenhum, a tela precisa saber que é cegueira nossa', () => {
+  // Stand cadastrado antes de o registro existir: "nunca abriu" pode ser a
+  // verdade ou pode ser que ele tenha aberto em julho e ninguém estivesse
+  // olhando. Sem essa marca, a primeira semana no ar vira uma lista de
+  // telefonemas para quem já mandou tudo — e a equipe aprende, com razão, a
+  // desconfiar do sinal inteiro.
+  assert.equal(sinalDeContato({}, sit()).semHistorico, true)
+  assert.equal(sinalDeContato({ acesso: { primeiraEm: iso(AGORA) } }, sit()).semHistorico, false)
+})
+
+test('a data do gabarito viaja junto, para a ficha poder mostrá-la', () => {
+  const p = { acesso: { primeiraEm: iso(AGORA - DIA), gabaritoEm: iso(AGORA) } }
+  assert.equal(sinalDeContato(p, sit()).gabaritoEm, AGORA)
+})
+
 test('quem já enviou vence qualquer carimbo de visita', () => {
   // Evidência mais forte manda. Um stand com arte recebida não pode aparecer
   // como "nunca abriu" só porque o carimbo é anterior a este recurso existir.
@@ -164,4 +179,53 @@ test('prazo vencido não entra: aí já é outra conversa', () => {
 
 test('o limiar de dias é o mesmo do lembrete de prazo mais próximo', () => {
   assert.equal(DIAS_DE_INTERVENCAO, 7)
+})
+
+// ------------------------------------------------------ "já falei com ele"
+//
+// Todo alerta precisa de uma saída, ou deixa de ser alerta. O de dificuldade
+// sumia só no navegador de quem abria a ficha e voltava para o resto do time
+// no dia seguinte — na prática, o stand ficava marcado para sempre mesmo
+// depois de resolvido por telefone.
+
+test('conversa recente tira o stand da lista de telefonemas', () => {
+  const c = caso({ contato: { houve: true, em: AGORA - DIA } })
+  assert.equal(precisaDeIntervencao(c, { agora: AGORA }), false)
+})
+
+test('a conversa vale por uma semana, não para sempre', () => {
+  // Aqui não existe evento novo capaz de reabrir o alerta: o estado é
+  // "silêncio", e silêncio não muda sozinho. Se uma semana depois ele continua
+  // sem abrir e o prazo continua chegando, a conversa não resolveu.
+  const c = caso({ contato: { houve: true, em: AGORA - 8 * DIA } })
+  assert.equal(precisaDeIntervencao(c, { agora: AGORA }), true)
+})
+
+test('a conversa cala até o e-mail que voltou', () => {
+  // Falaram com o cliente por outro canal; o aviso de endereço inválido não
+  // precisa insistir na mesma semana.
+  const c = caso({ correio: { estado: 'voltou' }, contato: { houve: true, em: AGORA - DIA } })
+  assert.equal(precisaDeIntervencao(c, { agora: AGORA }), false)
+})
+
+test('retorno de um e-mail que saiu do cadastro não conta mais', () => {
+  // É assim que o alerta se resolve pelo caminho certo: o analista liga, pega
+  // o endereço bom, corrige o cadastro — e o aviso some porque o problema
+  // acabou, não porque alguém o dispensou.
+  const projeto = {
+    emails: ['compras@kemin.com'],
+    correio: { estado: 'voltou', para: 'marketing@kemim.com', em: iso(AGORA) },
+  }
+  assert.equal(correioDoProjeto(projeto).estado, 'desconhecido')
+
+  // Mas enquanto o endereço ruim continuar cadastrado, o aviso fica.
+  const aindaRuim = { ...projeto, emails: ['marketing@kemim.com'] }
+  assert.equal(correioDoProjeto(aindaRuim).estado, 'voltou')
+})
+
+test('sem cadastro de e-mail nenhum, o retorno antigo é preservado', () => {
+  // Não dá para concluir "endereço trocado" quando não há lista com o que
+  // comparar — e apagar o aviso por falta de dado seria inventar uma correção.
+  const p = { correio: { estado: 'voltou', para: 'a@b.com', em: iso(AGORA) } }
+  assert.equal(correioDoProjeto(p).estado, 'voltou')
 })

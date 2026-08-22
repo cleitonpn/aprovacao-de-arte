@@ -380,6 +380,39 @@ function paraCarimbo(fb, iso) {
   return Number.isNaN(data.getTime()) ? null : fb.firestore.Timestamp.fromDate(data)
 }
 
+/**
+ * "Já falei com o cliente" — a saída dos alertas.
+ *
+ * Todo alerta precisa de uma, ou deixa de ser alerta. O de dificuldade sumia
+ * quando alguém abria a ficha, mas isso era local do navegador: voltava para o
+ * resto do time no dia seguinte, e o stand ficava marcado para sempre mesmo
+ * depois de resolvido por telefone. Alerta que não se apaga vira paisagem — e
+ * aí o próximo caso de verdade também não é visto.
+ *
+ * `reprovacoesAte` congela quantas tentativas existiam AGORA. É o que faz o
+ * alerta voltar na próxima reprovação e não antes: a conversa vale até haver
+ * notícia nova de que ela não resolveu.
+ *
+ * Fica em `controle`, que só o time escreve. E é registro, não apagamento:
+ * guarda quem falou, quando e o que combinou — a próxima pessoa que abrir a
+ * ficha precisa saber o que já foi tentado antes de ligar de novo.
+ */
+export function registrarContato(fb, token, { por, reprovacoes = 0, observacao = '' } = {}) {
+  return escreverComoTime(fb, token, {
+    'controle.contato': semIndefinidos({
+      em: new Date().toISOString(),
+      por: por ?? null,
+      reprovacoesAte: Number(reprovacoes) || 0,
+      observacao: String(observacao || '').trim().slice(0, 400) || null,
+    }),
+  })
+}
+
+/** Desfaz o registro — para quando alguém clicou no stand errado. */
+export function desfazerContato(fb, token) {
+  return escreverComoTime(fb, token, { 'controle.contato': null })
+}
+
 /** Prorrogação do prazo para um stand específico. `ate` em ISO, ou null. */
 export function prorrogarPrazo(fb, token, ate, por) {
   return escreverComoTime(fb, token, {

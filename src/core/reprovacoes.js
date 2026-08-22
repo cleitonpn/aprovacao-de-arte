@@ -90,12 +90,24 @@ export function chaveDaTentativa(token, pecaId, resultado) {
 export function dificuldadeDoProjeto(projeto) {
   const d = projeto?.dificuldade || {}
   const total = Number(d.reprovacoes) || 0
+  // Quantas reprovações o stand tinha quando alguém do time falou com o
+  // cliente. Gravado no `controle`, que só o time escreve.
+  const atendidoAte = Number(projeto?.controle?.contato?.reprovacoesAte) || 0
+
   return {
     total,
     ultimaEm: d.ultimaEm || null,
     ultimoMotivo: d.ultimoMotivo || null,
     ultimaPeca: d.ultimaPeca || null,
-    alerta: total > LIMITE_REPROVACOES,
+    // O alerta cala depois da conversa e VOLTA na próxima tentativa reprovada.
+    //
+    // Por contagem, e não por tempo: aqui existe um evento novo capaz de dizer
+    // que a conversa não resolveu — o cliente tentar de novo e ser recusado de
+    // novo. Enquanto ele não tentar, não há notícia nenhuma, e repetir o alerta
+    // seria repetir uma informação que o time já tratou.
+    alerta: total > LIMITE_REPROVACOES && total > atendidoAte,
+    atendido: atendidoAte > 0 && total <= atendidoAte,
+    atendidoAte,
   }
 }
 

@@ -11,7 +11,7 @@
 
 import { resumoDoProjeto, STATUS, rotuloParaOTime, situacaoDoPrazo } from './fluxo.js'
 import { dificuldadeDoProjeto } from './reprovacoes.js'
-import { sinalDeContato, correioDoProjeto, precisaDeIntervencao, SINAL } from './contato.js'
+import { sinalDeContato, correioDoProjeto, contatoDoProjeto, precisaDeIntervencao, SINAL } from './contato.js'
 
 /**
  * Junta as duas fontes de verdade sobre um projeto.
@@ -41,6 +41,7 @@ export function situacaoDoProjeto(projeto, envios = []) {
     // situações pedem ações opostas.
     sinal: sinalDeContato(projeto, { recebidas, dificuldade }),
     correio: correioDoProjeto(projeto),
+    contato: contatoDoProjeto(projeto),
     pendentes: pecas.filter((s) => !comEnvio.has(s.peca.id)),
     apoio: envios.filter((e) => e.tipoEnvio === 'avulso'),
     // Arte que o cliente mandou por fora da lista: ele digitou a medida à mão.
@@ -127,9 +128,10 @@ export function panorama(linhas = [], { feira = null, agora = Date.now() } = {})
     .filter(({ sit }) => precisaDeIntervencao({
       sinal: sit.sinal,
       correio: sit.correio,
+      contato: sit.contato,
       prazo: sit.prazo?.temPrazo ? sit.prazo : prazo,
       sit,
-    }))
+    }, { agora }))
     .sort((a, b) => (a.sit.correio.estado === 'voltou' ? -1 : 0) - (b.sit.correio.estado === 'voltou' ? -1 : 0)
       || (SINAL[a.sit.sinal.id]?.ordem ?? 9) - (SINAL[b.sit.sinal.id]?.ordem ?? 9)
       || b.sit.total - a.sit.total)

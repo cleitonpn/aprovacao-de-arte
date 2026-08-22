@@ -419,7 +419,9 @@ function Intervencao({ linhas, feiraId }) {
       <p className="ajuda">
         Nestes stands o problema não é falta de cobrança automática — é que o
         cliente não está no processo. O e-mail voltou, ou ninguém abriu o link
-        até agora e o prazo está perto.
+        até agora e o prazo está perto. Depois de falar com ele, use{' '}
+        <strong>Já falei com o cliente</strong> na ficha do stand: o aviso sai
+        desta lista para o time inteiro.
       </p>
       <ul className="pecas-lista">
         {linhas.map(({ projeto, sit }) => (
@@ -490,6 +492,13 @@ function QuemFalta({ cenario, feiraId }) {
                   ação é cobrar, ligar ou ajudar.
                 */}
                 {sit.sinal.id !== 'enviando' && <> · <span className={`sinal ${sit.sinal.cor}`}>{sit.sinal.rotulo}</span></>}
+                {/*
+                  Quem já foi atendido continua na lista — ele ainda deve arte —
+                  mas com a marca de que alguém do time já falou. Sem isso, o
+                  próximo analista liga de novo e o cliente ouve a mesma cobrança
+                  duas vezes no mesmo dia.
+                */}
+                {sit.contato?.houve && <> · <span className="sinal bom">time já falou</span></>}
               </p>
             </div>
             <div className="barra-mini" aria-hidden>

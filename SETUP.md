@@ -423,9 +423,34 @@ ficha mostra o motivo mais frequente — cinco reprovações pelo mesmo motivo �
 cliente que não entendeu uma coisa; cinco por motivos diferentes é um cliente
 perdido, e a conversa é outra.
 
-O alerta some quando alguém abre a ficha e volta se houver nova tentativa
-reprovada. Para mudar o número, é a constante `LIMITE_REPROVACOES` em
+Para mudar o número, é a constante `LIMITE_REPROVACOES` em
 `src/core/reprovacoes.js`.
+
+### "Já falei com o cliente"
+
+Todo alerta precisa de uma saída, ou deixa de ser alerta. Antes, o de
+dificuldade sumia quando alguém abria a ficha — mas isso ficava no navegador de
+quem abriu e voltava para o resto do time no dia seguinte. Na prática o stand
+ficava marcado para sempre, mesmo depois de resolvido por telefone.
+
+Na ficha do stand (`#/projetos` → **Abrir**), o botão **Já falei com o cliente**
+registra a conversa para o time inteiro, com quem falou, quando e o que ficou
+combinado. É registro, não apagamento: quem abrir a ficha depois precisa saber o
+que já foi tentado antes de ligar de novo.
+
+Quando o aviso volta depende do que ele estava dizendo:
+
+- **alerta de reprovações** volta na **próxima tentativa recusada**. Aqui existe
+  um evento novo capaz de dizer que a conversa não resolveu; enquanto o cliente
+  não tentar de novo, não há notícia nenhuma;
+- **"Ligar hoje"** volta depois de **7 dias**, porque o estado ali é silêncio — e
+  silêncio não muda sozinho. Se uma semana depois ele continua sem abrir e o
+  prazo continua chegando, a conversa não resolveu.
+
+O aviso de **e-mail que voltou** tem uma saída melhor que o botão: corrigir o
+endereço no cadastro. Um retorno que aponta para um e-mail que não está mais na
+lista do stand é descartado sozinho — o aviso some porque o problema acabou, não
+porque alguém o dispensou.
 
 ### Por que o stand está calado
 

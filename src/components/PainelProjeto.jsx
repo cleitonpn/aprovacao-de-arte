@@ -2,13 +2,14 @@ import { useEffect, useRef, useState } from 'react'
 import { STATUS, AVISO_EXTRA } from '../core/fluxo.js'
 import {
   liberarNovaVersao, recusarNovaVersao, definirStatusDaPeca, registrarProva, prorrogarPrazo,
-  ouvirReprovacoes, devolverArte, desfazerDevolucao,
+  ouvirReprovacoes, devolverArte, desfazerDevolucao, registrarContato, desfazerContato,
 } from '../services/projetos.js'
 import { enviarProva, EXTENSOES_PROVA } from '../services/envio.js'
 import { traduzirErroAuth } from '../services/sessao.js'
 import Conversa from './Conversa.jsx'
 import { formatarDataHora as fmtDataHora, paraInputData, fimDoDia } from '../core/datas.js'
 import { motivosMaisComuns, LIMITE_REPROVACOES } from '../core/reprovacoes.js'
+import { INICIO_DO_REGISTRO, DIAS_DE_SILENCIO_APOS_CONTATO } from '../core/contato.js'
 import { marcarVisto } from '../store/visto.js'
 
 // O que o analista faz com um projeto: responder pedidos, mandar a prova de
@@ -63,6 +64,21 @@ export default function PainelProjeto({ sessao, projeto, resumo, envios, podeApr
         </div>
 
         {erro && <p className="erro-envio">{erro}</p>}
+
+        <Contato
+          sinal={resumo.sinal}
+          correio={resumo.correio}
+          contato={resumo.contato}
+          dificuldade={resumo.dificuldade}
+          ocupado={ocupado}
+          podeAprovar={podeAprovar}
+          onRegistrar={(observacao) => rodar(() => registrarContato(sessao.fb, projeto.token, {
+            por: sessao.usuario?.email,
+            reprovacoes: resumo.dificuldade?.total || 0,
+            observacao,
+          }))}
+          onDesfazer={() => rodar(() => desfazerContato(sessao.fb, projeto.token))}
+        />
 
         <Prazo projeto={projeto} resumo={resumo} ocupado={ocupado} podeAprovar={podeAprovar} onProrrogar={(ate) => rodar(
           () => prorrogarPrazo(sessao.fb, projeto.token, ate, sessao.usuario?.email),
@@ -140,6 +156,114 @@ export default function PainelProjeto({ sessao, projeto, resumo, envios, podeApr
         ))}
       </div>
     </>
+  )
+}
+
+/**
+ * Em que pé está o contato com este cliente.
+ *
+ * Fica no alto da ficha, ao lado do prazo, porque é a primeira pergunta antes
+ * de qualquer cobrança: cobrar quem nunca soube do link é ruído, e cobrar quem
+ * já está com o designer trabalhando é gastar o telefonema que faria falta em
+ * outro stand.
+ */
+function Contato({ sinal, correio, contato, dificuldade, ocupado, podeAprovar, onRegistrar, onDesfazer }) {
+  const [aberto, setAberto] = useState(false)
+  const [observacao, setObservacao] = useState('')
+  if (!sinal) return null
+
+  const visitas = sinal.visitas > 1 ? ` · ${sinal.visitas} visitas` : ''
+  const quando = sinal.desde ? ` · desde ${fmtDataHora(sinal.desde)}` : ''
+
+  return (
+    <div className="bloco-contato">
+      <p>
+        <span className={`sinal ${sinal.cor}`}>{sinal.rotulo}</span>
+        {sinal.id !== 'nunca_abriu' && <span className="dica-campo">{quando}{visitas}</span>}
+        {sinal.gabaritoEm && <span className="dica-campo"> · gabarito baixado em {fmtDataHora(sinal.gabaritoEm)}</span>}
+      </p>
+
+      {/*
+        A honestidade que evita o telefonema errado: num stand cadastrado antes
+        de o registro existir, "nunca abriu" pode ser só a nossa cegueira.
+        Dizer isso na tela custa uma linha; não dizer custa a confiança da
+        equipe no sinal inteiro, logo na primeira semana.
+      */}
+      {sinal.semHistorico && (
+        <p className="dica-campo">
+          Nenhum acesso registrado — mas o registro começou em{' '}
+          {new Date(INICIO_DO_REGISTRO).toLocaleDateString('pt-BR')}. Num stand
+          mais antigo, isso pode significar que ele abriu antes disso.
+        </p>
+      )}
+
+      {correio?.estado !== 'desconhecido' && (
+        <p className="dica-campo">
+          <span className={`sinal ${correio.cor}`}>{correio.rotulo}</span>
+          {correio.para && ` · ${correio.para}`}
+          {correio.em && ` · ${fmtDataHora(correio.em)}`}
+          {correio.motivo && <> · {correio.motivo}</>}
+          {correio.estado === 'voltou' && (
+            <> — corrigir o e-mail no cadastro tira este aviso sozinho.</>
+          )}
+        </p>
+      )}
+
+      {/*
+        A saída do alerta. Sem ela, o stand que o analista já resolveu por
+        telefone fica marcado para sempre — e alerta que não se apaga vira
+        paisagem, até o próximo caso de verdade passar batido junto.
+
+        É registro, não apagamento: guarda quem falou, quando e o que combinou.
+        A próxima pessoa que abrir esta ficha precisa saber o que já foi
+        tentado antes de ligar de novo.
+      */}
+      {contato?.houve ? (
+        <p className="dica-campo">
+          <strong>Time já falou com o cliente</strong> em {fmtDataHora(contato.em)}
+          {contato.por && ` · ${contato.por}`}
+          {contato.observacao && <> · “{contato.observacao}”</>}
+          {podeAprovar && (
+            <>
+              {' '}
+              <button className="link" disabled={ocupado} onClick={onDesfazer}>desfazer</button>
+            </>
+          )}
+        </p>
+      ) : podeAprovar && (aberto ? (
+        <div className="contato-registro">
+          <label className="campo">
+            <span>O que ficou combinado <em className="opcional">(opcional)</em></span>
+            <input
+              type="text"
+              value={observacao}
+              placeholder="Ex.: agência vai mandar até sexta; e-mail novo é compras@…"
+              onChange={(e) => setObservacao(e.target.value)}
+            />
+          </label>
+          <div className="acoes compactas">
+            <button
+              className="btn"
+              disabled={ocupado}
+              onClick={() => { onRegistrar(observacao); setAberto(false); setObservacao('') }}
+            >
+              Registrar a conversa
+            </button>
+            <button className="btn btn-ghost" disabled={ocupado} onClick={() => setAberto(false)}>Cancelar</button>
+          </div>
+          <p className="dica-campo">
+            Isto silencia o aviso deste stand para o time inteiro.{' '}
+            {dificuldade?.total > 0
+              ? 'Ele volta se o cliente tentar enviar e for reprovado de novo.'
+              : `Ele volta depois de ${DIAS_DE_SILENCIO_APOS_CONTATO} dias, se nada mudar.`}
+          </p>
+        </div>
+      ) : (
+        <button className="link" disabled={ocupado} onClick={() => setAberto(true)}>
+          Já falei com o cliente
+        </button>
+      ))}
+    </div>
   )
 }
 

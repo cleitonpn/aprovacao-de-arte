@@ -479,6 +479,17 @@ textarea { width: 100%; font: inherit; font-size: 13px; padding: 9px 11px; borde
    fundo nem borda — é uma anotação dentro de uma linha já cheia, e o que ela
    precisa é ser lida de relance ao percorrer a coluna, não competir com o
    nome do stand. */
+/* O contato na ficha: mesma moldura do prazo, logo acima dele, porque as duas
+   perguntas se leem juntas — "quanto tempo falta" e "ele sequer começou". */
+.bloco-contato {
+  border: 1px solid var(--borda);
+  border-radius: var(--raio);
+  padding: 12px 14px;
+  margin-bottom: 12px;
+}
+.bloco-contato p { margin: 0; }
+.bloco-contato p + p { margin-top: 6px; }
+
 .sinal { font-style: normal; font-weight: 600; }
 .sinal.ruim { color: var(--ruim); }
 .sinal.alerta { color: var(--alerta); }
