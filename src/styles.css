@@ -475,6 +475,15 @@ textarea { width: 100%; font: inherit; font-size: 13px; padding: 9px 11px; borde
 .destaque-correcao { border-left: 3px solid var(--ruim); padding-left: 10px; }
 .destaque-pendencia { color: var(--ruim); }
 
+/* Por que o stand está calado: nunca abriu, abriu, está produzindo. Cor, sem
+   fundo nem borda — é uma anotação dentro de uma linha já cheia, e o que ela
+   precisa é ser lida de relance ao percorrer a coluna, não competir com o
+   nome do stand. */
+.sinal { font-style: normal; font-weight: 600; }
+.sinal.ruim { color: var(--ruim); }
+.sinal.alerta { color: var(--alerta); }
+.sinal.neutro, .sinal.bom { color: var(--suave); }
+
 /* ------------------------------------------------- painel do analista */
 .pedidos-abertos { border-left: 4px solid var(--ruim); }
 .pedido, .peca-time { border-bottom: 1px solid var(--borda); padding: 12px 0; }

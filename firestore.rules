@@ -162,10 +162,20 @@ service cloud.firestore {
       // dificuldade, o que não muda nada do que a ferramenta decide; e o
       // registro de cada tentativa vive na subcoleção abaixo, que ninguém
       // altera.
+      //
+      // `acesso` é o carimbo de quem abriu a página e baixou o gabarito. Vale a
+      // mesma lógica: o fato acontece no navegador dele, e o pior uso possível
+      // é alguém com o link fingir ter aberto — o que não convence de nada,
+      // porque a única consequência é o stand SAIR da lista de quem precisa de
+      // telefonema, e quem tem o link não tem motivo para se esconder do time.
+      //
+      // O que ele NÃO alcança, e é o ponto: `correio`, que é o retorno do
+      // serviço de e-mail. Aquilo é prova de que o aviso chegou (ou voltou) e
+      // vem de fora, escrito pela função na nuvem com conta de serviço.
       allow update: if ehAdmin()
         || (request.auth != null
             && request.resource.data.diff(resource.data).affectedKeys()
-                 .hasOnly(['entregas', 'pedidos', 'respostasProva', 'conversa', 'dificuldade']));
+                 .hasOnly(['entregas', 'pedidos', 'respostasProva', 'conversa', 'dificuldade', 'acesso']));
     }
 
     // As tentativas que a análise reprovou.

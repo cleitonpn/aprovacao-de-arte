@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { carregarPerfis, carregarPolitica, carregarDetectorNitidez } from '../data/perfis.js'
 import { POLITICA_PADRAO, especificacao } from '../core/regras.js'
 import { cadastroDoProjeto, pecaNova, perfilPorTexto } from '../data/projeto.js'
@@ -6,7 +6,7 @@ import { resumoDoProjeto, situacaoDaPeca, AVISO_PRAZO, AVISO_EXTRA } from '../co
 import { formatarData as fmtData, formatarDataHora as fmtDataHora } from '../core/datas.js'
 import {
   carregarProjetoPublico, ouvirProjetoPublico, marcarEntrega, pedirNovaVersao,
-  aceitarCustoExtra, responderProva, registrarReprovacao,
+  aceitarCustoExtra, responderProva, registrarReprovacao, registrarVisita,
 } from '../services/projetos.js'
 import { eventoDeReprovacao, chaveDaTentativa } from '../core/reprovacoes.js'
 import { usarAnalise } from '../store/usarAnalise.js'
@@ -67,6 +67,32 @@ export default function Projeto({ token }) {
   useEffect(() => {
     if (estado === 'pronto' && !jaViuTutorial(token)) setTutorial(true)
   }, [estado, token])
+
+  // Carimba que este stand foi aberto.
+  //
+  // O que o time ganha: hoje "0 de 5 artes" é o mesmo número para quem nunca
+  // viu o link e para quem está com o designer trabalhando há uma semana — duas
+  // situações que pedem ações opostas. A quatro dias do prazo, essa diferença
+  // decide se alguém liga hoje ou não.
+  //
+  // A referência guarda o `acesso` que veio na primeira carga, e não o do
+  // estado: a escuta em tempo real reescreve `projeto` a cada mudança, e ler
+  // dali faria o efeito rodar de novo a cada gravação — inclusive a que ele
+  // mesmo acabou de fazer.
+  const acessoInicial = useRef(null)
+  useEffect(() => {
+    if (estado !== 'pronto') return
+    if (acessoInicial.current === token) return
+    acessoInicial.current = token
+    registrarVisita(token, projeto?.acesso)
+  }, [estado, token, projeto])
+
+  // Baixar o gabarito é o sinal mais forte que a página produz: para desenhar a
+  // arte o designer PRECISA dele, então quem não baixou não começou. Não é
+  // palpite sobre intenção, é uma dependência do processo.
+  const anotarGabarito = useCallback(() => {
+    registrarVisita(token, projeto?.acesso, { gabarito: true })
+  }, [token, projeto])
 
   const fecharTutorial = useCallback(() => {
     setTutorial(false)
@@ -214,6 +240,7 @@ export default function Projeto({ token }) {
               projeto={projeto}
               onEscolher={() => setPecaAtivaId(s.peca.id)}
               onAtualizar={carregar}
+              aoBaixarGabarito={anotarGabarito}
             />
           ))}
         </ul>
@@ -473,7 +500,7 @@ function CartaoProva({ prova, projeto, onResponder }) {
   )
 }
 
-function CartaoPeca({ situacao, perfis, politica, projeto, onEscolher, onAtualizar }) {
+function CartaoPeca({ situacao, perfis, politica, projeto, onEscolher, onAtualizar, aoBaixarGabarito }) {
   const { peca, status, rotulo, cor, entrega, bloqueio } = situacao
   const perfil = perfis.find((p) => p.id === peca.perfilId) || perfis[0]
   const spec = especificacao(peca, perfil, politica)
@@ -565,6 +592,7 @@ function CartaoPeca({ situacao, perfis, politica, projeto, onEscolher, onAtualiz
           escalaFator={peca.escalaFator || 1}
           politica={politica}
           className="btn btn-ghost"
+          aoBaixar={aoBaixarGabarito}
         />
         {situacao.podeEnviar && (
           <button

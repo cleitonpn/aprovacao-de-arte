@@ -11,6 +11,7 @@ import { carregarFirebase, sessaoAnonima } from './firebase.js'
 import { idDeFeira } from '../data/cadastro.js'
 import { normalizarProjeto } from '../data/projeto.js'
 import { semIndefinidos } from '../core/mensagem.js'
+import { visitaAGravar } from '../core/contato.js'
 
 const COLECAO = 'projetos'
 
@@ -156,12 +157,43 @@ export async function marcarEntrega(token, pecaId, dados) {
   })
 }
 
+/**
+ * Carimba que alguém abriu a página deste stand — e se baixou o gabarito.
+ *
+ * Duas travas, e as duas mudam o significado do dado:
+ *
+ * 1. A VISITA DO TIME NÃO CONTA. O analista abre o link do cliente para
+ *    conferir; se isso carimbasse, o stand apareceria como "acessado" e a
+ *    equipe deixaria de ligar justamente para quem mais precisa. Dado errado
+ *    aqui é pior que dado nenhum, porque desliga um alarme que ninguém sabe
+ *    que foi desligado. Quem distingue é a sessão: o cliente é anônimo, o
+ *    time é logado.
+ *
+ * 2. FALHA EM SILÊNCIO. Isto é apoio, não a tarefa da pessoa. Nada do que o
+ *    cliente veio fazer pode quebrar porque um carimbo não foi gravado.
+ */
+export async function registrarVisita(token, acesso, opcoes = {}) {
+  const mudanca = visitaAGravar(acesso, opcoes)
+  if (!mudanca) return false
+  try {
+    const { app, firestore, usuario } = await sessaoAnonima()
+    if (!usuario?.isAnonymous) return false
+    const bd = firestore.getFirestore(app)
+    await firestore.updateDoc(firestore.doc(bd, COLECAO, token), mudanca)
+    return true
+  } catch (e) {
+    console.warn('não foi possível registrar o acesso', e)
+    return false
+  }
+}
+
 // ------------------------------------------------------- ações do cliente
 //
 // Tudo aqui roda com a sessão anônima e o token do link, e por isso só toca
-// nos três campos que as regras liberam ao cliente: `entregas`, `pedidos` e
-// `respostasProva`. A decisão do analista mora em `controle`, que ele não
-// alcança — é o que impede o cliente de assinar a própria liberação.
+// nos campos que as regras liberam ao cliente: `entregas`, `pedidos`,
+// `respostasProva`, `conversa`, `dificuldade` e `acesso`. A decisão do analista
+// mora em `controle`, que ele não alcança — é o que impede o cliente de
+// assinar a própria liberação.
 
 async function escreverComoCliente(token, mudanca) {
   const { app, firestore } = await sessaoAnonima()

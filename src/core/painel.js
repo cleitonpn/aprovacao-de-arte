@@ -11,6 +11,7 @@
 
 import { resumoDoProjeto, STATUS, rotuloParaOTime, situacaoDoPrazo } from './fluxo.js'
 import { dificuldadeDoProjeto } from './reprovacoes.js'
+import { sinalDeContato, correioDoProjeto, precisaDeIntervencao, SINAL } from './contato.js'
 
 /**
  * Junta as duas fontes de verdade sobre um projeto.
@@ -28,11 +29,18 @@ export function situacaoDoProjeto(projeto, envios = []) {
   const pecas = resumo.pecas.map((s) => ({ ...s, envios: envios.filter((e) => e.pecaId === s.peca.id) }))
   const recebidas = pecas.filter((s) => comEnvio.has(s.peca.id)).length
 
+  const dificuldade = dificuldadeDoProjeto(projeto)
+
   return {
     ...resumo,
     pecas,
     envios,
     recebidas,
+    // Por que este stand está calado. "0 de 5" é o mesmo número para quem nunca
+    // abriu o link e para quem está com o designer trabalhando — e as duas
+    // situações pedem ações opostas.
+    sinal: sinalDeContato(projeto, { recebidas, dificuldade }),
+    correio: correioDoProjeto(projeto),
     pendentes: pecas.filter((s) => !comEnvio.has(s.peca.id)),
     apoio: envios.filter((e) => e.tipoEnvio === 'avulso'),
     // Arte que o cliente mandou por fora da lista: ele digitou a medida à mão.
@@ -41,7 +49,7 @@ export function situacaoDoProjeto(projeto, envios = []) {
     extras: envios.filter((e) => e.tipoEnvio !== 'avulso' && !e.pecaId),
     completo: pecas.length > 0 && recebidas === pecas.length,
     provasAguardando: pecas.filter((s) => s.status === 'em_prova').length,
-    dificuldade: dificuldadeDoProjeto(projeto),
+    dificuldade,
   }
 }
 
@@ -106,6 +114,26 @@ export function panorama(linhas = [], { feira = null, agora = Date.now() } = {})
   // aparece na linha dele, não aqui.
   const prazo = situacaoDoPrazo({ prazoEnvio: feira?.prazoEnvio }, agora)
 
+  // Quem precisa de um telefonema hoje.
+  //
+  // Esta é a única lista do painel que aponta para FORA do sistema: as outras
+  // pedem um clique do analista, esta pede que alguém ligue. Por isso ela é
+  // curta de propósito — e-mail que voltou (o canal está quebrado, e nenhum
+  // aviso futuro vai chegar) ou silêncio total com o prazo em cima.
+  //
+  // O prazo usado é o do STAND quando ele tem um (prorrogação é individual) e
+  // o da feira quando não tem.
+  const intervencao = linhas
+    .filter(({ sit }) => precisaDeIntervencao({
+      sinal: sit.sinal,
+      correio: sit.correio,
+      prazo: sit.prazo?.temPrazo ? sit.prazo : prazo,
+      sit,
+    }))
+    .sort((a, b) => (a.sit.correio.estado === 'voltou' ? -1 : 0) - (b.sit.correio.estado === 'voltou' ? -1 : 0)
+      || (SINAL[a.sit.sinal.id]?.ordem ?? 9) - (SINAL[b.sit.sinal.id]?.ordem ?? 9)
+      || b.sit.total - a.sit.total)
+
   const semNada = linhas.filter(({ sit }) => sit.total > 0 && sit.recebidas === 0)
   const incompletos = linhas
     .filter(({ sit }) => sit.total > 0 && sit.recebidas < sit.total)
@@ -124,10 +152,10 @@ export function panorama(linhas = [], { feira = null, agora = Date.now() } = {})
     impressas: soma((s) => s.impressas),
     apoio: soma((s) => s.apoio.length),
     extras: soma((s) => s.extras.length),
-    acoes: { pedidos, provas, mensagens, dificuldade },
+    acoes: { pedidos, provas, mensagens, dificuldade, intervencao },
     // Quantas coisas, ao todo, dependem de alguém do time agora. É o número
     // que diz se o dia está tranquilo ou não.
-    aFazer: pedidos.length + provas.length + mensagens.length + dificuldade.length,
+    aFazer: pedidos.length + provas.length + mensagens.length + dificuldade.length + intervencao.length,
     prazo,
   }
 }

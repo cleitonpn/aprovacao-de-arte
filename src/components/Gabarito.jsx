@@ -112,12 +112,25 @@ export const temGabaritoProprio = (peca) => Boolean(peca?.gabarito?.url)
  * comportamento certo por baixo, é o que evita a pergunta "qual dos dois eu
  * uso?" chegando ao time.
  */
-export function BotaoGabarito({ peca, perfil, escalaFator, politica, className = 'btn btn-ghost', rotulo = 'Gabarito' }) {
+export function BotaoGabarito({
+  peca, perfil, escalaFator, politica,
+  className = 'btn btn-ghost', rotulo = 'Gabarito', aoBaixar,
+}) {
   const proprio = peca?.gabarito
 
+  // `aoBaixar` avisa a tela do cliente que o gabarito saiu — é o sinal de que
+  // alguém começou de fato a produzir a arte, e nos dois caminhos vale igual:
+  // o desenhado pelo projetista e o gerado na hora servem ao mesmo propósito.
   if (proprio?.url) {
     return (
-      <a className={className} href={proprio.url} target="_blank" rel="noreferrer" title={proprio.nome}>
+      <a
+        className={className}
+        href={proprio.url}
+        target="_blank"
+        rel="noreferrer"
+        title={proprio.nome}
+        onClick={() => aoBaixar?.()}
+      >
         {rotulo}
       </a>
     )
@@ -126,7 +139,7 @@ export function BotaoGabarito({ peca, perfil, escalaFator, politica, className =
   return (
     <button
       className={className}
-      onClick={() => baixarGabarito(peca, perfil, escalaFator, politica)}
+      onClick={() => { baixarGabarito(peca, perfil, escalaFator, politica); aoBaixar?.() }}
       title="Gera um PNG com corte, sangria e área segura"
     >
       {rotulo}

@@ -112,6 +112,7 @@ export default function Visao({ sessao }) {
           <Numeros cenario={cenario} />
           <Esteira cenario={cenario} feiraId={feiraId} />
           <PrecisaDeVoce cenario={cenario} feiraId={feiraId} />
+          <Intervencao linhas={cenario.acoes.intervencao} feiraId={feiraId} />
           <Dificuldade linhas={cenario.acoes.dificuldade} feiraId={feiraId} />
           <QuemFalta cenario={cenario} feiraId={feiraId} />
         </>
@@ -391,6 +392,68 @@ function Dificuldade({ linhas, feiraId }) {
   )
 }
 
+/**
+ * Quem precisa de um telefonema hoje.
+ *
+ * Todo o resto do painel aponta para dentro: um clique do analista resolve.
+ * Esta lista aponta para fora — são os stands em que nenhum clique adianta
+ * porque o cliente não está no processo. Duas portas de entrada:
+ *
+ * - o e-mail voltou. O canal está quebrado e vai continuar quebrado: o aviso da
+ *   prova pronta, mais adiante, também não vai chegar. Só uma pessoa conserta.
+ * - silêncio com o prazo em cima. A quatro dias do fim, quem nunca abriu o link
+ *   não tem como ter começado — o gabarito só existe na página.
+ *
+ * Deliberadamente curta. Uma lista de trinta nomes vira parede e ninguém liga
+ * para ninguém; é por isso que "nunca abriu" com trinta dias pela frente não
+ * entra aqui.
+ */
+function Intervencao({ linhas, feiraId }) {
+  if (!linhas.length) return null
+  return (
+    <div className="cartao log-reprovacoes alerta">
+      <div className="titulo-secao">
+        <h3>Ligar hoje ({linhas.length})</h3>
+        <span className="tag aviso">o sistema não resolve sozinho</span>
+      </div>
+      <p className="ajuda">
+        Nestes stands o problema não é falta de cobrança automática — é que o
+        cliente não está no processo. O e-mail voltou, ou ninguém abriu o link
+        até agora e o prazo está perto.
+      </p>
+      <ul className="pecas-lista">
+        {linhas.map(({ projeto, sit }) => (
+          <li key={projeto.token} className="pendente">
+            <span className="marca" aria-hidden>!</span>
+            <div>
+              <strong>
+                <a href={linkDaFicha(feiraId, projeto.token)}>{projeto.stand}</a>
+              </strong>
+              <em className="dica-campo"> · {projeto.expositor} · {sit.recebidas} de {sit.total} artes</em>
+              <p className="dica-campo">
+                {sit.correio.estado === 'voltou' || sit.correio.estado === 'reclamou'
+                  ? (
+                    <>
+                      <strong className="destaque-pendencia">{sit.correio.rotulo}</strong>
+                      {sit.correio.para && <> · {sit.correio.para}</>}
+                      {' · '}{sit.correio.acao}
+                    </>
+                  )
+                  : (
+                    <>
+                      <strong className="destaque-pendencia">{sit.sinal.rotulo}</strong>
+                      {' · '}{sit.sinal.acao}
+                    </>
+                  )}
+              </p>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
 /** Quem ainda deve arte, do mais atrasado para o menos. */
 function QuemFalta({ cenario, feiraId }) {
   const lista = cenario.incompletos
@@ -421,6 +484,12 @@ function QuemFalta({ cenario, feiraId }) {
                 {sit.recebidas} de {sit.total} artes · faltam{' '}
                 {sit.pendentes.map(({ peca }) => peca.rotulo).slice(0, 3).join(', ')}
                 {sit.pendentes.length > 3 && ` e mais ${sit.pendentes.length - 3}`}
+                {/*
+                  Por que ainda falta. Sem isto a linha diz o tamanho do atraso
+                  e nada sobre a causa — e a causa é o que decide se a próxima
+                  ação é cobrar, ligar ou ajudar.
+                */}
+                {sit.sinal.id !== 'enviando' && <> · <span className={`sinal ${sit.sinal.cor}`}>{sit.sinal.rotulo}</span></>}
               </p>
             </div>
             <div className="barra-mini" aria-hidden>
