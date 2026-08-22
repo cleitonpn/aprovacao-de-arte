@@ -6,7 +6,7 @@
 
 import { sha256, detectarFormato, extensao, lerJpeg, lerPng, formatarBytes } from './arquivo.js'
 import { carregarBitmap, amostraReduzida, recortesNativos, fracaoChapada, miniatura, renderVazio, LADO_RECORTE } from './imagem.js'
-import { paraCinza, blocagem, conteudoNaMargem, bordaUniforme, estatisticasCor } from './metricas.js'
+import { paraCinza, blocagem, conteudoNaMargem, bordaUniforme, estatisticasCor, larguraDeBorda } from './metricas.js'
 import { analisarEspectro, classificarDeficit } from './espectro.js'
 import { avaliar } from './regras.js'
 import { fonteDeBitmap, fonteDePdf } from './recorte.js'
@@ -166,6 +166,56 @@ export async function analisar(arquivo, peca, perfil, opcoes = {}) {
   return { medidas, ...resultado, peca, perfil, escalaFator, politica }
 }
 
+// --------------------------------------------------- nitidez real do PDF
+//
+// A densidade declarada não prediz qualidade. Medido em três arquivos reais
+// desta operação: o que o time REPROVOU tinha 216 dpi nominais, e um dos
+// aprovados tinha 150. Contar pixel não diz se há detalhe dentro deles.
+//
+// O que decide é a largura da borda, e ela precisa de resolução para ser
+// vista: o borrão do arquivo reprovado mede 1,5 mm impressos, então abaixo de
+// uns 35 dpi ele cabe dentro de um pixel e some. Medir numa resolução em que
+// o defeito não aparece é pior do que não medir — devolve "está tudo certo"
+// justamente nos arquivos que a checagem existe para pegar.
+
+/** dpi da análise, no tamanho impresso. Calibrado com arquivos reais. */
+const DPI_ANALISE = 50
+/** Abaixo disto a medida mente para o lado de aprovar. */
+const DPI_MINIMO_ANALISE = 35
+/** Teto de memória: acima disso o navegador do cliente é que paga a conta. */
+const MAX_PIXELS_ANALISE = 40e6
+
+function larguraParaAnalise(larguraCm, alturaCm) {
+  if (!(larguraCm > 0) || !(alturaCm > 0)) return null
+  const largura = Math.round((larguraCm / CM_POR_POL) * DPI_ANALISE)
+  const altura = Math.round((alturaCm / CM_POR_POL) * DPI_ANALISE)
+  if (largura * altura > MAX_PIXELS_ANALISE) return null
+  return largura
+}
+
+function medirNitidez(dadosRGBA, largura, altura, larguraCm) {
+  if (!(larguraCm > 0)) return { medido: false, motivo: 'sem_medida' }
+
+  // A resolução OBTIDA, não a pedida: `renderizarPagina` limita a escala em 4,
+  // e uma arte montada em 1:10 bate nesse teto. Confiar no valor pedido faria
+  // a medida ser lida na escala errada.
+  const dpi = largura / (larguraCm / CM_POR_POL)
+  if (dpi < DPI_MINIMO_ANALISE) return { medido: false, motivo: 'resolucao_baixa', dpi }
+
+  const cinza = paraCinza(dadosRGBA, largura, altura)
+  const borda = larguraDeBorda(cinza, largura, altura)
+  if (borda == null) return { medido: false, motivo: 'sem_bordas', dpi }
+
+  return {
+    medido: true,
+    dpi,
+    bordaPx: borda,
+    // Em milímetros impressos: é a única forma que não depende da resolução em
+    // que medimos, e a única que quer dizer alguma coisa para quem lê.
+    bordaMm: (borda / dpi) * 25.4,
+  }
+}
+
 async function medirPdf(buffer, base, peca, perfil, escalaFator) {
   // import dinâmico: o pdf.js é pesado e só entra em cena quando é PDF
   const {
@@ -199,20 +249,31 @@ async function medirPdf(buffer, base, peca, perfil, escalaFator) {
     }))
   }
 
-  // A prévia é opcional; saber que ela FALHOU não é.
-  //
-  // Diante de uma imagem embutida grande demais o pdf.js não lança erro:
-  // devolve a página em branco. O `catch` vazio de antes tratava isso como
-  // "sem pré-visualização", e o resto do laudo seguia descrevendo uma arte que
-  // a ferramenta nunca chegou a abrir.
+  // UM render, usado para três coisas: detectar que ele falhou, medir a
+  // nitidez real e gerar a miniatura. Antes eram dois (400 px na inspeção,
+  // 900 px na prévia) e nenhum servia para medir — 900 px numa peça de 120 cm
+  // dão 19 dpi, resolução em que TODA arte parece nítida, inclusive a
+  // ampliada. Medido: a 19 dpi o arquivo ruim aparece mais nítido que o bom.
+  const larguraAnalise = larguraParaAnalise(declaradoLarguraCm, declaradoAlturaCm)
   let miniaturaUrl = null
   let visualIndisponivel = false
+  let nitidez = { medido: false, motivo: 'nao_tentado' }
+
   try {
-    const { canvas } = await renderizarPagina(doc, 1, 900)
+    const { canvas } = await renderizarPagina(doc, 1, larguraAnalise || 900)
     const ctx = canvas.getContext('2d', { willReadFrequently: true })
     const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height)
+
+    // A prévia é opcional; saber que ela FALHOU não é. Diante de uma imagem
+    // embutida grande demais o pdf.js não lança erro: devolve a página em
+    // branco. O `catch` de antes tratava isso como "sem pré-visualização", e o
+    // laudo seguia descrevendo uma arte que a ferramenta nunca abriu.
     visualIndisponivel = renderVazio(data)
-    if (!visualIndisponivel) miniaturaUrl = canvas.toDataURL('image/jpeg', 0.85)
+
+    if (!visualIndisponivel) {
+      miniaturaUrl = await miniatura(canvas, 900)
+      nitidez = medirNitidez(data, canvas.width, canvas.height, declaradoLarguraCm)
+    }
   } catch {
     visualIndisponivel = true
   }
@@ -220,6 +281,9 @@ async function medirPdf(buffer, base, peca, perfil, escalaFator) {
   // Página só de vetor pode ser legitimamente clara e uniforme — aí "vazio"
   // não significa falha. O sintoma só vale quando havia raster para aparecer.
   visualIndisponivel = visualIndisponivel && Boolean(dpiImagens?.length)
+  if (visualIndisponivel) nitidez = { medido: false, motivo: 'render_vazio' }
+  // Peça inteiramente vetorial não tem o que medir: vetor não tem resolução.
+  if (info.puroVetor) nitidez = { medido: false, motivo: 'vetor' }
 
   // O documento fica aberto para o simulador recortar depois, na resolução
   // real. Nada disso vai para o Firestore: o laudo gravado é montado campo a
@@ -247,6 +311,7 @@ async function medirPdf(buffer, base, peca, perfil, escalaFator) {
     miniaturaUrl,
     fonteVisual,
     visualIndisponivel,
+    nitidez,
     tamanhoDeclaradoCm: { largura: declaradoLarguraCm, altura: declaradoAlturaCm },
     escalaSugerida: escalaFator === 1 ? escalaProvavel(info.larguraMm / 10, peca.larguraCm) : null,
     cmyk: false,

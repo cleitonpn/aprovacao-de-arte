@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   avaliar, pxNecessarios, dpiEfetivo, especificacao, veredictoDe, exigencia,
-  DPI_PISO_ABSOLUTO, DPI_MINIMO_GLOBAL, SANGRIA_MINIMA_MM,
+  DPI_PISO_ABSOLUTO, DPI_MINIMO_GLOBAL, SANGRIA_MINIMA_MM, LIMIAR_BORDA_MM,
 } from '../src/core/regras.js'
 import { PERFIS_PADRAO } from '../src/data/perfis.js'
 
@@ -407,4 +407,54 @@ test('render vazio vira ressalva, não aprovação silenciosa', () => {
 test('PDF que abriu normalmente não ganha o aviso', () => {
   const r = avaliar({ peca: pecaLona, perfil: lona, medidas: pdfGrande() })
   assert.equal(achado(r, 'visual-indisponivel'), undefined)
+})
+
+// -------------------------------------------------- nitidez real (PDF)
+//
+// A densidade declarada não prediz qualidade. Nos três arquivos reais desta
+// operação, o que o time REPROVOU tinha 216 dpi nominais e um dos aprovados
+// tinha 150. O que separa é a largura da borda, medida em mm impressos.
+
+const pdfComNitidez = (bordaMm) => ({
+  formato: 'pdf', formatoSuportado: true, paginas: 1, puroVetor: false,
+  tamanhoDeclaradoCm: { largura: 200, altura: 290 },
+  dpiImagens: [{ dpi: 216, px: 21571, py: 28912, larguraCm: 200 }],
+  larguraPx: 17008, alturaPx: 24662,
+  nitidez: { medido: true, dpi: 50, bordaPx: bordaMm / 25.4 * 50, bordaMm },
+})
+
+test('arte ampliada vira ressalva mesmo com dpi declarado alto', () => {
+  // 1,50 mm foi o medido no arquivo J&T, aprovado pela ferramenta e reprovado
+  // pelo time por causa do personagem borrado.
+  const r = avaliar({ peca: pecaLona, perfil: lona, medidas: pdfComNitidez(1.50) })
+  const a = achado(r, 'nitidez-real')
+  assert.ok(a, 'o arquivo que o time reprovou precisa sair com ressalva')
+  assert.equal(a.nivel, 'ressalva')
+  assert.equal(r.veredicto, 'ressalva')
+  assert.match(a.acao, /não resolve/, 'mandar arquivo maior não conserta falta de detalhe')
+})
+
+test('os dois arquivos que o time aprova passam limpos', () => {
+  for (const mm of [0.60, 0.74]) {   // Infracommerce e JadLog, medidos
+    const r = avaliar({ peca: pecaLona, perfil: lona, medidas: pdfComNitidez(mm) })
+    assert.equal(achado(r, 'nitidez-real'), undefined, `${mm} mm não pode ser acusado`)
+  }
+})
+
+test('o limiar tem folga dos dois lados', () => {
+  // Errar reprovando destrói a confiança no laudo; errar aprovando cai na
+  // conferência do time. Por isso o corte fica mais perto do reprovado.
+  assert.ok(LIMIAR_BORDA_MM > 0.74 * 1.4, 'folga sobre o pior aprovado')
+  assert.ok(LIMIAR_BORDA_MM < 1.50 * 0.9, 'ainda pega o reprovado')
+})
+
+test('sem medição confiável, nenhum achado — silêncio, não aprovação', () => {
+  for (const nitidez of [
+    { medido: false, motivo: 'resolucao_baixa' },
+    { medido: false, motivo: 'vetor' },
+    undefined,
+  ]) {
+    const r = avaliar({ peca: pecaLona, perfil: lona, medidas: { ...pdfComNitidez(9), nitidez } })
+    assert.equal(achado(r, 'nitidez-real'), undefined)
+  }
 })

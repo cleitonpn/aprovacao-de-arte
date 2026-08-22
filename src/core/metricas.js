@@ -201,3 +201,88 @@ export function estatisticasCor(dados) {
   }
   return { saturacaoMedia: somaSat / n, saturacaoMax: maxSat, minLuma: minL, maxLuma: maxL, cinza: maxSat < 0.04 }
 }
+
+/**
+ * Quantos pixels uma borda leva para trocar de tom.
+ *
+ * É a medida que separa arte nítida de arte ampliada, e ela funciona onde a
+ * densidade declarada engana. Medido em três arquivos reais desta operação, a
+ * 50 dpi no tamanho impresso:
+ *
+ *   Infracommerce, aprovado pelo time, 300 dpi nominal   →  1,1 px
+ *   JadLog,        aprovado pelo time, 150 dpi nominal   →  1,4 px
+ *   J&T,           reprovado pelo time, 216 dpi nominal  →  3,4 px
+ *
+ * Repare no que a tabela desmonta: o arquivo reprovado tinha densidade nominal
+ * MAIOR que um dos aprovados. Contar pixel não diz nada sobre haver detalhe
+ * neles; medir a borda diz.
+ *
+ * O método: numa transição forte, a altura do degrau dividida pela inclinação
+ * máxima dá a largura da rampa. Borda real vira em um ou dois pixels; borda de
+ * imagem ampliada arrasta por dez ou vinte, porque os pixels do meio foram
+ * inventados por interpolação.
+ *
+ * Devolve a MEDIANA, não o pior caso. Arte boa tem regiões moles legítimas —
+ * fundo desfocado, céu, gradiente — e o JadLog aprovado tem várias. O que
+ * separa não é existir região mole, é a peça inteira ser mole.
+ */
+export function larguraDeBorda(gray, w, h, { maxAmostras = 20000 } = {}) {
+  if (w < 8 || h < 8) return null
+
+  // Percentil por histograma: ordenar quinze milhões de gradientes custaria
+  // mais que toda a análise junta.
+  const hist = new Uint32Array(256)
+  let total = 0
+  for (let y = 0; y < h; y++) {
+    const base = y * w
+    for (let x = 0; x < w - 1; x++) {
+      hist[Math.abs(gray[base + x + 1] - gray[base + x]) | 0]++
+      total++
+    }
+  }
+  if (!total) return null
+
+  const alvo = total * 0.995
+  let acum = 0
+  let limiar = 255
+  for (let v = 0; v < 256; v++) {
+    acum += hist[v]
+    if (acum >= alvo) { limiar = v; break }
+  }
+  if (limiar < 6) return null // nada com contraste suficiente para medir
+
+  const JANELA = 30
+  const PASSO_MIN = 30
+  const larguras = []
+  const salto = Math.max(1, Math.floor(h / 600))
+
+  for (let y = 0; y < h && larguras.length < maxAmostras; y += salto) {
+    const base = y * w
+    for (let x = 1; x < w - 2 && larguras.length < maxAmostras; x++) {
+      if (Math.abs(gray[base + x + 1] - gray[base + x]) < limiar) continue
+
+      const i0 = Math.max(0, x - JANELA)
+      const i1 = Math.min(w - 1, x + JANELA)
+      let min = 255
+      let max = 0
+      let inclinacao = 0
+      for (let i = i0; i <= i1; i++) {
+        const v = gray[base + i]
+        if (v < min) min = v
+        if (v > max) max = v
+        if (i < i1) {
+          const g = Math.abs(gray[base + i + 1] - v)
+          if (g > inclinacao) inclinacao = g
+        }
+      }
+      const degrau = max - min
+      if (degrau >= PASSO_MIN && inclinacao > 0) larguras.push(degrau / inclinacao)
+      x = i1 // não medir a mesma borda dezenas de vezes
+    }
+  }
+
+  if (larguras.length < 12) return null
+  larguras.sort((a, b) => a - b)
+  const m = larguras.length >> 1
+  return larguras.length % 2 ? larguras[m] : (larguras[m - 1] + larguras[m]) / 2
+}

@@ -29,6 +29,19 @@ const POL_POR_CM = 1 / 2.54
 // passa com ressalva, com o cliente sabendo o que está aceitando.
 export const DPI_PISO_ABSOLUTO = 100
 export const DPI_MINIMO_GLOBAL = 150
+/**
+ * Acima de quantos milímetros de borda a arte é considerada sem detalhe real.
+ *
+ * Calibrado com três arquivos desta operação, medidos a 50 dpi no tamanho
+ * impresso: aprovados pelo time em 0,60 e 0,74 mm, reprovado em 1,50 mm. O
+ * corte fica mais perto do reprovado de propósito — acusar arte boa custa a
+ * confiança no laudo inteiro, e deixar passar cai na conferência do time.
+ *
+ * Três arquivos não são uma amostra. Este número deve ser revisto quando
+ * houver mais casos reais dos dois lados.
+ */
+export const LIMIAR_BORDA_MM = 1.2
+
 export const SANGRIA_MINIMA_MM = 100
 
 export const POLITICA_PADRAO = {
@@ -410,6 +423,29 @@ export function avaliar(ctx) {
         dados: { imagens: medidas.dpiImagens },
       })
     }
+    // Nitidez REAL, que é outra pergunta que "quantos pixels tem".
+    //
+    // Um arquivo pode declarar 216 dpi e não carregar detalhe nenhum neles:
+    // basta a arte ter sido montada com uma imagem pequena ampliada. Foi o que
+    // passou aprovado com o personagem visivelmente borrado — e um dos
+    // arquivos que o time aprova declara 150 dpi, menos que ele.
+    //
+    // O limiar está em milímetros impressos porque é assim que a coisa existe
+    // no mundo: 1,2 mm é o ponto entre os aprovados (0,60 e 0,74 mm) e o
+    // reprovado (1,50 mm), com folga maior para o lado de não acusar arte boa.
+    // Errar reprovando destrói a confiança no laudo inteiro; errar aprovando
+    // cai na conferência do time, que existe justamente para isso.
+    if (medidas.nitidez?.medido && medidas.nitidez.bordaMm > LIMIAR_BORDA_MM) {
+      add({
+        id: 'nitidez-real',
+        nivel: 'ressalva',
+        titulo: 'A arte tem menos definição do que a resolução declarada sugere',
+        detalhe: `As transições desta arte levam cerca de ${num(medidas.nitidez.bordaMm, 2)} mm para acontecer no tamanho impresso — uma arte com detalhe real fica abaixo de ${num(LIMIAR_BORDA_MM, 1)} mm. Isso acontece quando algum elemento foi ampliado dentro do arquivo: o PDF fica grande e declara a resolução certa, mas o detalhe não existe. Costuma aparecer primeiro em personagens, fotos e logos.`,
+        acao: 'Peça ao designer os elementos na resolução original, sem ampliar, e remonte a arte. Trocar o arquivo por um maior não resolve — o que falta é detalhe, não pixel.',
+        dados: { bordaMm: medidas.nitidez.bordaMm, bordaPx: medidas.nitidez.bordaPx, dpi: medidas.nitidez.dpi },
+      })
+    }
+
     if (medidas.dpiImagens?.length) {
       const pior = medidas.dpiImagens.reduce((m, i) => (i.dpi < m.dpi ? i : m))
       if (pior.dpi < dpiMin) {
