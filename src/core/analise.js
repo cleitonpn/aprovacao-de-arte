@@ -5,7 +5,7 @@
 // de arte não divulgada antes do evento.
 
 import { sha256, detectarFormato, extensao, lerJpeg, lerPng, formatarBytes } from './arquivo.js'
-import { carregarBitmap, amostraReduzida, recortesNativos, fracaoChapada, miniatura, LADO_RECORTE } from './imagem.js'
+import { carregarBitmap, amostraReduzida, recortesNativos, fracaoChapada, miniatura, renderVazio, LADO_RECORTE } from './imagem.js'
 import { paraCinza, blocagem, conteudoNaMargem, bordaUniforme, estatisticasCor } from './metricas.js'
 import { analisarEspectro, classificarDeficit } from './espectro.js'
 import { avaliar } from './regras.js'
@@ -199,19 +199,35 @@ async function medirPdf(buffer, base, peca, perfil, escalaFator) {
     }))
   }
 
+  // A prévia é opcional; saber que ela FALHOU não é.
+  //
+  // Diante de uma imagem embutida grande demais o pdf.js não lança erro:
+  // devolve a página em branco. O `catch` vazio de antes tratava isso como
+  // "sem pré-visualização", e o resto do laudo seguia descrevendo uma arte que
+  // a ferramenta nunca chegou a abrir.
   let miniaturaUrl = null
+  let visualIndisponivel = false
   try {
     const { canvas } = await renderizarPagina(doc, 1, 900)
-    miniaturaUrl = canvas.toDataURL('image/jpeg', 0.85)
+    const ctx = canvas.getContext('2d', { willReadFrequently: true })
+    const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height)
+    visualIndisponivel = renderVazio(data)
+    if (!visualIndisponivel) miniaturaUrl = canvas.toDataURL('image/jpeg', 0.85)
   } catch {
-    /* pré-visualização é opcional */
+    visualIndisponivel = true
   }
+
+  // Página só de vetor pode ser legitimamente clara e uniforme — aí "vazio"
+  // não significa falha. O sintoma só vale quando havia raster para aparecer.
+  visualIndisponivel = visualIndisponivel && Boolean(dpiImagens?.length)
 
   // O documento fica aberto para o simulador recortar depois, na resolução
   // real. Nada disso vai para o Firestore: o laudo gravado é montado campo a
   // campo em `laudoJson`, e este não está na lista.
   const larguraPt = await larguraEmPontos(doc, 1)
-  const fonteVisual = larguraPx && larguraPt
+  // Sem render não há recorte: oferecer o simulador aqui desenhava dois
+  // quadrados brancos legendados com dpi, o que é pior que não oferecer nada.
+  const fonteVisual = larguraPx && larguraPt && !visualIndisponivel
     ? fonteDePdf(doc, larguraPt, larguraPx, alturaPx)
     : null
 
@@ -230,6 +246,7 @@ async function medirPdf(buffer, base, peca, perfil, escalaFator) {
     alturaPx,
     miniaturaUrl,
     fonteVisual,
+    visualIndisponivel,
     tamanhoDeclaradoCm: { largura: declaradoLarguraCm, altura: declaradoAlturaCm },
     escalaSugerida: escalaFator === 1 ? escalaProvavel(info.larguraMm / 10, peca.larguraCm) : null,
     cmyk: false,

@@ -110,6 +110,40 @@ export function recortesNativos(bitmap, amostra, quantidade = 3, lado = LADO_REC
   })
 }
 
+/**
+ * O render saiu vazio?
+ *
+ * Existe porque a falha do pdf.js diante de uma imagem gigante NÃO é uma
+ * exceção: ele devolve a página em branco e não reclama. O `try/catch` em
+ * volta do render nunca dispara, a miniatura vira um JPEG branco, o simulador
+ * desenha dois quadrados brancos — e o laudo segue afirmando coisas sobre uma
+ * imagem que ninguém conseguiu abrir. Foi assim que uma arte com o personagem
+ * borrado saiu "aprovada", acompanhada da frase "a granulação não é
+ * perceptível a esta distância".
+ *
+ * Uniformidade é o sinal: arte de verdade varia. Render que falhou é a cor de
+ * fundo do canvas, do primeiro ao último pixel.
+ */
+export function renderVazio(dadosRGBA, limiar = 1.2) {
+  const n = Math.floor(dadosRGBA.length / 4)
+  if (n < 16) return true
+  const passo = Math.max(1, Math.floor(n / 4096))
+  let soma = 0
+  let soma2 = 0
+  let vistos = 0
+  for (let i = 0; i < n; i += passo) {
+    const p = i * 4
+    // Luminância aproximada: o que importa é variar, não a cor exata.
+    const v = (dadosRGBA[p] * 299 + dadosRGBA[p + 1] * 587 + dadosRGBA[p + 2] * 114) / 1000
+    soma += v
+    soma2 += v * v
+    vistos++
+  }
+  if (!vistos) return true
+  const media = soma / vistos
+  return Math.sqrt(Math.max(0, soma2 / vistos - media * media)) < limiar
+}
+
 /** Fração da imagem que é área chapada — usada para contextualizar os avisos. */
 export function fracaoChapada(amostra) {
   const cinza = paraCinza(amostra.dados.data, amostra.largura, amostra.altura)

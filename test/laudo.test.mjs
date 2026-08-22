@@ -1,5 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { renderVazio } from '../src/core/imagem.js'
 import { laudoJson, semIndefinidos } from '../src/core/mensagem.js'
 import { avaliar } from '../src/core/regras.js'
 import { PERFIS_PADRAO } from '../src/data/perfis.js'
@@ -88,4 +89,21 @@ test('semIndefinidos NÃO reconstrói objetos que não sejam simples', () => {
   assert.equal(limpo.criadoEm, sentinela, 'o sentinela precisa sair intacto, não copiado')
   assert.equal(limpo.quando, data)
   assert.equal(limpo.x, null)
+})
+
+// Uniformidade é o sinal de que o render falhou: arte de verdade varia.
+test('renderVazio distingue página em branco de arte', () => {
+  const branco = new Uint8ClampedArray(64 * 64 * 4).fill(255)
+  assert.equal(renderVazio(branco), true)
+
+  const preto = new Uint8ClampedArray(64 * 64 * 4).fill(0)
+  for (let i = 3; i < preto.length; i += 4) preto[i] = 255
+  assert.equal(renderVazio(preto), true, 'chapado de qualquer cor é falha igual')
+
+  const arte = new Uint8ClampedArray(64 * 64 * 4)
+  for (let i = 0; i < 64 * 64; i++) {
+    const v = (i * 37) % 256
+    arte[i * 4] = v; arte[i * 4 + 1] = 255 - v; arte[i * 4 + 2] = (v * 3) % 256; arte[i * 4 + 3] = 255
+  }
+  assert.equal(renderVazio(arte), false)
 })

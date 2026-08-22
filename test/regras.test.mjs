@@ -378,3 +378,33 @@ test('sangria grande em peça estreita não bloqueia o envio', () => {
   assert.equal(achado(r, 'dimensao'), undefined)
   assert.notEqual(r.veredicto, 'reprovado')
 })
+
+// ------------------------------------------- quando não foi possível conferir
+//
+// O pdf.js diante de imagem gigante não lança erro: devolve a página em
+// branco. O laudo seguia "aprovado", com prévia e simulador vazios e a frase
+// "a granulação não é perceptível a esta distância" — sobre uma arte que a
+// ferramenta nunca abriu. Aprovar sem ter visto é a única falha aqui que o
+// cliente não tem como perceber sozinho.
+
+const pdfGrande = (extra = {}) => ({
+  formato: 'pdf', formatoSuportado: true, paginas: 1, puroVetor: false,
+  tamanhoDeclaradoCm: { largura: 200, altura: 290 },
+  dpiImagens: [{ dpi: 216, px: 21571, py: 28912, larguraCm: 254 }],
+  larguraPx: 17008, alturaPx: 24662,
+  ...extra,
+})
+
+test('render vazio vira ressalva, não aprovação silenciosa', () => {
+  const r = avaliar({ peca: pecaLona, perfil: lona, medidas: pdfGrande({ visualIndisponivel: true }) })
+  const a = achado(r, 'visual-indisponivel')
+  assert.ok(a, 'a falha de leitura precisa aparecer no laudo')
+  assert.equal(a.nivel, 'ressalva')
+  assert.equal(r.veredicto, 'ressalva', 'não pode sair como aprovado')
+  assert.match(a.detalhe, /não puderam ser geradas/)
+})
+
+test('PDF que abriu normalmente não ganha o aviso', () => {
+  const r = avaliar({ peca: pecaLona, perfil: lona, medidas: pdfGrande() })
+  assert.equal(achado(r, 'visual-indisponivel'), undefined)
+})

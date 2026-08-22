@@ -389,6 +389,27 @@ export function avaliar(ctx) {
 
   // -------------------------------------------------------------------- PDF
   if (medidas.formato === 'pdf' || medidas.formato === 'ai') {
+    // Não conseguimos abrir a imagem: isto precisa APARECER.
+    //
+    // Antes, um arquivo cuja imagem o navegador não dava conta de decodificar
+    // seguia como "aprovado", com a prévia em branco, o simulador em branco e
+    // uma frase afirmando que a granulação não seria perceptível. Aprovar sem
+    // ter visto é a única falha aqui que o cliente não tem como perceber
+    // sozinho — todas as outras ele lê no laudo.
+    //
+    // Ressalva, e não bloqueio: o arquivo pode estar perfeito, e o que falta é
+    // a nossa capacidade de conferir, não a qualidade dele. Mas quem envia
+    // assume isso de olhos abertos, e fica registrado quem assumiu.
+    if (medidas.visualIndisponivel) {
+      add({
+        id: 'visual-indisponivel',
+        nivel: 'ressalva',
+        titulo: 'Não conseguimos abrir a imagem deste PDF para conferir',
+        detalhe: 'O arquivo tem uma imagem embutida grande demais para o navegador processar, então a pré-visualização e a simulação de distância não puderam ser geradas. Os dados técnicos acima (medida, resolução declarada, sangria) foram conferidos normalmente; o que não foi possível verificar é como a arte realmente se parece.',
+        acao: 'Se puder, exporte o PDF com a imagem em resolução compatível com o tamanho da peça — arquivos muito acima do necessário não melhoram a impressão e impedem a conferência. Nossa equipe vai olhar esta arte manualmente antes de imprimir.',
+        dados: { imagens: medidas.dpiImagens },
+      })
+    }
     if (medidas.dpiImagens?.length) {
       const pior = medidas.dpiImagens.reduce((m, i) => (i.dpi < m.dpi ? i : m))
       if (pior.dpi < dpiMin) {
