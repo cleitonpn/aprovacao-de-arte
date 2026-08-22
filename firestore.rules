@@ -255,7 +255,15 @@ service cloud.firestore {
                  .hasOnly(['nome', 'atualizadaEm'])
             && textoValido(request.resource.data.nome, 160));
 
-      allow delete: if ehAdmin();
+      // Apagar a feira é a segunda permissão que também é LEI aqui, ao lado de
+      // mexer na lista de analistas — e pelo mesmo motivo: é das duas únicas
+      // ações do sistema que não se consertam depois. Some com a feira, com os
+      // stands, com as conversas e com os arquivos, e os links que os clientes
+      // têm param de funcionar no mesmo instante.
+      //
+      // Criar e editar continua com qualquer analista de cadastro. O que muda
+      // é só a destruição.
+      allow delete: if ehGestor();
     }
 
     // O espelho do app de produção.

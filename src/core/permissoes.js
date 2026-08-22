@@ -19,8 +19,8 @@
 export const PAPEIS = {
   admin: {
     rotulo: 'Administrador',
-    descricao: 'Acesso máximo. Faz tudo, em todas as feiras, e é o único que cadastra e remove analistas.',
-    permissoes: ['verPainel', 'verArtes', 'cadastrarProjetos', 'cobrar', 'aprovar', 'gerenciarAnalistas'],
+    descricao: 'Acesso máximo. Faz tudo, em todas as feiras, e é o único que cadastra analistas e exclui feiras.',
+    permissoes: ['verPainel', 'verArtes', 'cadastrarProjetos', 'cobrar', 'aprovar', 'gerenciarAnalistas', 'excluirFeiras'],
     sempreTodasAsFeiras: true,
   },
   completo: {
@@ -50,6 +50,7 @@ export const ROTULO_PERMISSAO = {
   cobrar: 'Cobrar o cliente por e-mail e exportar listas',
   aprovar: 'Prova de aprovação, liberar reenvio e status de impressão',
   gerenciarAnalistas: 'Cadastrar e remover analistas',
+  excluirFeiras: 'Excluir uma feira inteira, com stands e arquivos',
 }
 
 /**

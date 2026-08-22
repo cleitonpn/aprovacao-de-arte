@@ -82,7 +82,14 @@ export function usarFeiras(fb, acesso, inicial = '') {
       // `inicial` só vale se a feira existir e a pessoa alcançar: um atalho
       // colado de outra feira não pode deixar a tela apontando para o vazio.
       const pedida = lista.some((f) => f.id === inicial) ? inicial : ''
-      setFeiraId((atual) => selecionar || atual || pedida || lista[0]?.id || '')
+      // A seleção atual só vale enquanto a feira existir. Sem esta conferência,
+      // apagar a feira aberta deixa a tela apontando para um id que não existe
+      // mais: seletor em branco, nenhum stand e nenhuma explicação. Vale também
+      // para o dia em que alguém perder o acesso a uma feira.
+      setFeiraId((atual) => {
+        const valida = lista.some((f) => f.id === atual) ? atual : ''
+        return selecionar || valida || pedida || lista[0]?.id || ''
+      })
     } catch (e) {
       setErro(traduzirErroAuth(e))
     }

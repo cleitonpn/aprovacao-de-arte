@@ -444,6 +444,45 @@ export async function salvarFeira(fb, { id, nome, prazoEnvio }, por) {
   return feiraId
 }
 
+/**
+ * Apaga uma feira e tudo que pertencia a ela.
+ *
+ * O trabalho é dividido em dois, e a divisão não é arbitrária:
+ *
+ * AQUI, na frente de quem clicou, vão os STANDS — a parte que não pode falhar
+ * em silêncio. Enquanto o documento do projeto existir, o link do cliente
+ * continua abrindo e a varredura diária continua mandando e-mail sobre uma
+ * feira que, para o time, já não existe. Se algo der errado, o erro aparece na
+ * tela em vez de virar uma feira meio apagada que ninguém sabe que ficou.
+ *
+ * NA NUVEM ficam os envios e os arquivos guardados. Envio é registro histórico
+ * e nenhuma sessão de navegador pode apagá-lo — é uma trava que vale manter, e
+ * abrir exceção nas regras para este caso enfraqueceria o resto do ano inteiro.
+ * A função `limparFeiraApagada` faz isso com conta de serviço, disparada pelo
+ * sumiço da feira. Se ela demorar um minuto, ninguém percebe.
+ *
+ * `aoAndar` existe porque apagar cinquenta stands leva alguns segundos, e uma
+ * tela parada durante uma ação irreversível é o momento em que a pessoa clica
+ * de novo.
+ */
+export async function apagarFeira(fb, feiraId, tokens = [], aoAndar) {
+  const { getFirestore, doc, deleteDoc } = fb.firestore
+  const bd = getFirestore(fb.app)
+
+  let feitos = 0
+  for (const token of tokens) {
+    await deleteDoc(doc(bd, COLECAO, token))
+    feitos += 1
+    aoAndar?.(feitos, tokens.length)
+  }
+
+  // Por último: é o sumiço DELA que dispara a limpeza do resto. Apagando antes
+  // dos stands, um erro no meio deixaria a função tendo que adivinhar o que
+  // sobrou — e a feira já teria sumido da tela de quem poderia perceber.
+  await deleteDoc(doc(bd, 'feiras', feiraId))
+  return feitos
+}
+
 export { carregarFirebase }
 
 // ------------------------------------------------------------- conversa

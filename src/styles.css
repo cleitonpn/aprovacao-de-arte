@@ -353,6 +353,21 @@ input[aria-invalid='true'] { border-color: var(--ruim); }
 .escolha-modo em { display: block; font-style: normal; font-size: 12.5px; color: var(--suave); margin-top: 2px; line-height: 1.5; }
 
 .perigo { color: var(--ruim) !important; }
+
+/* Exclusão de feira. A moldura vermelha não é decoração: ela separa
+   visualmente o que é editável do que é irreversível, dentro do mesmo bloco.
+   O botão fica sólido e vermelho porque, uma vez que a pessoa digitou o nome
+   da feira, o que falta é acertar o alvo — não pensar de novo. */
+.zona-perigo {
+  border: 1px solid var(--ruim);
+  border-radius: var(--raio);
+  padding: 14px;
+  margin-top: 14px;
+}
+.zona-perigo > strong { color: var(--ruim); display: block; margin-bottom: 6px; }
+.zona-perigo .campo { margin-top: 10px; }
+.btn.perigo { background: var(--ruim); border-color: var(--ruim); color: #fff !important; }
+.btn.perigo:disabled { opacity: .45; }
 .acoes.compactas { gap: 6px; margin-top: 10px; }
 .acoes.compactas .btn { padding: 6px 11px; font-size: 12.5px; }
 .campo.cresce { flex: 2; }

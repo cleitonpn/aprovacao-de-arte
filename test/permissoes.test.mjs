@@ -24,7 +24,7 @@ test('papel desconhecido não vira acesso vazio nem acesso total por acidente', 
 
 test('cada papel pode exatamente o que promete', () => {
   const esperado = {
-    admin: ['verPainel', 'verArtes', 'cadastrarProjetos', 'cobrar', 'aprovar', 'gerenciarAnalistas'],
+    admin: ['verPainel', 'verArtes', 'cadastrarProjetos', 'cobrar', 'aprovar', 'gerenciarAnalistas', 'excluirFeiras'],
     completo: ['verPainel', 'verArtes', 'cadastrarProjetos', 'cobrar', 'aprovar'],
     cadastro: ['verArtes', 'cadastrarProjetos'],
     cobranca: ['verArtes', 'cobrar'],
@@ -105,4 +105,23 @@ test('a tela inicial é sempre uma que a pessoa consegue abrir', () => {
     const inicial = telaInicial(acesso)
     assert.ok(abasDe(acesso).some((a) => a.id === inicial), `${papel} abriria numa tela proibida`)
   }
+})
+
+// -------------------------------------------------- exclusão de feira
+//
+// Criar e editar feira é trabalho de cadastro. Apagar leva junto os stands, os
+// arquivos e as conversas, e não tem desfazer — é uma das duas únicas ações do
+// sistema que não se consertam depois.
+
+test('só o administrador exclui feiras', () => {
+  assert.equal(pode(acessoDe({ papel: 'admin' }), 'excluirFeiras'), true)
+  for (const papel of ['completo', 'cadastro', 'cobranca']) {
+    assert.equal(pode(acessoDe({ papel }), 'excluirFeiras'), false, papel)
+  }
+})
+
+test('quem cadastra feira não necessariamente apaga', () => {
+  const cadastro = acessoDe({ papel: 'cadastro' })
+  assert.equal(pode(cadastro, 'cadastrarProjetos'), true)
+  assert.equal(pode(cadastro, 'excluirFeiras'), false)
 })

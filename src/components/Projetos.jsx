@@ -8,7 +8,7 @@ import { FASES, filtroDeFase } from '../core/fluxo.js'
 import { situacaoDoProjeto } from '../core/painel.js'
 import { formatarData as fmtData, paraInputData, fimDoDia } from '../core/datas.js'
 import {
-  salvarProjeto, salvarProjetos, apagarProjeto, salvarFeira,
+  salvarProjeto, salvarProjetos, apagarProjeto, salvarFeira, apagarFeira,
   ouvirProjetos, ouvirEnvios,
 } from '../services/projetos.js'
 import { vistoEm, dataEmMs, assinarVisto } from '../store/visto.js'
@@ -292,6 +292,8 @@ export default function Projetos({ sessao, feiraInicial = '', tokenInicial = '' 
               feira={feira}
               feiraId={feiraId}
               novaFeira={editandoFeira === 'nova'}
+              projetos={projetos}
+              envios={envios}
               onPronto={async (id) => {
                 setEditandoFeira(null)
                 await recarregarFeiras(id)
@@ -398,7 +400,8 @@ export default function Projetos({ sessao, feiraInicial = '', tokenInicial = '' 
  * perceber, porque a tela continuava mostrando a data. Lendo da origem, a
  * ordem de cadastro deixa de importar e não há o que reaplicar.
  */
-function FeiraEmEdicao({ sessao, feira, feiraId, novaFeira, onPronto, onCancelar }) {
+function FeiraEmEdicao({ sessao, feira, feiraId, novaFeira, projetos, envios, onPronto, onCancelar }) {
+  const podeExcluir = pode(sessao.acesso, 'excluirFeiras')
   const [nome, setNome] = useState(novaFeira ? '' : (feira?.nome || ''))
   const [data, setData] = useState(() => paraInputData(feira?.prazoEnvio))
   const [gravando, setGravando] = useState(false)
@@ -455,6 +458,117 @@ function FeiraEmEdicao({ sessao, feira, feiraId, novaFeira, onPronto, onCancelar
         Correções que o time pediu continuam liberadas: quem foi reprovado numa
         prova não é punido pela nossa volta. Para abrir exceção a um stand, use{' '}
         <strong>Abrir</strong> e prorrogue só para ele.
+      </p>
+
+      {/*
+        Só administrador. Cadastro e analista completo criam e editam feiras —
+        apagar é outra coisa: leva junto os stands, os arquivos e as conversas,
+        e não tem desfazer. É a segunda permissão do sistema que também é lei no
+        servidor, ao lado de mexer na lista de analistas, pelo mesmo motivo: são
+        as duas em que o erro não se conserta depois.
+      */}
+      {!novaFeira && podeExcluir && (
+        <ApagarFeira
+          sessao={sessao}
+          feira={feira}
+          feiraId={feiraId}
+          projetos={projetos}
+          envios={envios}
+          onApagou={onPronto}
+        />
+      )}
+    </div>
+  )
+}
+
+/**
+ * Apagar a feira inteira.
+ *
+ * Existe porque feira de teste ficava para sempre na lista, e uma lista com
+ * lixo é uma lista em que se erra a seleção — cadastrar um stand real na
+ * "Teste 2" é o tipo de engano que só aparece quando o cliente reclama.
+ *
+ * Três decisões sobre a confirmação:
+ *
+ * 1. DIGITAR O NOME, e não um "tem certeza?". A caixa de confirmação é clicada
+ *    sem ser lida; digitar "Petvet 2026" obriga a olhar QUAL feira está
+ *    prestes a sumir. É a diferença entre confirmar e conferir.
+ * 2. A CONTA VEM ANTES. "6 stands e 14 artes serão apagados" é a informação
+ *    que muda a decisão, e ela precisa estar visível no momento de digitar,
+ *    não escondida numa tela anterior.
+ * 3. SEM DESFAZER, e dito com todas as letras. Não existe lixeira aqui; fingir
+ *    que existe seria pior do que a ausência.
+ */
+function ApagarFeira({ sessao, feira, feiraId, projetos, envios, onApagou }) {
+  const [aberto, setAberto] = useState(false)
+  const [confirmacao, setConfirmacao] = useState('')
+  const [apagando, setApagando] = useState(false)
+  const [andamento, setAndamento] = useState(null)
+  const [erro, setErro] = useState(null)
+
+  const nome = feira?.nome || feiraId
+  const confere = confirmacao.trim().toLowerCase() === String(nome).trim().toLowerCase()
+
+  const apagar = async () => {
+    setErro(null)
+    setApagando(true)
+    try {
+      await apagarFeira(sessao.fb, feiraId, projetos.map((p) => p.token), (feitos, total) => {
+        setAndamento(`${feitos} de ${total} stands…`)
+      })
+      await onApagou(null)
+    } catch (e) {
+      setErro(traduzirErroAuth(e, 'gravacao'))
+      setApagando(false)
+      setAndamento(null)
+    }
+  }
+
+  if (!aberto) {
+    return (
+      <p className="nota">
+        <button className="link perigo" onClick={() => setAberto(true)}>Excluir esta feira</button>
+        {' '}— apaga a feira, os stands e os arquivos. Serve para limpar testes.
+      </p>
+    )
+  }
+
+  return (
+    <div className="zona-perigo">
+      <strong>Excluir “{nome}” definitivamente</strong>
+      <p className="dica-campo">
+        Vão junto <strong>{projetos.length} stand(s)</strong>,{' '}
+        <strong>{envios.length} arquivo(s) recebido(s)</strong>, as conversas, o
+        histórico de reprovações e as provas de aprovação. Os links que os
+        clientes têm param de funcionar. <strong>Não há como desfazer.</strong>
+      </p>
+      <label className="campo">
+        <span>Para confirmar, digite o nome da feira: <strong>{nome}</strong></span>
+        <input
+          type="text"
+          value={confirmacao}
+          disabled={apagando}
+          onChange={(e) => setConfirmacao(e.target.value)}
+          placeholder={nome}
+        />
+      </label>
+      {erro && <p className="erro-envio">{erro}</p>}
+      <div className="acoes">
+        <button className="btn perigo" disabled={!confere || apagando} onClick={apagar}>
+          {apagando ? (andamento || 'Apagando…') : 'Excluir a feira'}
+        </button>
+        <button
+          className="btn btn-ghost"
+          disabled={apagando}
+          onClick={() => { setAberto(false); setConfirmacao(''); setErro(null) }}
+        >
+          Cancelar
+        </button>
+      </div>
+      <p className="dica-campo">
+        Os arquivos guardados são apagados logo em seguida, por uma rotina no
+        servidor — o navegador não tem permissão para isso, e é de propósito:
+        registro de envio não se apaga de dentro de uma sessão.
       </p>
     </div>
   )

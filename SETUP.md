@@ -426,6 +426,34 @@ perdido, e a conversa é outra.
 Para mudar o número, é a constante `LIMITE_REPROVACOES` em
 `src/core/reprovacoes.js`.
 
+### Excluir uma feira
+
+Feira de teste ficava para sempre na lista — e lista com lixo é lista em que se
+erra a seleção. Em `#/projetos` → **Editar feira**, no fim do bloco, há
+**Excluir esta feira**.
+
+**Só administrador vê essa opção**, e a trava vale também no servidor: é uma das
+duas únicas permissões que são lei nas regras do Firestore, ao lado de mexer na
+lista de analistas. Pelo mesmo motivo — são as duas ações que não se consertam
+depois. Cadastro e analista completo continuam criando e editando feiras
+normalmente.
+
+Para confirmar é preciso **digitar o nome da feira**. Caixa de "tem certeza?" é
+clicada sem ser lida; digitar o nome obriga a olhar qual feira vai sumir. A tela
+mostra antes quantos stands e quantos arquivos vão junto.
+
+O que é apagado: a feira, todos os stands, as conversas, o histórico de
+reprovações, os registros de envio e os arquivos guardados (artes, apoio,
+provas e gabaritos). Os links que os clientes têm param de funcionar.
+**Não há como desfazer** — não existe lixeira.
+
+O navegador apaga os stands na sua frente, com erro na tela se algo falhar: é a
+parte que não pode falhar em silêncio, porque enquanto o stand existir o link
+do cliente abre e o lembrete diário continua saindo. Os envios e os arquivos
+são apagados logo depois pela função `limparFeiraApagada` — nenhuma sessão de
+navegador pode apagar um envio, e essa trava vale mais do que a conveniência de
+fazer tudo num lugar só.
+
 ### "Já falei com o cliente"
 
 Todo alerta precisa de uma saída, ou deixa de ser alerta. Antes, o de

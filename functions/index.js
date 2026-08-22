@@ -16,13 +16,14 @@
 // mesmo código do site e roda nos testes sem rede nem Firebase. Aqui fica só
 // o encanamento — ler, gravar a marca, mandar.
 
-import { onDocumentWritten } from 'firebase-functions/v2/firestore'
+import { onDocumentWritten, onDocumentDeleted } from 'firebase-functions/v2/firestore'
 import { onSchedule } from 'firebase-functions/v2/scheduler'
 import { onRequest } from 'firebase-functions/v2/https'
 import { defineSecret } from 'firebase-functions/params'
 import { logger } from 'firebase-functions'
 import { initializeApp } from 'firebase-admin/app'
 import { getFirestore } from 'firebase-admin/firestore'
+import { getStorage } from 'firebase-admin/storage'
 
 import { avisosPendentes } from './nucleo/avisos.js'
 import { enviarEmail } from './src/correio.js'
@@ -180,6 +181,96 @@ export const avisarAoMudarProjeto = onDocumentWritten(
     // quem já imprimiu.
     const novo = evento.data?.before?.exists === false
     await despachar(evento.params.token, depois.data(), { novo })
+  },
+)
+
+// ------------------------------------------------------- apagar uma feira
+//
+// Feira de teste ficava para sempre. O navegador consegue apagar os stands e a
+// feira — as regras permitem —, mas não os ENVIOS nem os ARQUIVOS: envio é
+// registro histórico e nenhuma sessão de navegador pode apagá-lo, o que é uma
+// trava que vale manter. Uma conta de serviço passa por cima das regras, então
+// a limpeza pesada mora aqui.
+//
+// A divisão de trabalho não é arbitrária. O navegador faz a parte que NÃO PODE
+// falhar em silêncio — enquanto o documento do projeto existir, o link do
+// cliente continua abrindo e a varredura diária continua mandando e-mail. Isso
+// acontece na frente do analista, com erro na tela se der errado. O que sobra
+// para cá é o que ninguém percebe se demorar um minuto: arquivo guardado e
+// registro de envio.
+
+/** As quatro pastas do Storage, todas organizadas por feira. */
+const PASTAS_DA_FEIRA = ['envios', 'avulsos', 'provas', 'gabaritos']
+
+async function apagarEmLotes(consulta, rotulo, feiraId) {
+  let apagados = 0
+  // Em páginas porque uma feira grande tem milhares de envios, e carregar tudo
+  // de uma vez estoura a memória da função — justamente no caso em que ela
+  // mais precisa terminar.
+  for (;;) {
+    const pagina = await consulta.limit(300).get()
+    if (pagina.empty) break
+    const lote = bd.batch()
+    for (const doc of pagina.docs) lote.delete(doc.ref)
+    await lote.commit()
+    apagados += pagina.size
+    if (pagina.size < 300) break
+  }
+  if (apagados) logger.info(`${rotulo} apagados`, { feiraId, apagados })
+  return apagados
+}
+
+/**
+ * Limpa tudo que pertencia a uma feira apagada.
+ *
+ * Roda quando o documento da feira some. É irreversível de propósito — quem
+ * apaga uma feira quer que ela suma —, e a confirmação por escrito fica na
+ * tela, que é onde a pessoa ainda pode voltar atrás.
+ *
+ * Idempotente: se rodar duas vezes, a segunda não acha nada. Gatilho do
+ * Firestore roda "pelo menos uma vez", então isso não é zelo, é requisito.
+ */
+export const limparFeiraApagada = onDocumentDeleted(
+  { document: 'feiras/{feiraId}', region: REGIAO, retry: false, timeoutSeconds: 540, memory: '512MiB' },
+  async (evento) => {
+    const feiraId = evento.params.feiraId
+    logger.info('limpando a feira apagada', { feiraId })
+
+    // Os stands que o navegador não alcançou — se a rede caiu no meio, ou se
+    // alguém apagou a feira direto pelo console do Firebase.
+    const projetos = await bd.collection('projetos').where('feiraId', '==', feiraId).get()
+    const tokens = new Set(projetos.docs.map((d) => d.id))
+
+    const envios = await bd.collection('envios').where('feiraId', '==', feiraId).get()
+    // Os stands que o navegador JÁ apagou deixaram as subcoleções órfãs
+    // (mensagens, reprovações, avisos): apagar o documento pai no Firestore não
+    // apaga o que está abaixo dele. Os envios sabem de quais stands eram.
+    for (const doc of envios.docs) {
+      const id = doc.get('projetoId')
+      if (id) tokens.add(id)
+    }
+
+    for (const token of tokens) {
+      // `recursiveDelete` desce nas subcoleções — é a única forma de não deixar
+      // conversa e histórico de reprovação para trás.
+      await bd.recursiveDelete(bd.doc(`projetos/${token}`))
+    }
+    if (tokens.size) logger.info('stands apagados', { feiraId, stands: tokens.size })
+
+    await apagarEmLotes(bd.collection('envios').where('feiraId', '==', feiraId), 'envios', feiraId)
+
+    // Os arquivos. Falham separadamente das quatro pastas de propósito: uma
+    // pasta com problema de permissão não pode impedir a limpeza das outras
+    // três, e o log diz qual foi.
+    for (const pasta of PASTAS_DA_FEIRA) {
+      try {
+        await getStorage().bucket().deleteFiles({ prefix: `${pasta}/${feiraId}/`, force: true })
+      } catch (erro) {
+        logger.error('falha ao apagar arquivos da feira', { feiraId, pasta, erro: String(erro) })
+      }
+    }
+
+    logger.info('feira limpa', { feiraId, stands: tokens.size, envios: envios.size })
   },
 )
 
