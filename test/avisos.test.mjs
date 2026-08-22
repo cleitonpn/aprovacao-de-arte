@@ -12,10 +12,15 @@ const AGORA = Date.parse('2026-08-10T12:00:00Z')
 const lona = { id: 'p_lona', rotulo: 'Lona de fundo', larguraCm: 275, alturaCm: 275 }
 const testeira = { id: 'p_test', rotulo: 'Testeira', larguraCm: 150, alturaCm: 50 }
 
+// Os três nomes são diferentes de propósito: quem recebe o e-mail (`expositor`,
+// que na tela é "Cliente / expositor"), o stand e a feira. Iguais, um teste
+// passaria com o campo trocado — foi assim que o assunto saiu "Suas artes do
+// cleiton — Petvet", com o nome de quem recebe no lugar do stand.
 const projeto = (extra = {}) => ({
   token: 'abc123abc123',
   feira: 'KEMIN 2026',
-  expositor: 'Kemin',
+  expositor: 'Cleiton',
+  stand: 'Kemin Nutrição Animal',
   emails: ['marketing@kemin.com', 'agencia@x.com'],
   pecas: [lona, testeira],
   ...extra,
@@ -205,6 +210,56 @@ test('os três avisos convivem sem se atrapalhar', () => {
     },
   })
   assert.deepEqual(tipos(avisosPendentes(p, { agora: AGORA })), ['devolucao', 'prazo', 'prova'])
+})
+
+// ----------------------------------------------------- de quem é este e-mail
+//
+// O erro que isto tranca: o assunto saía "Suas artes do cleiton — Petvet",
+// juntando o nome de quem recebe com o da feira. Quem expõe em três feiras no
+// mês recebia três assuntos quase idênticos e não sabia qual stand abrir.
+
+test('todo aviso se identifica pelo stand e pela feira, não pelo nome de quem recebe', () => {
+  const p = projeto({
+    prazoEnvio: AGORA + 2 * DIA,
+    pecas: [lona, testeira, { id: 'p_bal', rotulo: 'Balcão', larguraCm: 100, alturaCm: 100 }],
+    entregas: { ...entregue('p_lona'), ...entregue('p_test') },
+    controle: {
+      provas: { pr1: { pecaIds: ['p_lona'], versoes: { p_lona: 1 }, enviadaEm: '2026-08-05T10:00:00Z' } },
+      pecas: { p_test: { devolucao: { motivo: 'Cor não fecha.', paraVersao: 1, em: '2026-08-07T10:00:00Z' } } },
+    },
+  })
+  const avisos = avisosPendentes(p, { agora: AGORA, novo: true })
+  assert.deepEqual(tipos(avisos), ['boas_vindas', 'devolucao', 'prazo', 'prova'])
+
+  for (const a of avisos) {
+    assert.match(a.assunto, /Kemin Nutrição Animal/, `assunto sem o stand: ${a.tipo}`)
+    assert.match(a.assunto, /KEMIN 2026/, `assunto sem a feira: ${a.tipo}`)
+    // O nome do cliente é para saudar, não para identificar o stand.
+    assert.doesNotMatch(a.assunto, /Cleiton/, `nome do cliente no assunto: ${a.tipo}`)
+    assert.match(a.texto, /^Olá, Cleiton!/, `saudação sem o nome: ${a.tipo}`)
+    assert.match(a.texto, /stand Kemin Nutrição Animal para a feira KEMIN 2026/, a.tipo)
+  }
+})
+
+test('sem nome de cliente a saudação não fica com vírgula solta', () => {
+  const p = projeto({ expositor: '' })
+  const [a] = avisosPendentes(p, { agora: AGORA, novo: true })
+  assert.match(a.texto, /^Olá! Você está cadastrado/)
+})
+
+test('projeto antigo sem nome de stand cai no nome do cliente', () => {
+  // A importação da produção nem sempre traz o stand. Melhor "stand Kemin" do
+  // que "stand undefined" — o cliente reconhece o próprio nome.
+  const p = projeto({ stand: '', expositor: 'Kemin' })
+  const [a] = avisosPendentes(p, { agora: AGORA, novo: true })
+  assert.match(a.assunto, /stand Kemin para a feira KEMIN 2026/)
+})
+
+test('sem feira cadastrada o assunto não fica pela metade', () => {
+  const p = projeto({ feira: '' })
+  const [a] = avisosPendentes(p, { agora: AGORA, novo: true })
+  assert.equal(a.assunto, 'Suas artes do stand Kemin Nutrição Animal')
+  assert.doesNotMatch(a.texto, /para a feira\b/)
 })
 
 // ------------------------------------------------------------ boas-vindas

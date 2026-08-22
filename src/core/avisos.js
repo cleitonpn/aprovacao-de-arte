@@ -80,7 +80,28 @@ ${paragrafos.map((p) => `<p>${escapar(p)}</p>`).join('\n')}
   return { texto, html }
 }
 
-const nomeDoStand = (p) => p?.expositor || p?.stand || 'seu stand'
+// Quem é quem no cadastro — e este trio já se confundiu uma vez.
+//
+// `expositor` é o campo "Cliente / expositor": a pessoa (ou a empresa) com quem
+// se fala. `stand` é o nome do stand. `feira` é o evento. O assunto saía como
+// "Suas artes do cleiton — Petvet", que junta o nome de quem recebe com o nome
+// da feira e não diz o que o cliente precisa saber ao bater o olho na caixa de
+// entrada: de qual stand e de qual feira se trata. Quem expõe em três feiras no
+// mesmo mês recebia três e-mails de assunto quase idêntico.
+//
+// A convenção é a mesma da mensagem de cobrança que o time manda à mão: saudar
+// pelo nome do cliente, identificar pelo stand e pela feira.
+const nomeDoCliente = (p) => String(p?.expositor || '').trim()
+const nomeDoStand = (p) => String(p?.stand || p?.expositor || '').trim() || 'seu stand'
+const nomeDaFeira = (p) => String(p?.feira || '').trim()
+
+/** "do stand Petvet Brasil para a feira Petvet 2026" — sem feira, só o stand. */
+const ondeExpoe = (p, preposicao = 'do') =>
+  `${preposicao} stand ${nomeDoStand(p)}${nomeDaFeira(p) ? ` para a feira ${nomeDaFeira(p)}` : ''}`
+
+/** O que identifica o stand no fim do assunto: " — stand X, Feira Y". */
+const etiqueta = (p) =>
+  ` — stand ${nomeDoStand(p)}${nomeDaFeira(p) ? `, ${nomeDaFeira(p)}` : ''}`
 
 /** Medida sem casa decimal inútil: 275 e não 275,0. */
 const fmt = (v) => Number(v).toLocaleString('pt-BR', { maximumFractionDigits: 1 })
@@ -102,8 +123,8 @@ export function avisosPendentes(projeto, {
 
   const resumo = resumoDoProjeto(projeto, agora)
   const link = linkDoStand(projeto.token, base)
-  const stand = nomeDoStand(projeto)
-  const feira = projeto.feira ? ` — ${projeto.feira}` : ''
+  const cliente = nomeDoCliente(projeto)
+  const fim = etiqueta(projeto)
   const avisos = []
 
   // ------------------------------------------------------------ boas-vindas
@@ -128,11 +149,11 @@ export function avisosPendentes(projeto, {
       chave: `boas_vindas:${projeto.token}`,
       tipo: 'boas_vindas',
       para,
-      assunto: `Suas artes do ${stand}${feira}`,
+      assunto: `Suas artes ${ondeExpoe(projeto)}`,
       ...corpo({
-        saudacao: `Olá! O ${stand} está cadastrado${projeto.feira ? ` na ${projeto.feira}` : ''} e a página para enviar as artes já está no ar.`,
+        saudacao: `Olá${cliente ? `, ${cliente}` : ''}! Você está cadastrado para enviar as artes ${ondeExpoe(projeto)}, e a página de envio já está no ar.`,
         paragrafos: [
-          `São ${resumo.total} ${resumo.total === 1 ? 'peça' : 'peças'}:`,
+          resumo.total === 1 ? 'É 1 peça:' : `São ${resumo.total} peças:`,
           ...lista,
           quando,
           'Cada peça já está na página com a medida certa e um gabarito para baixar — o seu designer não precisa perguntar tamanho a ninguém. A conferência é na hora, no seu próprio navegador: em segundos você sabe se o arquivo serve.',
@@ -161,9 +182,9 @@ export function avisosPendentes(projeto, {
       chave: `prova:${provaId}`,
       tipo: 'prova',
       para,
-      assunto: `Sua prova de impressão está pronta${feira}`,
+      assunto: `Sua prova de impressão está pronta${fim}`,
       ...corpo({
-        saudacao: `Olá! A prova de impressão do ${stand} está pronta.`,
+        saudacao: `Olá${cliente ? `, ${cliente}` : ''}! A prova de impressão ${ondeExpoe(projeto)} está pronta.`,
         paragrafos: [
           `Ela cobre ${pecas.length === 1 ? 'a peça' : 'as peças'}: ${pecas.join(', ')}.`,
           'Nada vai para a impressora sem o seu aceite — é o último momento de pedir ajuste sem custo de reimpressão. Você pode aprovar tudo, reprovar tudo ou aprovar em partes.',
@@ -181,9 +202,9 @@ export function avisosPendentes(projeto, {
       chave: `devolucao:${s.peca.id}:v${s.devolucao.paraVersao}`,
       tipo: 'devolucao',
       para,
-      assunto: `Precisamos de um ajuste na arte: ${s.peca.rotulo}${feira}`,
+      assunto: `Precisamos de um ajuste na arte: ${s.peca.rotulo}${fim}`,
       ...corpo({
-        saudacao: `Olá! O time de comunicação visual conferiu a arte da peça “${s.peca.rotulo}” do ${stand} e precisa de um ajuste antes de imprimir.`,
+        saudacao: `Olá${cliente ? `, ${cliente}` : ''}! O time de comunicação visual conferiu a arte da peça “${s.peca.rotulo}” ${ondeExpoe(projeto)} e precisa de um ajuste antes de imprimir.`,
         paragrafos: [
           `O motivo: “${s.devolucao.motivo}”`,
           `É só enviar a versão corrigida na mesma página — ela entra como versão ${s.proximaVersao}. Você não precisa pedir liberação, e o prazo não conta contra você nesta correção.`,
@@ -208,10 +229,10 @@ export function avisosPendentes(projeto, {
       tipo: 'prazo',
       para,
       assunto: prazo.diasRestantes === 1
-        ? `Amanhã é o último dia para enviar as artes${feira}`
-        : `Faltam ${prazo.diasRestantes} dias para o fim do prazo de artes${feira}`,
+        ? `Amanhã é o último dia para enviar as artes${fim}`
+        : `Faltam ${prazo.diasRestantes} dias para o fim do prazo de artes${fim}`,
       ...corpo({
-        saudacao: `Olá! O prazo de envio das artes do ${stand} termina em ${dia}.`,
+        saudacao: `Olá${cliente ? `, ${cliente}` : ''}! O prazo de envio das artes ${ondeExpoe(projeto)} termina em ${dia}.`,
         paragrafos: [
           `Ainda ${faltam === 1 ? 'falta' : 'faltam'} ${quantas} para chegar.`,
           'Cada peça já está na página com a medida certa e um gabarito para baixar — o designer não precisa perguntar tamanho a ninguém. A conferência é na hora, no seu próprio navegador.',
