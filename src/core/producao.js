@@ -166,21 +166,45 @@ export function elosDesalinhados(projetos = [], clientesDoApp = []) {
     porNome.set(chave, c)
   }
 
+  // Primeiro QUEM está fora, depois PARA ONDE cada um vai. A ordem importa: a
+  // segunda pergunta depende de saber quem mais está se movendo.
   const fora = []
   for (const p of projetos) {
     if (!p?.producaoId) continue
     const atual = porId.get(p.producaoId) || null
     const veredicto = eloConfere(p, atual)
-    if (veredicto.confere) continue
-
-    const chave = achatar(p.expositor)
-    const sugestao = chave && !nomesAmbiguos.has(chave) ? porNome.get(chave) || null : null
-    // Sugerir o elo que outro projeto já usa seria trocar um desalinhamento por
-    // um conflito — dois projetos no mesmo documento, que é o defeito vizinho.
-    const jaUsado = sugestao && projetos.some((o) => o !== p && o.producaoId === sugestao.producaoId)
-
-    fora.push({ projeto: p, atual, motivo: veredicto.motivo, sugestao: jaUsado ? null : sugestao })
+    if (!veredicto.confere) fora.push({ projeto: p, atual, motivo: veredicto.motivo, sugestao: null })
   }
+
+  // Os ids que vão ficar livres — porque quem os segura hoje também está fora
+  // do lugar e vai se mover.
+  //
+  // Esta distinção é o que faz o conserto existir. Um deslocamento de planilha
+  // não espalha os elos ao acaso: ele os ROTACIONA. O id certo da Selia está
+  // com o projeto da JadLog, o da JadLog está com o do J&T, e assim por diante,
+  // num ciclo fechado. Recusar todo id "já usado" — que era a trava anterior,
+  // escrita para evitar dois projetos no mesmo documento — bloqueava a fila
+  // inteira justamente no caso para o qual ela foi feita.
+  //
+  // O que vale é o ESTADO FINAL. Depois de religar todo o ciclo, cada id tem um
+  // dono só; durante, há sobreposição, e ela é inofensiva porque a
+  // sincronização já se recusa a publicar qualquer id disputado.
+  const vaoLiberar = new Set(fora.map((f) => f.projeto.producaoId))
+
+  for (const item of fora) {
+    const chave = achatar(item.projeto.expositor)
+    if (!chave || nomesAmbiguos.has(chave)) continue
+    const alvo = porNome.get(chave)
+    if (!alvo) continue
+
+    // Só barra quem segura o id e NÃO vai sair de lá: esse é o conflito de
+    // verdade, e sugerir por cima dele criaria dois projetos no mesmo documento.
+    const donoParado = projetos.some((o) => (
+      o !== item.projeto && o.producaoId === alvo.producaoId && !vaoLiberar.has(o.producaoId)
+    ))
+    if (!donoParado) item.sugestao = alvo
+  }
+
   return fora
 }
 

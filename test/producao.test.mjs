@@ -372,16 +372,45 @@ test('elo certo não aparece na lista de conserto', () => {
   assert.deepEqual(elosDesalinhados(projetos, [noApp({ producaoId: 'f_15', expositor: 'Selia' })]), [])
 })
 
-test('não sugere um elo que outro projeto já usa', () => {
-  // Seria trocar o desalinhamento por um conflito: dois projetos escrevendo no
-  // mesmo documento, que é o defeito vizinho.
+test('não sugere um id preso a um projeto que está no lugar certo', () => {
+  // Esse é o conflito de verdade: o dono não vai sair, e sugerir por cima dele
+  // criaria dois projetos escrevendo no mesmo documento.
   const projetos = [
     { token: 'selia', expositor: 'Selia', stand: '', producaoId: 'f_17' },
-    { token: 'outro', expositor: 'Outro', stand: '', producaoId: 'f_15' },
+    { token: 'parado', expositor: 'Selia', stand: '', producaoId: 'f_15' },
   ]
   const clientes = [noApp({ producaoId: 'f_17', expositor: 'Tray' }), noApp({ producaoId: 'f_15', expositor: 'Selia' })]
   const [fora] = elosDesalinhados(projetos, clientes)
   assert.equal(fora.sugestao, null, 'sem sugestão; a pessoa desfaz e decide')
+})
+
+test('o ciclo inteiro tem conserto — foi aqui que a trava anterior travou tudo', () => {
+  // Deslocamento de planilha ROTACIONA os elos: o id certo da Selia está com o
+  // projeto da JadLog, o da JadLog está com o do J&T. Recusar todo id "já
+  // usado" bloqueava a fila inteira, e a tela mostrava só "desfazer o elo" em
+  // todas as linhas — sem caminho de conserto, que é o oposto do que ela existe
+  // para dar.
+  const projetos = [
+    { token: 'jt', expositor: 'J&T', stand: '', producaoId: 'f_13' },
+    { token: 'jadlog', expositor: 'JadLog', stand: '', producaoId: 'f_15' },
+    { token: 'selia', expositor: 'Selia', stand: '', producaoId: 'f_17' },
+  ]
+  const clientes = [
+    noApp({ producaoId: 'f_13', expositor: 'JadLog' }),
+    noApp({ producaoId: 'f_15', expositor: 'Selia' }),
+    noApp({ producaoId: 'f_17', expositor: 'Tray' }),
+    noApp({ producaoId: 'f_11', expositor: 'J&T' }),
+  ]
+  const fora = elosDesalinhados(projetos, clientes)
+  assert.equal(fora.length, 3)
+  assert.deepEqual(
+    Object.fromEntries(fora.map((f) => [f.projeto.token, f.sugestao?.producaoId])),
+    { jt: 'f_11', jadlog: 'f_13', selia: 'f_15' },
+  )
+  // E o estado final não tem dois projetos no mesmo id, que é o que torna a
+  // religação em bloco segura.
+  const finais = fora.map((f) => f.sugestao.producaoId)
+  assert.equal(new Set(finais).size, finais.length)
 })
 
 test('nome repetido no app não vira sugestão', () => {
