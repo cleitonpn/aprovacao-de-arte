@@ -30,7 +30,9 @@ import { getFirestore, FieldValue } from 'firebase-admin/firestore'
 // outra implementação, garantiria que em uma semana o app mostrasse um status
 // que o analista não reconhece.
 import { resumoDoProjeto, provasDoProjeto } from '../src/core/fluxo.js'
-import { statusParaProducao, eloConfere } from '../src/core/producao.js'
+import {
+  statusParaProducao, eloConfere, normalizarDaProducao, eloParaGravar,
+} from '../src/core/producao.js'
 
 const COLECAO_ORIGEM = 'fair_clients'
 const COLECAO_ESPELHO = 'producao_clientes'
@@ -204,10 +206,15 @@ async function publicarStatusDaArte(producao, arte) {
   // linha 12. Nenhum dos dois lados parece errado sozinho — o que se perdeu é a
   // correspondência entre eles, e é por isso que só uma conferência explícita
   // acha isso.
-  const noApp = new Map(
-    (await producao.collection(COLECAO_ORIGEM).get()).docs
-      .map((d) => [d.id, { nome: d.get('nome') || '', local: d.get('local') || '' }]),
-  )
+  // Indexado pelas DUAS chaves: o id do documento (o elo antigo, posicional) e
+  // a `clientKey` publicada pelo app (o elo novo, estável). Enquanto houver
+  // projeto de cada geração, os dois precisam encontrar o mesmo cliente.
+  const noApp = new Map()
+  for (const d of (await producao.collection(COLECAO_ORIGEM).get()).docs) {
+    const cliente = normalizarDaProducao({ ...d.data(), producaoId: d.id })
+    noApp.set(d.id, cliente)
+    if (cliente.clientKey) noApp.set(cliente.clientKey, cliente)
+  }
 
   const desalinhados = new Set()
   for (const doc of snap.docs) {
@@ -228,6 +235,7 @@ async function publicarStatusDaArte(producao, arte) {
   }
 
   let gravados = 0
+  let migrados = 0
   let lote = producao.batch()
   let noLote = 0
   const vistos = new Set()
@@ -241,9 +249,35 @@ async function publicarStatusDaArte(producao, arte) {
     if (conflitados.has(projeto.producaoId)) continue
     if (desalinhados.has(projeto.producaoId)) continue
 
+    // A MIGRAÇÃO DO ELO, feita aqui e não numa tela.
+    //
+    // O projeto importado antes desta mudança guarda o id posicional. O cliente
+    // correspondente no app hoje traz a `clientKey`, então dá para trocar sem
+    // perguntar nada a ninguém — e é melhor que seja automático: um elo
+    // posicional esquecido volta a quebrar na próxima reordenação da planilha,
+    // e ninguém vai lembrar de migrar stand a stand.
+    //
+    // O documento antigo em `cv_status` não precisa ser apagado à mão: a chave
+    // nova não entra em `vistos` com o id velho, e o laço de limpeza lá embaixo
+    // remove o que sobrou.
+    const cliente = noApp.get(projeto.producaoId)
+    const elo = eloParaGravar(cliente) || projeto.producaoId
+    if (cliente?.clientKey && elo !== projeto.producaoId) {
+      await arte.doc(`projetos/${doc.id}`).set({
+        producaoId: elo,
+        eloMigradoEm: new Date().toISOString(),
+      }, { merge: true })
+      migrados += 1
+      console.log(`elo migrado: ${projeto.stand || doc.id} — ${projeto.producaoId} → ${elo}`)
+      projeto.producaoId = elo
+    }
+
     // O mesmo motor da tela do analista, sem segunda implementação.
     const resumo = resumoDoProjeto(projeto)
-    const dados = statusParaProducao(projeto, resumo, provasDoProjeto(projeto))
+    const dados = statusParaProducao(projeto, resumo, provasDoProjeto(projeto), {
+      clientKey: cliente?.clientKey || '',
+      clientName: cliente?.expositor || '',
+    })
     vistos.add(projeto.producaoId)
 
     const marca = assinatura(dados)
@@ -271,7 +305,7 @@ async function publicarStatusDaArte(producao, arte) {
   }
 
   if (noLote) await lote.commit()
-  console.log(`Status publicado: ${gravados} gravados, ${removidos} removidos.`)
+  console.log(`Status publicado: ${gravados} gravados, ${removidos} removidos, ${migrados} elos migrados para a chave estável.`)
 }
 
 async function principal() {

@@ -6,6 +6,7 @@ import { lerProducao, lerProjetosParaCruzar, vincularAProducao, desvincularDaPro
 import { lerProducaoAoVivo } from '../services/producaoDireta.js'
 import {
   cruzarComExistentes, feirasDaProducao, pendenciasDe, elosDuplicados, elosDesalinhados,
+  eloParaGravar,
 } from '../core/producao.js'
 import { formatarDataHora } from '../core/datas.js'
 import { traduzirErroAuth } from '../services/sessao.js'
@@ -143,7 +144,9 @@ export default function ImportarProducao({ sessao, onPronto, onCancelar }) {
         }),
         // A chave que liga os dois sistemas. É por causa dela que o app vai
         // conseguir, depois, saber de qual projeto vem a prova e o status.
-        producaoId: c.producaoId,
+        // `eloParaGravar` prefere a chave estável (feira + expositor) ao id do
+        // documento, que é posicional e troca de dono quando a planilha muda.
+        producaoId: eloParaGravar(c),
         producaoFeira: c.feira,
         importadoEm: new Date().toISOString(),
         importadoPor: sessao.usuario?.email || null,
@@ -175,7 +178,7 @@ export default function ImportarProducao({ sessao, onPronto, onCancelar }) {
 
   const vincular = async (linha) => {
     try {
-      await vincularAProducao(sessao.fb, linha.existente.token, linha.producaoId, sessao.usuario?.email)
+      await vincularAProducao(sessao.fb, linha.existente.token, eloParaGravar(linha), sessao.usuario?.email)
       setProjetos((atual) => atual.map((p) => (
         p.token === linha.existente.token ? { ...p, producaoId: linha.producaoId } : p
       )))
@@ -598,7 +601,7 @@ function ElosDesalinhados({ linhas, onReligar, onDesvincular }) {
             disabled={Boolean(ocupado)}
             onClick={() => rodar('todos', async () => {
               for (const l of comSugestao) {
-                await onReligar(l.projeto.token, l.sugestao.producaoId)
+                await onReligar(l.projeto.token, eloParaGravar(l.sugestao))
               }
             })}
           >
@@ -625,7 +628,7 @@ function ElosDesalinhados({ linhas, onReligar, onDesvincular }) {
                 <button
                   className="link"
                   disabled={Boolean(ocupado)}
-                  onClick={() => rodar(projeto.token, () => onReligar(projeto.token, sugestao.producaoId))}
+                  onClick={() => rodar(projeto.token, () => onReligar(projeto.token, eloParaGravar(sugestao)))}
                 >
                   {ocupado === projeto.token ? 'religando…' : `religar a “${sugestao.expositor}”`}
                 </button>

@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   normalizarDaProducao, utilizavel, cruzarComExistentes, feirasDaProducao, pendenciasDe,
-  elosDuplicados, eloConfere, elosDesalinhados,
+  elosDuplicados, eloConfere, elosDesalinhados, eloParaGravar,
 } from '../src/core/producao.js'
 import { projetoNovo, normalizarProjeto } from '../src/data/projeto.js'
 
@@ -481,4 +481,55 @@ test('feira diferente não casa, mesmo com o nome igual', () => {
     { producaoId: 'f_15', feira: 'Expo', expositor: 'Selia', stand: '' },
   ], projetos)
   assert.equal(linha.existente, null)
+})
+
+// ------------------------------------------------- a chave estável na ponte
+//
+// O app passou a publicar `clientKey` (feira + nome do expositor, normalizados
+// igual dos dois lados). Ela substitui o id posicional como elo. Os dois
+// convivem durante a transição, e é a convivência que precisa de trava: um
+// carimbo errado faz o app RECUSAR um documento correto, e a queda dele deixa
+// de proteger.
+
+test('a normalização traz a chave do app e calcula quando ela falta', () => {
+  const comChave = normalizarDaProducao({ fairName: 'ABAV', nome: 'JadLog', clientKey: 'abav__jadlog' })
+  assert.equal(comChave.clientKey, 'abav__jadlog')
+
+  // Feira ainda não sincronizada depois da atualização do app: calculamos com a
+  // mesma função, que é cópia verbatim da de lá.
+  const semChave = normalizarDaProducao({ fairName: 'São Paulo', nome: 'Açaí & Cia' })
+  assert.equal(semChave.clientKey, 'sao_paulo__acai_cia')
+})
+
+test('o elo gravado é a chave estável, com o id posicional como último recurso', () => {
+  assert.equal(eloParaGravar({ clientKey: 'abav__jadlog', producaoId: 'abav_13' }), 'abav__jadlog')
+  // Expositor cujo nome não forma chave (vazio, só pontuação): sobra o id
+  // posicional. É aceitar a fragilidade antiga naquele stand, e ainda assim é
+  // melhor que ficar sem elo nenhum.
+  assert.equal(eloParaGravar({ clientKey: '', producaoId: 'abav_13' }), 'abav_13')
+  assert.equal(eloParaGravar(null), '')
+})
+
+test('o carimbo só sai quando a chave é estável de verdade', () => {
+  const projeto = { producaoId: 'abav__jadlog', expositor: 'JadLog', token: 't1' }
+  const resumo = { recebidas: 1, total: 2, pecas: [] }
+
+  const carimbado = statusParaProducao(projeto, resumo, [], { clientKey: 'abav__jadlog', clientName: 'JadLog' })
+  assert.equal(carimbado.clientKey, 'abav__jadlog')
+  assert.equal(carimbado.clientName, 'JadLog')
+
+  // Ainda sob o id posicional: NENHUM `clientKey` vai junto. Carimbar o id
+  // posicional como se fosse a chave faria o app recusar um documento correto —
+  // a conferência dele compara com a chave que ele mesmo calculou.
+  const semCarimbo = statusParaProducao({ ...projeto, producaoId: 'abav_13' }, resumo, [], {})
+  assert.equal('clientKey' in semCarimbo, false)
+  assert.equal(semCarimbo.clientName, 'JadLog', 'o nome vai sempre — é o que a queda confere')
+})
+
+test('o cruzamento reconhece projeto ligado pela chave nova e pela antiga', () => {
+  const cliente = { producaoId: 'abav_13', clientKey: 'abav__jadlog', feira: 'ABAV', expositor: 'JadLog', stand: '' }
+  const pelaNova = cruzarComExistentes([cliente], [{ token: 'a', feira: 'ABAV', expositor: 'JadLog', stand: '', producaoId: 'abav__jadlog' }])
+  const pelaAntiga = cruzarComExistentes([cliente], [{ token: 'b', feira: 'ABAV', expositor: 'JadLog', stand: '', producaoId: 'abav_13' }])
+  assert.equal(pelaNova[0].existente.token, 'a')
+  assert.equal(pelaAntiga[0].existente.token, 'b')
 })

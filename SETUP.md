@@ -282,6 +282,34 @@ Três coisas que a tela faz de propósito:
   esses stands com **sem peças cadastradas** em vermelho, porque o link do
   cliente abriria uma lista vazia.
 
+### A chave que liga os dois sistemas
+
+O elo era o id do documento do expositor no app — que lá é
+`nomeDaFeira_númeroDaLinha`, ou seja, a **posição dele na planilha**. Inserir,
+apagar ou reordenar linhas reescrevia o id de todo mundo abaixo, e cada cliente
+herdava o id do vizinho: aconteceu com 10 stands da Conferencia Luxo, e o
+sintoma foi o print de um cliente abrindo na ficha de outro no app.
+
+Hoje o elo é a `clientKey`: **feira + nome do expositor**, normalizados. Ela não
+depende da ordem da planilha.
+
+A normalização é cópia **verbatim** de `tools/client_key_parity.test.js` do
+repositório do app, e vive em `src/core/chaveCliente.js`. Não reescreva a partir
+da descrição: acento é **convertido**, não removido — "Módulos" vira `modulos`,
+e uma implementação que apague o caractere produz `mdulos`. A ponte então não
+casa nada, sem erro em lugar nenhum. `test/chave-cliente.test.mjs` trava os
+mesmos casos que o teste Dart do outro lado; se ele quebrar, os dois repositórios
+divergiram e a ponte vai parar de encontrar expositores.
+
+Dois expositores com o mesmo nome na mesma feira **não recebem chave** — nenhum
+dos dois. Desempatar por posição resolveria na aparência e devolveria a
+fragilidade pela porta dos fundos.
+
+A migração é automática: a sincronização troca o id posicional pela chave assim
+que encontra o cliente correspondente, e o log diz quantos elos migrou. Projeto
+sem chave possível continua com o id antigo — pior que o ideal, melhor que ficar
+sem elo.
+
 ### O que volta para o app
 
 A mesma ação agendada leva de volta, para os stands importados, o que o app

@@ -14,20 +14,37 @@
 // arte. O e-mail é o que o admin completa na importação; as peças, o analista
 // cadastra depois — o app não as conhece e nunca vai conhecer.
 //
-// A chave que liga os dois lados é o `producaoId` (o `firestore_id` de lá).
-// É ela que, mais adiante, deixa o app saber de qual projeto vem a prova e o
-// status da arte. Sem a importação, essa chave não existe.
+// A chave que liga os dois lados é o `producaoId`. Ela era o `firestore_id` do
+// app — que é a POSIÇÃO do expositor na planilha, e por isso trocava de dono a
+// cada linha inserida ou apagada. Hoje é a `clientKey`, derivada de feira +
+// nome do expositor, calculada igual dos dois lados (ver `chaveCliente.js`).
+//
+// Os dois convivem: projeto importado antes da mudança ainda guarda o id
+// posicional, e a sincronização migra sozinha quando encontra a chave nova.
+
+import { clientKeyFor } from './chaveCliente.js'
 
 /** Campos do app que valem alguma coisa aqui. O resto fica de fora. */
 export function normalizarDaProducao(doc = {}) {
   const t = (v) => String(v ?? '').trim()
+  const feira = t(doc.fairName)
+  const expositor = t(doc.nome)
   return {
+    // O id do DOCUMENTO no app. Continua sendo lido porque é o elo antigo, que
+    // ainda está gravado nos projetos importados antes desta mudança.
     producaoId: t(doc.producaoId || doc.firestore_id || doc.id),
-    feira: t(doc.fairName),
-    expositor: t(doc.nome),
+    // A chave ESTÁVEL, que é o elo novo. Vem do campo publicado pelo app; na
+    // falta dele — feira ainda não sincronizada depois da atualização —, é
+    // calculada aqui pela mesma função, que é cópia verbatim da de lá. Preferir
+    // o valor do app é deliberado: se um dia as duas discordarem, quem manda é
+    // quem escreve o documento, e a divergência aparece no teste de paridade em
+    // vez de virar uma chave fantasma.
+    clientKey: t(doc.clientKey) || clientKeyFor(feira, expositor),
+    feira,
+    expositor,
     // No app, "local" é o identificador do stand na planta — é o que a nossa
     // ferramenta chama de stand. `nome` é a empresa.
-    stand: t(doc.local) || t(doc.nome),
+    stand: t(doc.local) || expositor,
     localizacao: [t(doc.pavilhao), t(doc.local)].filter(Boolean).join(' · '),
     area: t(doc.total_area) || t(doc.area),
     produtor: t(doc.produtor),
@@ -39,6 +56,18 @@ export function normalizarDaProducao(doc = {}) {
     dataDesmontagem: t(doc.data_desmontagem),
   }
 }
+
+/**
+ * O valor que deve ser gravado como `producaoId` de um projeto.
+ *
+ * A chave estável quando ela existe; o id do documento como último recurso —
+ * feira que ainda não sincronizou depois da atualização do app, ou expositor
+ * cujo nome não forma chave (vazio, só pontuação, ou repetido na feira).
+ * Gravar o id posicional é aceitar a fragilidade antiga naquele stand; é
+ * melhor do que não ter elo nenhum, e a sincronização migra sozinha assim que
+ * a chave aparecer.
+ */
+export const eloParaGravar = (c) => c?.clientKey || c?.producaoId || ''
 
 /** Serve para alguma coisa? Sem feira e sem nome, é linha vazia da planilha. */
 export const utilizavel = (c) => Boolean(c.producaoId && c.feira && (c.expositor || c.stand))
@@ -107,7 +136,9 @@ export function cruzarComExistentes(daProducao, projetos = []) {
   }
 
   return daProducao.map((c) => {
-    const existente = porId.get(c.producaoId) || porApelidoDe(c) || null
+    // Os dois elos convivem: o projeto guarda a `clientKey` quando foi
+    // importado depois da mudança, e o id posicional quando veio antes.
+    const existente = porId.get(c.clientKey) || porId.get(c.producaoId) || porApelidoDe(c) || null
     return {
       ...c,
       existente,
@@ -224,8 +255,9 @@ export function elosDesalinhados(projetos = [], clientesDoApp = []) {
 
     // Só barra quem segura o id e NÃO vai sair de lá: esse é o conflito de
     // verdade, e sugerir por cima dele criaria dois projetos no mesmo documento.
+    const elo = eloParaGravar(alvo)
     const donoParado = projetos.some((o) => (
-      o !== item.projeto && o.producaoId === alvo.producaoId && !vaoLiberar.has(o.producaoId)
+      o !== item.projeto && o.producaoId === elo && !vaoLiberar.has(o.producaoId)
     ))
     if (!donoParado) item.sugestao = alvo
   }
@@ -345,11 +377,23 @@ export function provaVigente(provas = []) {
 }
 
 /** O documento que a ferramenta publica para o app ler. */
-export function statusParaProducao(projeto, resumo, provas) {
+export function statusParaProducao(projeto, resumo, provas, identidade = {}) {
   const estado = estadoDaArte(resumo)
   const prova = provaVigente(provas)
   return {
     producaoId: projeto.producaoId,
+    // O CARIMBO DE IDENTIDADE. O app confere estes dois campos antes de usar um
+    // documento: sem eles, ele aceita (documento antigo, escrito antes disto
+    // existir); com eles e não batendo, ele RECUSA em vez de mostrar a prova de
+    // outro stand. É o que torna a queda para o id posicional segura durante a
+    // transição — e é por isso que o `clientName` importa tanto quanto a chave.
+    // Só a chave ESTÁVEL entra aqui. Durante a transição o `producaoId` ainda
+    // pode ser o id posicional, e carimbá-lo como `clientKey` seria mentir para
+    // a conferência do outro lado: ele passaria a recusar por não bater com a
+    // chave dele. Sem carimbo, o documento é tratado como antigo e aceito —
+    // que é o comportamento certo enquanto a migração não chegou naquele stand.
+    ...(identidade.clientKey ? { clientKey: identidade.clientKey } : {}),
+    clientName: identidade.clientName || projeto.expositor || projeto.stand || '',
     fairName: projeto.producaoFeira || projeto.feira || '',
     token: projeto.token,
     estado,
