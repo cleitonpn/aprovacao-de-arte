@@ -47,7 +47,17 @@ function analisarRecortes(recortes) {
   return { ...c, amostras: medidas.length }
 }
 
-function escalaProvavel(declaradoCm, pecaCm) {
+/**
+ * A arte foi montada reduzida?
+ *
+ * Compara o tamanho que o ARQUIVO declara com o da peça cadastrada. Uma lona de
+ * 275 cm entregue num arquivo de 27,5 cm não é um erro de medida: é o designer
+ * trabalhando a 1:10, que é praxe no grande formato.
+ *
+ * Exportada para poder ser testada — ela decide veredicto, e um falso positivo
+ * aqui aprova uma arte que está de fato pequena demais.
+ */
+export function escalaProvavel(declaradoCm, pecaCm) {
   if (!declaradoCm || declaradoCm <= 0 || !pecaCm || pecaCm <= 0) return null
   const razao = pecaCm / declaradoCm
   for (const f of [10, 4, 2]) {
@@ -126,14 +136,13 @@ export async function analisar(arquivo, peca, perfil, opcoes = {}) {
     return { medidas, ...avaliar({ peca, perfil, medidas, escalaFator, politica, detectorNitidez }), peca, perfil, escalaFator, politica }
   }
 
-  let medidas
-  if (formato === 'pdf' || formato === 'ai') {
-    medidas = await medirPdf(buffer, base, peca, perfil, escalaFator)
-  } else {
+  const medir = async (fator) => {
+    if (formato === 'pdf' || formato === 'ai') return medirPdf(buffer, base, peca, perfil, fator)
+
     const meta = formato === 'jpeg' ? lerJpeg(buffer) : lerPng(buffer)
     const r = await medirRaster(arquivo, formato, meta, peca, perfil)
     const declaradoCm = meta.densidade ? (r.largura / meta.densidade) * CM_POR_POL : null
-    medidas = {
+    return {
       ...base,
       formatoSuportado: true,
       larguraPx: r.largura,
@@ -152,7 +161,7 @@ export async function analisar(arquivo, peca, perfil, opcoes = {}) {
       recortes: r.recortes,
       densidadeDeclarada: meta.densidade || null,
       tamanhoDeclaradoCm: declaradoCm ? { largura: declaradoCm, altura: (r.altura / meta.densidade) * CM_POR_POL } : null,
-      escalaSugerida: escalaFator === 1 ? escalaProvavel(declaradoCm, peca.larguraCm) : null,
+      escalaSugerida: fator === 1 ? escalaProvavel(declaradoCm, peca.larguraCm) : null,
       qualidadeJpeg: formato === 'jpeg' ? meta.qualidade : null,
       cmyk: formato === 'jpeg' ? meta.cmyk : false,
       temICC: meta.temICC,
@@ -162,8 +171,42 @@ export async function analisar(arquivo, peca, perfil, opcoes = {}) {
     }
   }
 
-  const resultado = avaliar({ peca, perfil, medidas, escalaFator, politica, detectorNitidez })
-  return { medidas, ...resultado, peca, perfil, escalaFator, politica }
+  let medidas = await medir(escalaFator)
+
+  // A escala que o cliente esqueceu de trocar.
+  //
+  // Arte em escala é praxe no grande formato: o designer monta a 1:10 a 300
+  // dpi, o que dá 30 dpi no tamanho final e está correto. A ferramenta já
+  // DETECTAVA isso — `escalaSugerida` é calculada desde sempre — e nunca disse
+  // a ninguém: nenhuma tela lia o campo. Um cliente real levou DEZ reprovações
+  // seguidas por causa de um seletor que ele não sabia que existia, enquanto a
+  // ferramenta sabia a resposta e calava.
+  //
+  // Agora ela aplica sozinha. Custa uma segunda medição, e só no caso em que a
+  // escala estava errada — o que hoje custa dez envios recusados.
+  //
+  // Aplicar em vez de sugerir é uma escolha: a alternativa é um aviso que o
+  // cliente precisa entender e agir, e quem não sabia da existência da escala
+  // é exatamente quem não vai saber o que fazer com o aviso. A decisão continua
+  // reversível — o seletor está na tela e o laudo diz, com todas as letras,
+  // qual escala foi considerada.
+  const detectada = escalaFator === 1 ? medidas.escalaSugerida : null
+  if (detectada) medidas = await medir(detectada)
+  const escalaUsada = detectada || escalaFator
+
+  const resultado = avaliar({ peca, perfil, medidas, escalaFator: escalaUsada, politica, detectorNitidez })
+  return {
+    medidas,
+    ...resultado,
+    peca,
+    perfil,
+    escalaFator: escalaUsada,
+    // Só quando a ferramenta mudou por conta própria. É o que a tela usa para
+    // contar ao cliente o que aconteceu — silêncio aqui seria trocar um erro
+    // silencioso por outro.
+    escalaAutomatica: detectada || null,
+    politica,
+  }
 }
 
 // --------------------------------------------------- nitidez real do PDF

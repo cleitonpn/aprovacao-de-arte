@@ -920,10 +920,26 @@ function PainelDaPeca({ situacao, projeto, resumo, cadastro, perfis, politica, d
                 <option value={10}>1:10 — um décimo</option>
               </select>
             </label>
-            <p className="nota">
-              Montar a arte reduzida é praxe no grande formato. Informar a escala
-              evita que um arquivo correto seja reprovado por engano.
-            </p>
+            {/*
+              A ferramenta detecta a escala sozinha e conta o que fez. Silêncio
+              aqui seria trocar um erro silencioso por outro: o cliente veria o
+              seletor em 1:1 e o laudo aprovando uma arte de 30 dpi, sem
+              entender o que aconteceu no meio.
+            */}
+            {analise.resultado?.escalaAutomatica ? (
+              <p className="nota destaque-extra">
+                Percebemos que esta arte foi montada em{' '}
+                <strong>escala 1:{analise.resultado.escalaAutomatica}</strong> — o
+                arquivo tem exatamente a fração da medida da peça. A conferência
+                já considerou isso. Se não for o caso, troque a escala acima.
+              </p>
+            ) : (
+              <p className="nota">
+                Montar a arte reduzida é praxe no grande formato. A ferramenta
+                reconhece a escala sozinha pelo tamanho do arquivo; este campo é
+                para os casos em que ela não tem como adivinhar.
+              </p>
+            )}
           </div>
 
           <Gabarito peca={alvo} perfil={perfil} escalaFator={escalaFator} politica={politica} />
