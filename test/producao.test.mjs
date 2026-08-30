@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   normalizarDaProducao, utilizavel, cruzarComExistentes, feirasDaProducao, pendenciasDe,
-  elosDuplicados, eloConfere,
+  elosDuplicados, eloConfere, elosDesalinhados,
 } from '../src/core/producao.js'
 import { projetoNovo, normalizarProjeto } from '../src/data/projeto.js'
 
@@ -343,4 +343,64 @@ test('o app usa `nome`/`local`; o espelho usa `expositor`/`stand`', () => {
   // Os dois vocabulários chegam aqui, e trocar um pelo outro faria a
   // conferência acusar todo mundo.
   assert.equal(eloConfere({ expositor: 'Selia', stand: 'B14' }, { expositor: 'Selia', stand: 'B14' }).confere, true)
+})
+
+// ------------------------------------------------ o caminho de conserto
+//
+// Sem isto o analista fica sem saída: a tela casa por `producaoId` ANTES do
+// nome, então um projeto com elo trocado aparece como "já importado" na linha
+// do cliente errado, e o botão de vincular — que só nasce quando não há elo —
+// nunca aparece. O conserto ficava no console do Firebase.
+
+const noApp = (extra = {}) => ({ producaoId: 'f_13', feira: 'Expo', expositor: 'JadLog', stand: '', ...extra })
+
+test('acha o elo trocado e sugere o cliente certo pelo nome', () => {
+  // O caso real: a planilha perdeu duas linhas e todo mundo subiu duas
+  // posições. O projeto da Selia continua apontando para o id que hoje é da
+  // Tray.
+  const projetos = [{ token: 'selia', expositor: 'Selia', stand: 'Selia', producaoId: 'f_17' }]
+  const clientes = [noApp({ producaoId: 'f_17', expositor: 'Tray' }), noApp({ producaoId: 'f_15', expositor: 'Selia' })]
+
+  const [fora] = elosDesalinhados(projetos, clientes)
+  assert.equal(fora.projeto.token, 'selia')
+  assert.equal(fora.atual.expositor, 'Tray')
+  assert.equal(fora.sugestao.producaoId, 'f_15', 'o id que hoje é da Selia')
+})
+
+test('elo certo não aparece na lista de conserto', () => {
+  const projetos = [{ token: 'a', expositor: 'Selia', stand: '', producaoId: 'f_15' }]
+  assert.deepEqual(elosDesalinhados(projetos, [noApp({ producaoId: 'f_15', expositor: 'Selia' })]), [])
+})
+
+test('não sugere um elo que outro projeto já usa', () => {
+  // Seria trocar o desalinhamento por um conflito: dois projetos escrevendo no
+  // mesmo documento, que é o defeito vizinho.
+  const projetos = [
+    { token: 'selia', expositor: 'Selia', stand: '', producaoId: 'f_17' },
+    { token: 'outro', expositor: 'Outro', stand: '', producaoId: 'f_15' },
+  ]
+  const clientes = [noApp({ producaoId: 'f_17', expositor: 'Tray' }), noApp({ producaoId: 'f_15', expositor: 'Selia' })]
+  const [fora] = elosDesalinhados(projetos, clientes)
+  assert.equal(fora.sugestao, null, 'sem sugestão; a pessoa desfaz e decide')
+})
+
+test('nome repetido no app não vira sugestão', () => {
+  const projetos = [{ token: 'x', expositor: 'Selia', stand: '', producaoId: 'f_99' }]
+  const clientes = [
+    noApp({ producaoId: 'f_99', expositor: 'Tray' }),
+    noApp({ producaoId: 'f_15', expositor: 'Selia' }),
+    noApp({ producaoId: 'f_16', expositor: 'Selia' }),
+  ]
+  assert.equal(elosDesalinhados(projetos, clientes)[0].sugestao, null)
+})
+
+test('expositor que sumiu do app entra com motivo próprio', () => {
+  const projetos = [{ token: 'x', expositor: 'Selia', stand: '', producaoId: 'f_404' }]
+  const [fora] = elosDesalinhados(projetos, [noApp({ producaoId: 'f_15', expositor: 'Selia' })])
+  assert.equal(fora.motivo, 'sumiu')
+  assert.equal(fora.sugestao.producaoId, 'f_15')
+})
+
+test('projeto sem elo não é problema de elo', () => {
+  assert.deepEqual(elosDesalinhados([{ token: 'x', expositor: 'Selia', producaoId: '' }], []), [])
 })

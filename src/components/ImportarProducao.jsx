@@ -4,7 +4,9 @@ import ListaDePecas from './ListaDePecas.jsx'
 import { salvarProjetos } from '../services/projetos.js'
 import { lerProducao, lerProjetosParaCruzar, vincularAProducao, desvincularDaProducao } from '../services/producao.js'
 import { lerProducaoAoVivo } from '../services/producaoDireta.js'
-import { cruzarComExistentes, feirasDaProducao, pendenciasDe, elosDuplicados } from '../core/producao.js'
+import {
+  cruzarComExistentes, feirasDaProducao, pendenciasDe, elosDuplicados, elosDesalinhados,
+} from '../core/producao.js'
 import { formatarDataHora } from '../core/datas.js'
 import { traduzirErroAuth } from '../services/sessao.js'
 
@@ -96,6 +98,15 @@ export default function ImportarProducao({ sessao, onPronto, onCancelar }) {
   // De TODOS os projetos, não só os desta feira: um elo trocado costuma cruzar
   // feiras, e é justamente esse o caso que ninguém encontra à mão.
   const duplicados = useMemo(() => elosDuplicados(projetos), [projetos])
+
+  // Elos que deixaram de apontar para o cliente certo. Comparado com TODOS os
+  // clientes do app, não só os da feira escolhida: um deslocamento de linhas
+  // atinge a feira inteira de uma vez, e filtrar esconderia justamente o
+  // conjunto que se quer ver junto.
+  const desalinhados = useMemo(
+    () => elosDesalinhados(projetos, dados?.clientes || []),
+    [projetos, dados],
+  )
 
   const linhas = useMemo(() => {
     const t = filtro.trim().toLowerCase()
@@ -193,6 +204,18 @@ export default function ImportarProducao({ sessao, onPronto, onCancelar }) {
       </div>
 
       {erro && <p className="erro-envio">{erro}</p>}
+
+      <ElosDesalinhados
+        linhas={desalinhados}
+        onReligar={async (token, producaoId) => {
+          await vincularAProducao(sessao.fb, token, producaoId, sessao.usuario?.email)
+          setProjetos((atual) => atual.map((p) => (p.token === token ? { ...p, producaoId } : p)))
+        }}
+        onDesvincular={async (token) => {
+          await desvincularDaProducao(sessao.fb, token, sessao.usuario?.email)
+          setProjetos((atual) => atual.map((p) => (p.token === token ? { ...p, producaoId: '' } : p)))
+        }}
+      />
 
       <ElosEmConflito
         duplicados={duplicados}
@@ -525,6 +548,105 @@ function ElosEmConflito({ duplicados, onDesvincular }) {
           </ul>
         </div>
       ))}
+    </div>
+  )
+}
+
+/**
+ * Elos que deixaram de apontar para o cliente certo.
+ *
+ * O caminho de conserto que faltava. A tela casa por `producaoId` antes do
+ * nome, então um projeto com elo trocado aparece como "já importado" na linha
+ * do cliente ERRADO, e o botão de vincular — que só nasce quando não há elo —
+ * nunca aparece. Sem este bloco, o conserto ficava no console do Firebase.
+ *
+ * "Religar" em vez de "desvincular e vincular de novo" porque um deslocamento
+ * de planilha atinge a feira inteira: dez stands corrigidos em dois cliques
+ * cada é uma tarde; em um clique cada, é um minuto. E a sugestão é sempre
+ * mostrada por extenso — quem confirma precisa ver o nome, não confiar.
+ */
+function ElosDesalinhados({ linhas, onReligar, onDesvincular }) {
+  const [ocupado, setOcupado] = useState('')
+  if (!linhas.length) return null
+
+  const comSugestao = linhas.filter((l) => l.sugestao)
+
+  const rodar = async (token, acao) => {
+    setOcupado(token)
+    try { await acao() } finally { setOcupado('') }
+  }
+
+  return (
+    <div className="zona-perigo">
+      <strong>
+        {linhas.length === 1
+          ? 'Um projeto perdeu o elo com o app de montagem'
+          : `${linhas.length} projetos perderam o elo com o app de montagem`}
+      </strong>
+      <p className="dica-campo">
+        O app identifica cada expositor pela POSIÇÃO dele na planilha. Quando
+        linhas são inseridas, apagadas ou reordenadas, todo mundo abaixo herda o
+        id do vizinho — e o elo passa a apontar para outro cliente. Enquanto
+        estiver assim, nada é publicado para esses stands: o app não mostra o
+        print, em vez de mostrar o do cliente errado.
+      </p>
+
+      {comSugestao.length > 1 && (
+        <div className="acoes compactas">
+          <button
+            className="btn"
+            disabled={Boolean(ocupado)}
+            onClick={() => rodar('todos', async () => {
+              for (const l of comSugestao) {
+                await onReligar(l.projeto.token, l.sugestao.producaoId)
+              }
+            })}
+          >
+            {ocupado === 'todos'
+              ? 'Religando…'
+              : `Religar os ${comSugestao.length} com correspondência clara`}
+          </button>
+        </div>
+      )}
+
+      <ul className="lista-simples">
+        {linhas.map(({ projeto, atual, motivo, sugestao }) => (
+          <li key={projeto.token}>
+            <strong>{projeto.expositor || projeto.stand || projeto.token}</strong>
+            <em className="dica-campo">
+              {' · '}
+              {motivo === 'sumiu'
+                ? 'o expositor apontado não existe mais no app'
+                : `hoje o elo aponta para “${atual?.expositor || '?'}”`}
+            </em>
+            {' '}
+            {sugestao
+              ? (
+                <button
+                  className="link"
+                  disabled={Boolean(ocupado)}
+                  onClick={() => rodar(projeto.token, () => onReligar(projeto.token, sugestao.producaoId))}
+                >
+                  {ocupado === projeto.token ? 'religando…' : `religar a “${sugestao.expositor}”`}
+                </button>
+              )
+              : (
+                <button
+                  className="link perigo"
+                  disabled={Boolean(ocupado)}
+                  onClick={() => rodar(projeto.token, () => onDesvincular(projeto.token))}
+                >
+                  {ocupado === projeto.token ? 'desfazendo…' : 'desfazer o elo'}
+                </button>
+              )}
+          </li>
+        ))}
+      </ul>
+      <p className="dica-campo">
+        Sem correspondência clara — dois expositores com o mesmo nome, ou nome
+        que mudou — sobra desfazer o elo e vincular pela lista abaixo, onde o
+        stand volta a aparecer como novidade.
+      </p>
     </div>
   )
 }

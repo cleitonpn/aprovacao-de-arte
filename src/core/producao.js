@@ -140,6 +140,51 @@ export function eloConfere(projeto, clienteDoApp) {
 }
 
 /**
+ * Projetos cujo elo deixou de apontar para o cliente certo — e para onde ele
+ * deveria apontar agora.
+ *
+ * Sem isto o analista fica sem saída. A tela de importação casa por
+ * `producaoId` ANTES do nome, então um projeto com elo trocado aparece como
+ * "já importado" na linha do cliente errado, e o botão de vincular — que só
+ * nasce quando não há elo — nunca aparece. O conserto ficava no console do
+ * Firebase, que é onde ninguém vai.
+ *
+ * A sugestão é o que evita dez religações à mão: procura, entre os clientes do
+ * app, quem tem o mesmo nome de expositor. Só sugere quando encontra UM. Dois
+ * candidatos é o momento de a pessoa escolher — sugerir no chute aqui seria
+ * recriar o mesmo defeito com outro nome.
+ */
+export function elosDesalinhados(projetos = [], clientesDoApp = []) {
+  const porId = new Map(clientesDoApp.map((c) => [c.producaoId, c]))
+
+  const porNome = new Map()
+  const nomesAmbiguos = new Set()
+  for (const c of clientesDoApp) {
+    const chave = achatar(c.expositor)
+    if (!chave) continue
+    if (porNome.has(chave)) nomesAmbiguos.add(chave)
+    porNome.set(chave, c)
+  }
+
+  const fora = []
+  for (const p of projetos) {
+    if (!p?.producaoId) continue
+    const atual = porId.get(p.producaoId) || null
+    const veredicto = eloConfere(p, atual)
+    if (veredicto.confere) continue
+
+    const chave = achatar(p.expositor)
+    const sugestao = chave && !nomesAmbiguos.has(chave) ? porNome.get(chave) || null : null
+    // Sugerir o elo que outro projeto já usa seria trocar um desalinhamento por
+    // um conflito — dois projetos no mesmo documento, que é o defeito vizinho.
+    const jaUsado = sugestao && projetos.some((o) => o !== p && o.producaoId === sugestao.producaoId)
+
+    fora.push({ projeto: p, atual, motivo: veredicto.motivo, sugestao: jaUsado ? null : sugestao })
+  }
+  return fora
+}
+
+/**
  * Projetos que disputam o mesmo expositor do app de montagem.
  *
  * O `producaoId` é a única ponte entre as duas bases, e ela é 1 para 1: o app
