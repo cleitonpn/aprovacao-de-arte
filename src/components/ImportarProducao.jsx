@@ -2,9 +2,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { projetoNovo, pecaNova } from '../data/projeto.js'
 import ListaDePecas from './ListaDePecas.jsx'
 import { salvarProjetos } from '../services/projetos.js'
-import { lerProducao, lerProjetosParaCruzar, vincularAProducao } from '../services/producao.js'
+import { lerProducao, lerProjetosParaCruzar, vincularAProducao, desvincularDaProducao } from '../services/producao.js'
 import { lerProducaoAoVivo } from '../services/producaoDireta.js'
-import { cruzarComExistentes, feirasDaProducao, pendenciasDe } from '../core/producao.js'
+import { cruzarComExistentes, feirasDaProducao, pendenciasDe, elosDuplicados } from '../core/producao.js'
 import { formatarDataHora } from '../core/datas.js'
 import { traduzirErroAuth } from '../services/sessao.js'
 
@@ -92,6 +92,10 @@ export default function ImportarProducao({ sessao, onPronto, onCancelar }) {
   }
 
   const feiras = useMemo(() => feirasDaProducao(dados?.clientes || []), [dados])
+
+  // De TODOS os projetos, não só os desta feira: um elo trocado costuma cruzar
+  // feiras, e é justamente esse o caso que ninguém encontra à mão.
+  const duplicados = useMemo(() => elosDuplicados(projetos), [projetos])
 
   const linhas = useMemo(() => {
     const t = filtro.trim().toLowerCase()
@@ -189,6 +193,14 @@ export default function ImportarProducao({ sessao, onPronto, onCancelar }) {
       </div>
 
       {erro && <p className="erro-envio">{erro}</p>}
+
+      <ElosEmConflito
+        duplicados={duplicados}
+        onDesvincular={async (token) => {
+          await desvincularDaProducao(sessao.fb, token, sessao.usuario?.email)
+          setProjetos((atual) => atual.map((p) => (p.token === token ? { ...p, producaoId: '' } : p)))
+        }}
+      />
 
       {!feiras.length && !erro && (
         <p className="nota">
@@ -453,5 +465,66 @@ function Rodape({ selecionados, emails, pecasDe, gravando, onImportar }) {
         </p>
       )}
     </>
+  )
+}
+
+/**
+ * Dois projetos disputando o mesmo expositor do app.
+ *
+ * O `producaoId` é a ponte com o app de montagem e ela é 1 para 1 — o app
+ * guarda um documento por expositor. Com dois projetos apontando para o mesmo,
+ * a sincronização escreve os dois no mesmo lugar e vence o último: sem erro,
+ * sem aviso, alternando a cada execução.
+ *
+ * O sintoma nasce longe da causa, e é isso que torna este aviso necessário: o
+ * print de um cliente abre na ficha de OUTRO no app, enquanto aqui na
+ * ferramenta cada um mostra o seu, corretamente. Quem vê o problema no galpão
+ * não tem como adivinhar que a causa é um elo trocado nesta tela.
+ *
+ * Enquanto o conflito existir, a sincronização não publica nada para esse
+ * expositor — o app volta ao link da planilha. Mostrar nada é ruim; mostrar o
+ * cliente errado é pior, porque ninguém desconfia.
+ */
+function ElosEmConflito({ duplicados, onDesvincular }) {
+  const [ocupado, setOcupado] = useState('')
+  if (!duplicados.length) return null
+
+  const desvincular = async (token) => {
+    setOcupado(token)
+    try { await onDesvincular(token) } finally { setOcupado('') }
+  }
+
+  return (
+    <div className="zona-perigo">
+      <strong>
+        {duplicados.length === 1
+          ? 'Um expositor do app está ligado a dois projetos'
+          : `${duplicados.length} expositores do app estão ligados a mais de um projeto`}
+      </strong>
+      <p className="dica-campo">
+        Cada expositor do app aceita um projeto só. Com dois, o app de montagem
+        pode mostrar o print de um cliente na ficha do outro — e aqui na
+        ferramenta os dois continuam certos, que é o que torna isso difícil de
+        achar. Desfaça o elo do projeto errado: nada se perde, o projeto
+        continua inteiro e só a ponte com o app é desligada.
+      </p>
+      {duplicados.map(({ producaoId, projetos }) => (
+        <div key={producaoId} className="conflito-elo">
+          <p className="dica-campo">Expositor <code>{producaoId}</code> está em:</p>
+          <ul className="lista-simples">
+            {projetos.map((p) => (
+              <li key={p.token}>
+                <strong>{p.stand || '(sem nome de stand)'}</strong>
+                <em className="dica-campo"> · {p.feira || 'sem feira'}</em>
+                {' '}
+                <button className="link perigo" disabled={Boolean(ocupado)} onClick={() => desvincular(p.token)}>
+                  {ocupado === p.token ? 'desfazendo…' : 'desfazer o elo deste'}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+    </div>
   )
 }

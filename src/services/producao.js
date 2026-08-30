@@ -60,3 +60,22 @@ export function vincularAProducao(fb, token, producaoId, por) {
     vinculadoPor: por ?? null,
   })
 }
+
+/**
+ * Desfaz o elo com a produção.
+ *
+ * Existe porque o elo errado não dá erro em lugar nenhum: o estrago aparece no
+ * app de montagem, como o print de um cliente na ficha de outro, e a única
+ * forma de consertar era editar o documento no console do Firebase.
+ *
+ * O projeto continua inteiro — perde só a ponte com o app. Nenhuma arte, nenhum
+ * histórico e nenhum link do cliente dependem deste campo.
+ */
+export function desvincularDaProducao(fb, token, por) {
+  const { getFirestore, doc, updateDoc } = fb.firestore
+  return updateDoc(doc(getFirestore(fb.app), 'projetos', token), {
+    producaoId: '',
+    desvinculadoEm: new Date().toISOString(),
+    desvinculadoPor: por ?? null,
+  })
+}

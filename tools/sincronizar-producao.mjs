@@ -162,6 +162,35 @@ async function publicarStatusDaArte(producao, arte) {
   const jaLa = await destino.get()
   const assinaturas = new Map(jaLa.docs.map((d) => [d.id, d.data().assinatura || '']))
 
+  // Dois projetos apontando para o MESMO expositor do app.
+  //
+  // Sem esta conferência, os dois escreviam no mesmo documento e vencia o
+  // último do laço — sem erro, sem aviso, e alternando de execução para
+  // execução. O efeito aparecia longe daqui: o print de um cliente abrindo na
+  // ficha de outro no app de montagem, enquanto na ferramenta de aprovação
+  // cada um mostrava o seu, corretamente. Um dos elos está errado (quase sempre
+  // um "vincular" no stand errado), e daqui não há como saber qual.
+  //
+  // Na dúvida, não publicar. O app cai para o link da planilha, que é o
+  // comportamento que ele tinha antes desta ponte existir — mostrar nada é
+  // ruim, mostrar o cliente errado é pior, porque ninguém desconfia.
+  const porProducaoId = new Map()
+  for (const doc of snap.docs) {
+    const id = doc.get('producaoId')
+    if (!id) continue
+    porProducaoId.set(id, [...(porProducaoId.get(id) || []), { token: doc.id, stand: doc.get('stand') || '' }])
+  }
+  const conflitados = new Set()
+  for (const [id, lista] of porProducaoId) {
+    if (lista.length < 2) continue
+    conflitados.add(id)
+    console.error(
+      `CONFLITO: ${lista.length} projetos apontam para o expositor ${id} — `
+      + `${lista.map((p) => `${p.stand || '(sem nome)'} [${p.token}]`).join(', ')}. `
+      + 'Nada será publicado para ele até que o elo errado seja desfeito na ficha do stand.',
+    )
+  }
+
   let gravados = 0
   let lote = producao.batch()
   let noLote = 0
@@ -170,6 +199,10 @@ async function publicarStatusDaArte(producao, arte) {
   for (const doc of snap.docs) {
     const projeto = { token: doc.id, ...doc.data() }
     if (!projeto.producaoId) continue
+    // Fora de `vistos` de propósito: assim o laço de limpeza abaixo APAGA o
+    // documento que estava lá, tirando do app o print que pode ser do cliente
+    // errado. Deixá-lo seria manter no ar exatamente o que se quer parar.
+    if (conflitados.has(projeto.producaoId)) continue
 
     // O mesmo motor da tela do analista, sem segunda implementação.
     const resumo = resumoDoProjeto(projeto)

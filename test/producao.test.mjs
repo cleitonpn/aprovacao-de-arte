@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   normalizarDaProducao, utilizavel, cruzarComExistentes, feirasDaProducao, pendenciasDe,
+  elosDuplicados,
 } from '../src/core/producao.js'
 import { projetoNovo, normalizarProjeto } from '../src/data/projeto.js'
 
@@ -219,4 +220,75 @@ test('o documento publicado leva o que o app precisa e nada de token do cliente'
   assert.equal(doc.total, 2)
   assert.equal(doc.recebidas, 1)
   assert.equal(doc.linkProva, '')
+})
+
+// ------------------------------------------------ o elo que troca os clientes
+//
+// O `producaoId` é a única ponte entre as duas bases, e ela é 1 para 1: o app
+// guarda UM documento por expositor. Um elo errado não dá erro em lugar nenhum
+// daqui — o estrago aparece no app de montagem, como o print de um cliente na
+// ficha de outro, enquanto nesta ferramenta os dois continuam certos. Foi
+// exatamente esse o defeito relatado, e são estes os dois pontos onde ele
+// nasce.
+
+const projetoDe = (extra = {}) => ({ token: 't1', feira: 'Expo Sul', stand: 'A12', producaoId: '', ...extra })
+
+test('stand em branco não casa com ninguém', () => {
+  // Vários expositores da mesma feira ficariam sob a chave "feira|", e o
+  // primeiro projeto sem nome de stand viraria o "existente" de todos eles —
+  // um convite a vincular o cliente errado.
+  const projetos = [projetoDe({ token: 'sem_nome', stand: '' })]
+  const [linha] = cruzarComExistentes([
+    { producaoId: 'p1', feira: 'Expo Sul', stand: '' },
+  ], projetos)
+  assert.equal(linha.existente, null)
+  assert.equal(linha.jaImportado, false)
+})
+
+test('nome de stand repetido não escolhe um pelo acaso da ordem', () => {
+  // Dois projetos com o mesmo nome de stand na mesma feira: nenhum dos dois é
+  // "o" correspondente. Escolher um seria criar o elo errado em silêncio.
+  const projetos = [
+    projetoDe({ token: 'a', stand: 'A12' }),
+    projetoDe({ token: 'b', stand: 'A12' }),
+  ]
+  const [linha] = cruzarComExistentes([{ producaoId: 'p1', feira: 'Expo Sul', stand: 'A12' }], projetos)
+  assert.equal(linha.existente, null, 'na dúvida, deixa a pessoa decidir')
+})
+
+test('o casamento por id continua vencendo o nome', () => {
+  const projetos = [
+    projetoDe({ token: 'certo', stand: 'B03', producaoId: 'p1' }),
+    projetoDe({ token: 'homonimo', stand: 'A12' }),
+  ]
+  const [linha] = cruzarComExistentes([{ producaoId: 'p1', feira: 'Expo Sul', stand: 'A12' }], projetos)
+  assert.equal(linha.existente.token, 'certo')
+})
+
+test('nome único e sem id continua casando — é o que "vincular" serve', () => {
+  const projetos = [projetoDe({ token: 'antigo', stand: 'A12' })]
+  const [linha] = cruzarComExistentes([{ producaoId: 'p1', feira: 'Expo Sul', stand: 'A12' }], projetos)
+  assert.equal(linha.existente.token, 'antigo')
+  assert.equal(linha.vincula, true)
+})
+
+test('encontra dois projetos disputando o mesmo expositor do app', () => {
+  const conflitos = elosDuplicados([
+    projetoDe({ token: 'selia', stand: 'Selia', producaoId: 'x9' }),
+    projetoDe({ token: 'jadlog', stand: 'JadLog', producaoId: 'x9' }),
+    projetoDe({ token: 'outro', stand: 'Outro', producaoId: 'z1' }),
+    projetoDe({ token: 'solto', stand: 'Solto', producaoId: '' }),
+  ])
+  assert.equal(conflitos.length, 1)
+  assert.equal(conflitos[0].producaoId, 'x9')
+  assert.deepEqual(conflitos[0].projetos.map((p) => p.token), ['selia', 'jadlog'])
+})
+
+test('projeto sem elo nunca conta como conflito', () => {
+  // Vários projetos sem `producaoId` são o normal — cadastro à mão. Contá-los
+  // encheria a tela de um alarme falso e o aviso deixaria de ser lido.
+  assert.deepEqual(elosDuplicados([
+    projetoDe({ token: 'a', producaoId: '' }),
+    projetoDe({ token: 'b', producaoId: '' }),
+  ]), [])
 })

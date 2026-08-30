@@ -51,19 +51,38 @@ export const utilizavel = (c) => Boolean(c.producaoId && c.feira && (c.expositor
  * comparação é pelo `producaoId` quando ele existe; para os projetos
  * cadastrados à mão antes desta ponte, cai para feira + stand, que é o par que
  * de fato identifica um stand na operação.
+ *
+ * O CASAMENTO POR NOME É O PERIGOSO, e por isso ele agora recusa dois casos.
+ * Ele alimenta o botão "vincular", e vincular grava o `producaoId` — o elo pelo
+ * qual o app de montagem descobre a prova daquele stand. Um elo errado não
+ * aparece aqui: aparece lá, como o print de um cliente na ficha de outro.
+ *
+ * 1. STAND EM BRANCO não identifica nada. Vários expositores da mesma feira
+ *    ficariam sob a chave "feira|", e o primeiro projeto sem nome de stand
+ *    viraria o "existente" de todos eles.
+ * 2. CHAVE REPETIDA é chute. Se dois projetos desta feira têm o mesmo nome de
+ *    stand, nenhum dos dois é "o" correspondente — e escolher um pelo acaso da
+ *    ordem do array é como o elo errado nasce. Sem correspondência, a linha
+ *    aparece como novidade e a pessoa decide, que é o certo.
  */
 export function cruzarComExistentes(daProducao, projetos = []) {
   const porId = new Map()
   const porNome = new Map()
+  const ambiguos = new Set()
   const chaveNome = (feira, stand) => `${achatar(feira)}|${achatar(stand)}`
 
   for (const p of projetos) {
     if (p.producaoId) porId.set(p.producaoId, p)
-    porNome.set(chaveNome(p.feira, p.stand), p)
+    if (!achatar(p.stand)) continue
+    const chave = chaveNome(p.feira, p.stand)
+    if (porNome.has(chave)) ambiguos.add(chave)
+    porNome.set(chave, p)
   }
 
   return daProducao.map((c) => {
-    const existente = porId.get(c.producaoId) || porNome.get(chaveNome(c.feira, c.stand)) || null
+    const chave = chaveNome(c.feira, c.stand)
+    const porApelido = achatar(c.stand) && !ambiguos.has(chave) ? porNome.get(chave) : null
+    const existente = porId.get(c.producaoId) || porApelido || null
     return {
       ...c,
       existente,
@@ -74,6 +93,30 @@ export function cruzarComExistentes(daProducao, projetos = []) {
       vincula: Boolean(existente && !existente.producaoId),
     }
   })
+}
+
+/**
+ * Projetos que disputam o mesmo expositor do app de montagem.
+ *
+ * O `producaoId` é a única ponte entre as duas bases, e ela é 1 para 1: o app
+ * guarda um documento por expositor. Dois projetos com o mesmo elo escrevem no
+ * mesmo lugar, e vence o último — sem erro, sem aviso, alternando a cada
+ * sincronização.
+ *
+ * O sintoma nasce longe da causa: o print de um cliente abre na ficha de outro
+ * NO APP, enquanto na ferramenta cada um mostra o seu, corretamente. Quem vê o
+ * problema não tem como adivinhar que a causa é um elo aqui — por isso ele
+ * precisa aparecer nesta tela, escrito.
+ */
+export function elosDuplicados(projetos = []) {
+  const porId = new Map()
+  for (const p of projetos) {
+    if (!p?.producaoId) continue
+    porId.set(p.producaoId, [...(porId.get(p.producaoId) || []), p])
+  }
+  return [...porId.entries()]
+    .filter(([, lista]) => lista.length > 1)
+    .map(([producaoId, lista]) => ({ producaoId, projetos: lista }))
 }
 
 const achatar = (v) => String(v || '')
