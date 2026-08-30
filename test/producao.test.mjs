@@ -433,3 +433,52 @@ test('expositor que sumiu do app entra com motivo próprio', () => {
 test('projeto sem elo não é problema de elo', () => {
   assert.deepEqual(elosDesalinhados([{ token: 'x', expositor: 'Selia', producaoId: '' }], []), [])
 })
+
+// ---------------------------------------- feira sem coluna de local na planilha
+//
+// A Conferencia Luxo veio assim: `local` vazio em todos os expositores. Com o
+// casamento apoiado só no nome do STAND, nenhum projeto era reconhecido —
+// "vincular" não aparecia e reimportar criaria um segundo projeto do mesmo
+// cliente, com um segundo link. O nome do expositor é o que resta.
+
+test('reconhece pelo expositor quando o stand vem vazio dos dois lados', () => {
+  const projetos = [{ token: 'selia', feira: 'Expo', expositor: 'Selia', stand: '', producaoId: '' }]
+  const [linha] = cruzarComExistentes([
+    { producaoId: 'f_15', feira: 'Expo', expositor: 'Selia', stand: '' },
+  ], projetos)
+  assert.equal(linha.existente.token, 'selia')
+  assert.equal(linha.vincula, true, 'sem elo ainda: o botão de vincular precisa aparecer')
+})
+
+test('stand ambíguo não cala o casamento por expositor', () => {
+  // Índices separados de propósito: dois stands chamados "A12" não podem
+  // impedir o reconhecimento de um expositor cujo nome está perfeitamente claro.
+  const projetos = [
+    { token: 'a', feira: 'Expo', expositor: 'Selia', stand: 'A12', producaoId: '' },
+    { token: 'b', feira: 'Expo', expositor: 'Tray', stand: 'A12', producaoId: '' },
+  ]
+  const [linha] = cruzarComExistentes([
+    { producaoId: 'f_15', feira: 'Expo', expositor: 'Selia', stand: 'A12' },
+  ], projetos)
+  assert.equal(linha.existente.token, 'a')
+})
+
+test('expositor repetido continua sem casar', () => {
+  const projetos = [
+    { token: 'a', feira: 'Expo', expositor: 'Selia', stand: '', producaoId: '' },
+    { token: 'b', feira: 'Expo', expositor: 'Selia', stand: '', producaoId: '' },
+  ]
+  const [linha] = cruzarComExistentes([
+    { producaoId: 'f_15', feira: 'Expo', expositor: 'Selia', stand: '' },
+  ], projetos)
+  assert.equal(linha.existente, null)
+})
+
+test('feira diferente não casa, mesmo com o nome igual', () => {
+  // Cliente que expõe em duas feiras é comum, e cada stand é um projeto.
+  const projetos = [{ token: 'a', feira: 'Outra Feira', expositor: 'Selia', stand: '', producaoId: '' }]
+  const [linha] = cruzarComExistentes([
+    { producaoId: 'f_15', feira: 'Expo', expositor: 'Selia', stand: '' },
+  ], projetos)
+  assert.equal(linha.existente, null)
+})

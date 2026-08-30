@@ -38,13 +38,23 @@ export async function lerProducao(fb) {
   }
 }
 
-/** Todos os projetos já cadastrados, de todas as feiras — para não duplicar. */
+/**
+ * Todos os projetos já cadastrados, de todas as feiras — para não duplicar.
+ *
+ * `expositor` vinha faltando aqui, e a falta era cara: quem cruza os dois lados
+ * comparava um nome vazio e concluía "não é o mesmo cliente" sempre. O efeito
+ * era invisível enquanto o casamento se apoiava no nome do STAND; quando a
+ * planilha da feira vem com a coluna de local em branco — que é o caso da
+ * Conferencia Luxo —, o nome do expositor é a única coisa que resta, e sem ele
+ * nem o "vincular" aparecia nem a religação era sugerida.
+ */
 export async function lerProjetosParaCruzar(fb) {
   const { getFirestore, collection, getDocs } = fb.firestore
   const snap = await getDocs(collection(getFirestore(fb.app), 'projetos'))
   return snap.docs.map((d) => ({
     token: d.id,
     feira: d.data().feira || '',
+    expositor: d.data().expositor || '',
     stand: d.data().stand || '',
     producaoId: d.data().producaoId || '',
     pecas: d.data().pecas || [],

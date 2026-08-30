@@ -57,32 +57,57 @@ export const utilizavel = (c) => Boolean(c.producaoId && c.feira && (c.expositor
  * qual o app de montagem descobre a prova daquele stand. Um elo errado não
  * aparece aqui: aparece lá, como o print de um cliente na ficha de outro.
  *
- * 1. STAND EM BRANCO não identifica nada. Vários expositores da mesma feira
- *    ficariam sob a chave "feira|", e o primeiro projeto sem nome de stand
- *    viraria o "existente" de todos eles.
- * 2. CHAVE REPETIDA é chute. Se dois projetos desta feira têm o mesmo nome de
- *    stand, nenhum dos dois é "o" correspondente — e escolher um pelo acaso da
- *    ordem do array é como o elo errado nasce. Sem correspondência, a linha
- *    aparece como novidade e a pessoa decide, que é o certo.
+ * 1. VAZIO não identifica nada. Vários expositores da mesma feira ficariam sob
+ *    a chave "feira|", e o primeiro projeto sem nome viraria o "existente" de
+ *    todos eles.
+ * 2. CHAVE REPETIDA é chute. Se dois projetos desta feira têm o mesmo nome,
+ *    nenhum dos dois é "o" correspondente — e escolher um pelo acaso da ordem
+ *    do array é como o elo errado nasce. Sem correspondência, a linha aparece
+ *    como novidade e a pessoa decide, que é o certo.
+ *
+ * São DUAS chaves, stand e expositor, e a segunda não é luxo: há feira cuja
+ * planilha vem com a coluna de local em branco — a Conferencia Luxo é uma —, e
+ * nela o nome do expositor é a única coisa que resta para reconhecer o stand.
+ * Sem ela, "vincular" não aparecia e reimportar criaria um segundo projeto do
+ * mesmo cliente, com um segundo link.
  */
 export function cruzarComExistentes(daProducao, projetos = []) {
   const porId = new Map()
-  const porNome = new Map()
-  const ambiguos = new Set()
-  const chaveNome = (feira, stand) => `${achatar(feira)}|${achatar(stand)}`
+  const chaveNome = (feira, nome) => `${achatar(feira)}|${achatar(nome)}`
+
+  // Um índice por chave, cada um com o próprio conjunto de ambíguos: um nome de
+  // stand repetido não pode calar o casamento por expositor, que talvez esteja
+  // perfeitamente claro.
+  const indices = [
+    { mapa: new Map(), ambiguos: new Set(), doProjeto: (p) => p.stand, doCliente: (c) => c.stand },
+    { mapa: new Map(), ambiguos: new Set(), doProjeto: (p) => p.expositor, doCliente: (c) => c.expositor },
+  ]
 
   for (const p of projetos) {
     if (p.producaoId) porId.set(p.producaoId, p)
-    if (!achatar(p.stand)) continue
-    const chave = chaveNome(p.feira, p.stand)
-    if (porNome.has(chave)) ambiguos.add(chave)
-    porNome.set(chave, p)
+    for (const ix of indices) {
+      const valor = achatar(ix.doProjeto(p))
+      if (!valor) continue
+      const chave = chaveNome(p.feira, valor)
+      if (ix.mapa.has(chave)) ix.ambiguos.add(chave)
+      ix.mapa.set(chave, p)
+    }
+  }
+
+  const porApelidoDe = (c) => {
+    for (const ix of indices) {
+      const valor = achatar(ix.doCliente(c))
+      if (!valor) continue
+      const chave = chaveNome(c.feira, valor)
+      if (ix.ambiguos.has(chave)) continue
+      const achado = ix.mapa.get(chave)
+      if (achado) return achado
+    }
+    return null
   }
 
   return daProducao.map((c) => {
-    const chave = chaveNome(c.feira, c.stand)
-    const porApelido = achatar(c.stand) && !ambiguos.has(chave) ? porNome.get(chave) : null
-    const existente = porId.get(c.producaoId) || porApelido || null
+    const existente = porId.get(c.producaoId) || porApelidoDe(c) || null
     return {
       ...c,
       existente,
