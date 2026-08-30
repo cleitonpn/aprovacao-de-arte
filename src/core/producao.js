@@ -96,6 +96,50 @@ export function cruzarComExistentes(daProducao, projetos = []) {
 }
 
 /**
+ * O elo com o app ainda aponta para o mesmo cliente?
+ *
+ * A pergunta existe porque a chave da ponte é FRÁGIL por construção. Do lado do
+ * app, o id do expositor é `nomeDaFeira_númeroDaLinha` — a posição dele na
+ * planilha, e não um identificador dele. Inserir uma linha, apagar outra ou
+ * reordenar a planilha reescreve o id de todo mundo abaixo, e cada cliente
+ * herda o id que era do vizinho.
+ *
+ * O estrago é invisível dos dois lados: aqui o projeto continua certo, lá o
+ * cartão continua certo — o que troca é a correspondência entre eles. Foi assim
+ * que o print de um cliente foi parar na ficha de outro.
+ *
+ * A conferência é deliberadamente FROUXA: basta o nome do expositor OU o do
+ * stand ainda baterem. Nome de empresa muda na planilha ("Selia" vira "Selia
+ * Cosméticos") e stand é renumerado sem que a correspondência tenha se perdido;
+ * exigir os dois transformaria toda correção de digitação num alarme. Quando
+ * NENHUM dos dois bate, não é mais o mesmo cliente.
+ */
+export function eloConfere(projeto, clienteDoApp) {
+  if (!clienteDoApp) return { confere: false, motivo: 'sumiu' }
+
+  const expositor = achatar(projeto?.expositor)
+  const stand = achatar(projeto?.stand)
+  const nomeLa = achatar(clienteDoApp.expositor ?? clienteDoApp.nome)
+  const standLa = achatar(clienteDoApp.stand ?? clienteDoApp.local)
+
+  // Sem nada com que comparar, não dá para afirmar que está errado — e barrar
+  // por falta de dado calaria stands que estão perfeitos.
+  if (!expositor && !stand) return { confere: true, motivo: 'sem_referencia' }
+  if (!nomeLa && !standLa) return { confere: true, motivo: 'sem_referencia' }
+
+  const bateNome = Boolean(expositor && nomeLa && expositor === nomeLa)
+  const bateStand = Boolean(stand && standLa && stand === standLa)
+  if (bateNome || bateStand) return { confere: true, motivo: bateNome ? 'nome' : 'stand' }
+
+  return {
+    confere: false,
+    motivo: 'trocado',
+    esperado: `${projeto?.expositor || '?'} / ${projeto?.stand || '?'}`,
+    encontrado: `${clienteDoApp.expositor ?? clienteDoApp.nome ?? '?'} / ${clienteDoApp.stand ?? clienteDoApp.local ?? '?'}`,
+  }
+}
+
+/**
  * Projetos que disputam o mesmo expositor do app de montagem.
  *
  * O `producaoId` é a única ponte entre as duas bases, e ela é 1 para 1: o app

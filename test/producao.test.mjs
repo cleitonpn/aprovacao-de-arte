@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   normalizarDaProducao, utilizavel, cruzarComExistentes, feirasDaProducao, pendenciasDe,
-  elosDuplicados,
+  elosDuplicados, eloConfere,
 } from '../src/core/producao.js'
 import { projetoNovo, normalizarProjeto } from '../src/data/projeto.js'
 
@@ -291,4 +291,56 @@ test('projeto sem elo nunca conta como conflito', () => {
     projetoDe({ token: 'a', producaoId: '' }),
     projetoDe({ token: 'b', producaoId: '' }),
   ]), [])
+})
+
+// --------------------------------------------- a chave frágil do outro lado
+//
+// A causa do defeito relatado não era duplicação: é que o id do expositor no
+// app é `nomeDaFeira_númeroDaLinha` — a POSIÇÃO na planilha, não uma identidade.
+// Reordenar a planilha reescreve o id de todo mundo abaixo, e cada cliente
+// herda o id que era do vizinho. `cv_status/feira_12` foi escrito quando a
+// linha 12 era a JadLog; hoje a linha 12 é a Selia, e o app lê aquele
+// documento para ela.
+//
+// Nenhum dos dois lados parece errado sozinho — o que se perdeu é a
+// correspondência. Só uma conferência explícita acha isso.
+
+test('elo que virou outro cliente é recusado', () => {
+  const v = eloConfere(
+    { expositor: 'Selia', stand: 'B14' },
+    { nome: 'JadLog', local: 'A02' },
+  )
+  assert.equal(v.confere, false)
+  assert.equal(v.motivo, 'trocado')
+  assert.match(v.esperado, /Selia/)
+  assert.match(v.encontrado, /JadLog/)
+})
+
+test('expositor que sumiu do app não publica nada', () => {
+  assert.deepEqual(eloConfere({ expositor: 'Selia', stand: 'B14' }, null), { confere: false, motivo: 'sumiu' })
+})
+
+test('basta o nome OU o stand baterem', () => {
+  // Frouxo de propósito: nome de empresa muda na planilha e stand é renumerado
+  // sem que a correspondência tenha se perdido. Exigir os dois transformaria
+  // toda correção de digitação num alarme — e alarme falso se aprende a ignorar.
+  assert.equal(eloConfere({ expositor: 'Selia', stand: 'B14' }, { nome: 'Selia Cosméticos', local: 'B14' }).confere, true)
+  assert.equal(eloConfere({ expositor: 'Selia', stand: 'C01' }, { nome: 'Selia', local: 'B14' }).confere, true)
+})
+
+test('acento e caixa não separam o mesmo cliente', () => {
+  assert.equal(eloConfere({ expositor: 'INFRACOMMERCE', stand: 'a12' }, { nome: 'Infracommerce', local: 'A-12' }).confere, true)
+})
+
+test('sem referência de um dos lados, não acusa', () => {
+  // Barrar por falta de dado calaria stands que estão perfeitos — e o silêncio
+  // aqui custa o print que o montador precisa ver.
+  assert.equal(eloConfere({ expositor: '', stand: '' }, { nome: 'JadLog', local: 'A02' }).confere, true)
+  assert.equal(eloConfere({ expositor: 'Selia', stand: 'B14' }, { nome: '', local: '' }).confere, true)
+})
+
+test('o app usa `nome`/`local`; o espelho usa `expositor`/`stand`', () => {
+  // Os dois vocabulários chegam aqui, e trocar um pelo outro faria a
+  // conferência acusar todo mundo.
+  assert.equal(eloConfere({ expositor: 'Selia', stand: 'B14' }, { expositor: 'Selia', stand: 'B14' }).confere, true)
 })

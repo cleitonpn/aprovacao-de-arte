@@ -30,7 +30,7 @@ import { getFirestore, FieldValue } from 'firebase-admin/firestore'
 // outra implementação, garantiria que em uma semana o app mostrasse um status
 // que o analista não reconhece.
 import { resumoDoProjeto, provasDoProjeto } from '../src/core/fluxo.js'
-import { statusParaProducao } from '../src/core/producao.js'
+import { statusParaProducao, eloConfere } from '../src/core/producao.js'
 
 const COLECAO_ORIGEM = 'fair_clients'
 const COLECAO_ESPELHO = 'producao_clientes'
@@ -191,6 +191,42 @@ async function publicarStatusDaArte(producao, arte) {
     )
   }
 
+  // O elo ainda aponta para o mesmo cliente?
+  //
+  // Esta é a conferência que pega o defeito REAL, e a causa está do outro lado:
+  // o id do expositor no app é `nomeDaFeira_númeroDaLinha` — a POSIÇÃO dele na
+  // planilha, não um identificador dele. Inserir uma linha, apagar outra ou
+  // reordenar a planilha reescreve o id de todo mundo abaixo, e cada cliente
+  // herda o id que era do vizinho.
+  //
+  // A partir daí, `cv_status/feira_12` foi escrito quando a linha 12 era a
+  // JadLog, e o app lê esse mesmo documento para a Selia, que hoje ocupa a
+  // linha 12. Nenhum dos dois lados parece errado sozinho — o que se perdeu é a
+  // correspondência entre eles, e é por isso que só uma conferência explícita
+  // acha isso.
+  const noApp = new Map(
+    (await producao.collection(COLECAO_ORIGEM).get()).docs
+      .map((d) => [d.id, { nome: d.get('nome') || '', local: d.get('local') || '' }]),
+  )
+
+  const desalinhados = new Set()
+  for (const doc of snap.docs) {
+    const id = doc.get('producaoId')
+    if (!id || conflitados.has(id)) continue
+    const veredicto = eloConfere(
+      { expositor: doc.get('expositor') || '', stand: doc.get('stand') || '' },
+      noApp.get(id),
+    )
+    if (veredicto.confere) continue
+    desalinhados.add(id)
+    console.error(
+      veredicto.motivo === 'sumiu'
+        ? `ELO ÓRFÃO: o projeto ${doc.get('stand') || doc.id} aponta para o expositor ${id}, que não existe mais no app. Nada será publicado para ele.`
+        : `ELO TROCADO: o projeto aqui é "${veredicto.esperado}", mas o expositor ${id} no app hoje é "${veredicto.encontrado}". `
+          + 'A planilha provavelmente foi reordenada. Nada será publicado para ele até o elo ser refeito.',
+    )
+  }
+
   let gravados = 0
   let lote = producao.batch()
   let noLote = 0
@@ -203,6 +239,7 @@ async function publicarStatusDaArte(producao, arte) {
     // documento que estava lá, tirando do app o print que pode ser do cliente
     // errado. Deixá-lo seria manter no ar exatamente o que se quer parar.
     if (conflitados.has(projeto.producaoId)) continue
+    if (desalinhados.has(projeto.producaoId)) continue
 
     // O mesmo motor da tela do analista, sem segunda implementação.
     const resumo = resumoDoProjeto(projeto)
