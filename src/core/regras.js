@@ -29,6 +29,45 @@ const POL_POR_CM = 1 / 2.54
 // passa com ressalva, com o cliente sabendo o que está aceitando.
 export const DPI_PISO_ABSOLUTO = 100
 export const DPI_MINIMO_GLOBAL = 150
+
+/**
+ * Acuidade visual humana: um minuto de arco, em radianos.
+ *
+ * É a mesma constante que o simulador de distância usa para dizer "a 3,9 m o
+ * olho distingue detalhes a partir de 1,13 mm". Ela já governava o que a
+ * ferramenta EXPLICA; passa a governar também o que ela DECIDE.
+ */
+const UM_MINUTO_DE_ARCO = Math.PI / (180 * 60)
+
+/**
+ * Quantas vezes menor que o perceptível o ponto impresso precisa ser.
+ *
+ * 2× é margem, não física: no limite exato (1×) o ponto tem o tamanho do menor
+ * detalhe que o olho separa, e qualquer coisa — a pessoa chegar mais perto, a
+ * impressora abrir o ponto, o material espalhar a tinta — cruza a linha. Com
+ * 2× o ponto tem metade do tamanho perceptível e a peça aguenta o mundo real.
+ */
+const MARGEM_DE_PERCEPCAO = 2
+
+/**
+ * A densidade abaixo da qual a peça de fato aparece granulada, na distância em
+ * que ela é vista.
+ *
+ * Por que isto existe: o piso da empresa era um número só, 100 dpi, aplicado a
+ * tudo. Numa parede vista a 2,5 m ele REPROVAVA arte que o próprio perfil
+ * declara boa — `lona-parede` pede 50 dpi e tem ideal de 100. Aconteceu de
+ * verdade: uma arte de 82 dpi numa parede de 100 × 265 cm foi reprovada aqui e
+ * aprovada à mão pelo time, que estava certo. A 2,5 m o ponto de 82 dpi mede
+ * 0,31 mm, menos da metade do que o olho distingue ali.
+ *
+ * E uma ferramenta que reprova o que a pessoa aprova não é rigorosa: é
+ * contornada. Depois de contornada uma vez, ela para de ser lida.
+ */
+export function pisoPorDistancia(distanciaM) {
+  const distanciaMm = Math.max(Number(distanciaM) || 0, 0.1) * 1000
+  const detalheMm = distanciaMm * UM_MINUTO_DE_ARCO
+  return (25.4 / detalheMm) * MARGEM_DE_PERCEPCAO
+}
 /**
  * Acima de quantos milímetros de borda a arte é considerada sem detalhe real.
  *
@@ -62,7 +101,23 @@ export function exigencia(perfil, politica = {}) {
   // O piso do PERFIL nunca é afrouxado: o adesivo de balcão pede 150 dpi
   // porque é visto a 50 cm, e nenhuma política de empresa muda essa física.
   // O piso da empresa só levanta o de peças mais tolerantes.
-  const dpiPiso = Math.max(perfil.dpiMin || 0, p.dpiPisoAbsoluto || 0)
+  // O piso da empresa não pode passar por cima da distância.
+  //
+  // A regra antiga era `max(piso do perfil, piso da empresa)`, e o comentário
+  // acima ainda vale para a primeira metade: o piso do PERFIL nunca é
+  // afrouxado. O que mudou é a segunda: o piso da empresa agora é LIMITADO
+  // pelo que a distância justifica. Ele continua levantando peças tolerantes
+  // demais, mas para de reprovar parede e testeira — que são vistas de longe e
+  // cujos perfis pedem 50 e 30 dpi — por um número escrito para peça de perto.
+  //
+  // O efeito é sempre para o lado de afrouxar: o piso resultante nunca fica
+  // acima do que era antes, então nada que passava hoje passa a reprovar.
+  const pisoDaEmpresa = Math.min(p.dpiPisoAbsoluto || 0, pisoPorDistancia(perfil.distanciaM))
+  // Arredondado aqui, e não na hora de escrever: este número aparece no laudo
+  // do cliente ("acima de 70 dpi a peça imprime") e é a fronteira entre passar
+  // e reprovar. Uma fronteira com catorze casas decimais não se explica para
+  // ninguém, e a diferença entre 69,855 e 70 não decide arte nenhuma.
+  const dpiPiso = Math.round(Math.max(perfil.dpiMin || 0, pisoDaEmpresa))
   const dpiMin = Math.max(perfil.dpiMin || 0, p.dpiMinimoGlobal || 0)
   return {
     dpiPiso,

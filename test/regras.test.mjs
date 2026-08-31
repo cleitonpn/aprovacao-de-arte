@@ -37,20 +37,31 @@ test('a densidade tem dois patamares: o que reprova e o que é padrão da casa',
   assert.equal(DPI_MINIMO_GLOBAL, 150)
   assert.equal(SANGRIA_MINIMA_MM, 100)
 
-  // Lona pede 50 dpi no perfil. O piso da empresa levanta os dois números:
-  // abaixo de 100 não imprime, abaixo de 150 imprime fora do padrão.
-  assert.equal(exigencia(lona).dpiPiso, 100)
+  // Lona pede 50 dpi no perfil e é vista a 2,5 m. O piso da empresa é LIMITADO
+  // pela distância: a 2,5 m o olho separa 0,73 mm, e com a margem de 2× isso dá
+  // 70 dpi. Era 100 — número escrito pensando em peça de perto, que reprovava
+  // arte de parede que o time aprovava à mão.
+  assert.equal(exigencia(lona).dpiPiso, 70)
+  // O PADRÃO da casa não é tocado pela distância: 150 continua sendo o alvo, e
+  // quem fica entre 70 e 150 passa com ressalva sabendo o que aceitou.
   assert.equal(exigencia(lona).dpiMin, 150)
   assert.equal(exigencia(lona).dpiIdeal, 150)
 
   // O balcão já pede 150 no perfil, porque é visto a 50 cm. Nenhuma política
-  // de empresa afrouxa isso: o piso dele continua 150, não 100.
+  // de empresa afrouxa isso: o piso dele continua 150, não 100. E a distância
+  // também não o afrouxa — a 0,5 m ela pediria 349 dpi, e o limite é de mão
+  // única: só relaxa o que a distância justifica, nunca aperta o que valia.
   assert.equal(exigencia(balcao).dpiPiso, 150)
   assert.equal(exigencia(balcao).dpiIdeal, 300)
 
   // os pisos são configuráveis pelo time de CV
   assert.equal(exigencia(lona, { dpiMinimoGlobal: 200 }).dpiMin, 200)
-  assert.equal(exigencia(lona, { dpiPisoAbsoluto: 120 }).dpiPiso, 120)
+  // O piso GERAL da empresa é distância-limitado mesmo quando configurado à
+  // mão: um número único não tem como saber de que distância a peça é vista, e
+  // foi exatamente essa pretensão que reprovou arte boa. Quem quiser ser mais
+  // exigente numa peça específica levanta o `dpiMin` do PERFIL, que é absoluto.
+  assert.equal(exigencia(lona, { dpiPisoAbsoluto: 120 }).dpiPiso, 70)
+  assert.equal(exigencia({ ...lona, dpiMin: 120 }).dpiPiso, 120)
   assert.equal(exigencia(lona, { sangriaMinimaMm: 150 }).sangriaMm, 150)
   // e um piso mais frouxo nunca afrouxa um perfil mais exigente
   assert.equal(exigencia(lona, { dpiMinimoGlobal: 30 }).dpiMin, 50)
@@ -119,8 +130,14 @@ test('entre o piso e o padrão da casa, passa com ressalva', () => {
     larguraPx: pxNecessarios(100, dpi), alturaPx: pxNecessarios(100, dpi),
   })
 
+  // O piso da lona é 70 dpi (2,5 m de distância), não mais 100. 90 dpi passa
+  // com ressalva — era reprovação, e era ela que mandava o time aprovar por
+  // fora. Quem reprova agora é o que a distância não sustenta.
   const a90 = avaliar({ peca, perfil: lona, medidas: em(90) })
-  assert.equal(a90.veredicto, 'reprovado', 'abaixo de 100 dpi não imprime')
+  assert.equal(a90.veredicto, 'ressalva', '90 dpi a 2,5 m é imperceptível')
+
+  const a60 = avaliar({ peca, perfil: lona, medidas: em(60) })
+  assert.equal(a60.veredicto, 'reprovado', 'abaixo de 70 dpi a granulação aparece')
 
   const a120 = avaliar({ peca, perfil: lona, medidas: em(120) })
   assert.equal(a120.veredicto, 'ressalva', '120 dpi imprime, mas fora do padrão')

@@ -587,6 +587,41 @@ prorrogação por stand.
 
 ### Sobre a resolução
 
+O piso — a densidade abaixo da qual a arte é **reprovada** — sai da distância em
+que a peça é vista, não de um número único para tudo:
+
+| Peça | Vista a | Reprova abaixo de | Padrão da casa |
+|---|---|---|---|
+| Lona de parede | 2,5 m | 70 dpi | 150 dpi |
+| Testeira | 5 m | 35 dpi | 150 dpi |
+| Vinil de piso | 1,5 m | 100 dpi | 150 dpi |
+| Placa / totem | 1 m | 120 dpi | 150 dpi |
+| Adesivo de balcão | 0,5 m | 150 dpi | 300 dpi |
+
+Antes o piso era 100 dpi para tudo, e ele **reprovava arte que o time aprovava à
+mão**: uma parede de 100 × 265 cm com 82 dpi foi recusada aqui e liberada por
+fora — corretamente, porque a 2,5 m o ponto de 82 dpi mede 0,31 mm, menos da
+metade do que o olho distingue àquela distância. Ferramenta que reprova o que a
+pessoa aprova não é rigorosa: é contornada, e depois de contornada uma vez para
+de ser lida.
+
+A conta é a mesma do simulador de distância (acuidade de um minuto de arco), com
+margem de 2×: o ponto impresso precisa ter metade do tamanho do menor detalhe
+perceptível. A margem existe porque no limite exato qualquer coisa cruza a linha
+— a pessoa chegar mais perto, a impressora abrir o ponto, o material espalhar a
+tinta.
+
+Ficar entre o piso e o padrão da casa continua sendo **ressalva**, não
+aprovação: imprime e fica aceitável na distância da peça, mas o cliente sabe que
+aceitou menos que o alvo.
+
+O limite é de **mão única**: ele só afrouxa o que a distância justifica, nunca
+aperta. Nenhuma peça ficou mais exigente do que era. Para exigir mais de um tipo
+de peça, levante o `dpiMin` do **perfil** (em `src/data/perfis.js`), que é
+absoluto — o piso geral da empresa é distância-limitado mesmo quando configurado
+à mão, justamente porque um número único não sabe de que distância a peça é
+vista.
+
 São **dois patamares**, não um só:
 
 | Faixa | O que acontece |
