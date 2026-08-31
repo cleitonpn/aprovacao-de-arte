@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { traduzirErroAuth } from '../services/sessao.js'
 import { enviarProva, EXTENSOES_PROVA } from '../services/envio.js'
-import { registrarProva, ouvirEnvios, arquivarEnvio } from '../services/projetos.js'
+import { registrarProva, ouvirEnvios, arquivarEnvio, marcarConferido } from '../services/projetos.js'
+import { conferenciaPendente } from '../core/regras.js'
 import { vistoEm, marcarVisto, dataEmMs, assinarVisto } from '../store/visto.js'
 import { feirasVisiveis } from '../core/permissoes.js'
 import { formatarDataHora as fmtData } from '../core/datas.js'
@@ -210,19 +211,33 @@ export default function Admin({ sessao }) {
 
   const arquivados = useMemo(() => envios.filter((e) => e.arquivado).length, [envios])
 
+  // Artes que a ferramenta NÃO CONSEGUIU abrir e ninguém olhou ainda.
+  //
+  // É a fila que faltava. O laudo dessas artes já prometia "nossa equipe vai
+  // olhar manualmente", e a promessa dependia de alguém reparar numa ressalva
+  // no meio de uma lista de cinquenta linhas. Não são raras: 300 dpi numa
+  // parede grande dá uma imagem que nenhum navegador abre, então é a arte BEM
+  // feita que cai aqui.
+  const semConferir = useMemo(
+    () => envios.filter((e) => !e.arquivado && conferenciaPendente(e)),
+    [envios],
+  )
+  const [soSemConferir, setSoSemConferir] = useState(false)
+
   const visiveis = useMemo(() => {
     const t = filtro.trim().toLowerCase()
     // `tipoEnvio` só existe nos registros novos: envio antigo sem o campo é
     // arte, que é tudo o que existia antes de os arquivos de apoio nascerem.
     const ehApoio = (e) => e.tipoEnvio === 'avulso'
     return envios
+      .filter((e) => !soSemConferir || conferenciaPendente(e))
       .filter((e) => mostrarArquivados || !e.arquivado)
       .filter((e) => tipo === 'todos' || (tipo === 'avulso' ? ehApoio(e) : !ehApoio(e)))
       .filter((e) => !t || [
         e.cadastro?.nome, e.cadastro?.email, e.cadastro?.stand, e.cadastro?.localizacao,
         e.pecaRotulo, e.perfil?.nome, e.protocolo, e.arquivo?.nome,
       ].some((v) => String(v || '').toLowerCase().includes(t)))
-  }, [envios, filtro, tipo, mostrarArquivados])
+  }, [envios, filtro, tipo, mostrarArquivados, soSemConferir])
 
   const totalApoio = useMemo(() => envios.filter((e) => e.tipoEnvio === 'avulso').length, [envios])
 
@@ -309,6 +324,21 @@ export default function Admin({ sessao }) {
           <div className="faixa-novidade">
             <strong>{novos} {novos === 1 ? 'arquivo novo' : 'arquivos novos'}</strong> desde a sua última visita.
             <em className="dica-campo">marcado como visto automaticamente</em>
+          </div>
+        )}
+
+        {semConferir.length > 0 && (
+          <div className="faixa-novidade conferir">
+            <strong>
+              {semConferir.length === 1
+                ? '1 arte que a ferramenta não conseguiu abrir'
+                : `${semConferir.length} artes que a ferramenta não conseguiu abrir`}
+            </strong>{' '}
+            — os dados técnicos foram conferidos, a aparência não. Precisam de
+            olho humano antes de imprimir.
+            <button className="link" onClick={() => setSoSemConferir((v) => !v)}>
+              {soSemConferir ? 'ver todas de novo' : 'ver só essas'}
+            </button>
           </div>
         )}
 
@@ -439,6 +469,9 @@ export default function Admin({ sessao }) {
                         ? <span className="tag apoio">Arquivo de apoio</span>
                         : <span className={`tag ${e.veredicto}`}>{ROTULO[e.veredicto] || e.veredicto}</span>}
                       {e.riscoAceito && <><br /><em className="dica-campo">risco aceito</em></>}
+                      {conferenciaPendente(e) && (
+                        <><br /><strong className="destaque-pendencia">não conferida</strong></>
+                      )}
                     </td>
                     <td>{fmtData(e.criadoEm)}</td>
                     <td>
@@ -452,6 +485,27 @@ export default function Admin({ sessao }) {
                       <BotaoProva envio={e} sessao={sessao} />
                     </td>
                     <td>
+                      {conferenciaPendente(e) && (
+                        <>
+                          <button
+                            className="link perigo"
+                            title="Registra que uma pessoa olhou esta arte — a ferramenta não conseguiu abri-la"
+                            onClick={() => marcarConferido(sessao.fb, e.protocolo, sessao.usuario?.email)
+                              .catch((erro) => setErro(traduzirErroAuth(erro, 'gravacao')))}
+                          >
+                            conferi esta arte
+                          </button>
+                          <br />
+                        </>
+                      )}
+                      {e.conferencia?.em && (
+                        <>
+                          <em className="dica-campo" title={`Conferida por ${e.conferencia.por || 'alguém do time'}`}>
+                            conferida à mão
+                          </em>
+                          <br />
+                        </>
+                      )}
                       <button
                         className="link"
                         title={e.arquivado

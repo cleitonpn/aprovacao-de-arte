@@ -632,6 +632,23 @@ export function ouvirReprovacoes(fb, token, aoMudar, aoFalhar) {
 // O que se ganha arquivando é só o que incomoda: o registro sai da lista, e
 // ninguém mais clica num "Baixar" que responde 403.
 
+/**
+ * Registra que uma pessoa olhou a arte que a ferramenta não conseguiu abrir.
+ *
+ * Fica no documento do envio, e não no navegador de quem clicou: o alerta de
+ * dificuldade já ensinou a lição — marca guardada em localStorage some para o
+ * resto do time no dia seguinte, e o item volta a aparecer para todo mundo
+ * menos para quem resolveu.
+ */
+export function marcarConferido(fb, protocolo, por, conferido = true) {
+  const { getFirestore, doc, updateDoc } = fb.firestore
+  return updateDoc(doc(getFirestore(fb.app), 'envios', protocolo), {
+    conferencia: conferido
+      ? { em: new Date().toISOString(), por: por ?? null }
+      : null,
+  })
+}
+
 export function arquivarEnvio(fb, protocolo, por, arquivado = true) {
   const { getFirestore, doc, updateDoc } = fb.firestore
   return updateDoc(doc(getFirestore(fb.app), 'envios', protocolo), {

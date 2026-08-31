@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   avaliar, pxNecessarios, dpiEfetivo, especificacao, veredictoDe, exigencia,
-  DPI_PISO_ABSOLUTO, DPI_MINIMO_GLOBAL, SANGRIA_MINIMA_MM, LIMIAR_BORDA_MM,
+  DPI_PISO_ABSOLUTO, DPI_MINIMO_GLOBAL, SANGRIA_MINIMA_MM, LIMIAR_BORDA_MM, exigeConferenciaHumana, conferenciaPendente,
 } from '../src/core/regras.js'
 import { PERFIS_PADRAO } from '../src/data/perfis.js'
 
@@ -474,4 +474,42 @@ test('sem medição confiável, nenhum achado — silêncio, não aprovação', 
     const r = avaliar({ peca: pecaLona, perfil: lona, medidas: { ...pdfComNitidez(9), nitidez } })
     assert.equal(achado(r, 'nitidez-real'), undefined)
   }
+})
+
+// ------------------------------------- o que a ferramenta não conseguiu ver
+//
+// A diferença entre "não aprovo" e "não consegui olhar" é tudo. Numa ressalva
+// comum a ferramenta OLHOU e tem opinião; o cliente aceita o risco com
+// conhecimento de causa e está encerrado. Quando ela não conseguiu abrir a
+// imagem, o "assumo o risco" do cliente encerra uma pergunta que ninguém fez.
+//
+// Aconteceu com uma parede de 120 × 320 cm — 562 megapixels, ~2,25 GB
+// descomprimidos, nenhum navegador abre. E não é caso raro: 300 dpi numa peça
+// desse tamanho dá exatamente isso, então é a arte BEM feita que cai aqui.
+
+test('arte que não pôde ser aberta exige olho humano', () => {
+  const laudo = { achados: [{ id: 'visual-indisponivel', nivel: 'ressalva' }] }
+  assert.equal(exigeConferenciaHumana(laudo), true)
+  assert.equal(conferenciaPendente({ laudo }), true)
+})
+
+test('ressalva comum não vai para a fila de conferência', () => {
+  // Resolução abaixo do padrão é opinião formada, não cegueira. Mandar isso
+  // para a fila entupiria a lista e ninguém olharia o que importa.
+  const laudo = { achados: [{ id: 'resolucao', nivel: 'ressalva' }, { id: 'cor', nivel: 'ressalva' }] }
+  assert.equal(exigeConferenciaHumana(laudo), false)
+  assert.equal(conferenciaPendente({ laudo }), false)
+})
+
+test('depois de alguém conferir, sai da fila', () => {
+  const laudo = { achados: [{ id: 'visual-indisponivel', nivel: 'ressalva' }] }
+  assert.equal(conferenciaPendente({ laudo, conferencia: { em: '2026-08-31T12:00:00Z', por: 'ana@x' } }), false)
+  // Marca vazia não conta: `conferencia: {}` seria um documento pela metade.
+  assert.equal(conferenciaPendente({ laudo, conferencia: {} }), true)
+})
+
+test('envio sem laudo não inventa pendência', () => {
+  // Arquivo de apoio não tem laudo — não é peça impressa, não tem o que olhar.
+  assert.equal(conferenciaPendente({ tipoEnvio: 'avulso' }), false)
+  assert.equal(conferenciaPendente(null), false)
 })

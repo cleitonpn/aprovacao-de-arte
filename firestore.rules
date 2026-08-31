@@ -104,9 +104,14 @@ service cloud.firestore {
       // "Baixar" para arquivo que responde 403. Continua sendo proibido mexer
       // no veredicto, no laudo, no cadastro ou na data — o que faz do envio um
       // registro confiável é justamente nada disso poder ser reescrito depois.
+      // `conferencia` entra na mesma exceção: é o registro de que uma PESSOA
+      // olhou a arte que a ferramenta não conseguiu abrir. Vive aqui, e não no
+      // navegador de quem clicou, porque marca local some para o resto do time
+      // no dia seguinte — e aí o item volta para todo mundo menos para quem
+      // resolveu.
       allow update: if ehAdmin()
         && request.resource.data.diff(resource.data).affectedKeys()
-             .hasOnly(['arquivado', 'arquivadoEm', 'arquivadoPor']);
+             .hasOnly(['arquivado', 'arquivadoEm', 'arquivadoPor', 'conferencia']);
 
       allow delete: if false;
     }

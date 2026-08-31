@@ -83,6 +83,35 @@ export const LIMIAR_BORDA_MM = 1.2
 
 export const SANGRIA_MINIMA_MM = 100
 
+/**
+ * Achados em que a ferramenta não conferiu — não em que ela desaprovou.
+ *
+ * A diferença é tudo. Numa ressalva comum a ferramenta OLHOU e tem uma opinião;
+ * o cliente aceita o risco com conhecimento de causa e está encerrado. Aqui ela
+ * não conseguiu olhar: a imagem embutida é grande demais para o navegador
+ * abrir, e o laudo fala só do que dá para ler nos metadados. O "assumo o risco"
+ * do cliente não pode encerrar uma pergunta que ninguém fez.
+ *
+ * O texto do achado já prometia "nossa equipe vai olhar esta arte manualmente".
+ * Isto é o que torna a promessa verdadeira — antes ela dependia de alguém
+ * reparar na ressalva no meio da lista.
+ *
+ * Aconteceu com uma parede de 120 × 320 cm: 562 megapixels, ~2,25 GB
+ * descomprimidos, nenhum navegador abre. E não é caso raro — 300 dpi numa peça
+ * desse tamanho dá exatamente isso, então é a arte BEM feita que cai aqui.
+ */
+export const ACHADOS_SEM_CONFERENCIA = ['visual-indisponivel']
+
+/** Este laudo precisa de olho humano antes de imprimir? */
+export function exigeConferenciaHumana(laudo) {
+  return (laudo?.achados || []).some((a) => ACHADOS_SEM_CONFERENCIA.includes(a.id))
+}
+
+/** O envio ainda espera essa conferência, ou alguém já a fez? */
+export function conferenciaPendente(envio) {
+  return exigeConferenciaHumana(envio?.laudo) && !envio?.conferencia?.em
+}
+
 export const POLITICA_PADRAO = {
   dpiPisoAbsoluto: DPI_PISO_ABSOLUTO,
   dpiMinimoGlobal: DPI_MINIMO_GLOBAL,

@@ -505,6 +505,15 @@ textarea { width: 100%; font: inherit; font-size: 13px; padding: 9px 11px; borde
 .bloco-contato p { margin: 0; }
 .bloco-contato p + p { margin-top: 6px; }
 
+/* A faixa da fila de conferência humana. Vermelha, e não amarela: o que ela
+   anuncia não é "olhe quando puder", é "isto vai para a impressora sem ninguém
+   ter visto a arte". */
+.faixa-novidade.conferir {
+  border-color: var(--ruim);
+  background: var(--ruim-fundo);
+}
+.faixa-novidade.conferir strong { color: var(--ruim); }
+
 .sinal { font-style: normal; font-weight: 600; }
 .sinal.ruim { color: var(--ruim); }
 .sinal.alerta { color: var(--alerta); }
