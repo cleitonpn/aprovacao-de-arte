@@ -6,7 +6,8 @@
 
 import { sha256, detectarFormato, extensao, lerJpeg, lerPng, formatarBytes } from './arquivo.js'
 import { carregarBitmap, amostraReduzida, recortesNativos, fracaoChapada, miniatura, renderVazio, LADO_RECORTE } from './imagem.js'
-import { paraCinza, blocagem, conteudoNaMargem, bordaUniforme, estatisticasCor, larguraDeBorda } from './metricas.js'
+import { paraCinza, blocagem, conteudoNaMargem, bordaUniforme, estatisticasCor, larguraDeBorda, bordaPorRegiao,
+} from './metricas.js'
 import { analisarEspectro, classificarDeficit } from './espectro.js'
 import { avaliar } from './regras.js'
 import { fonteDeBitmap, fonteDePdf } from './recorte.js'
@@ -137,7 +138,7 @@ export async function analisar(arquivo, peca, perfil, opcoes = {}) {
   }
 
   const medir = async (fator) => {
-    if (formato === 'pdf' || formato === 'ai') return medirPdf(buffer, base, peca, perfil, fator)
+    if (formato === 'pdf' || formato === 'ai') return medirPdf(buffer, base, peca, perfil, fator, arquivo)
 
     const meta = formato === 'jpeg' ? lerJpeg(buffer) : lerPng(buffer)
     const r = await medirRaster(arquivo, formato, meta, peca, perfil)
@@ -223,6 +224,19 @@ export async function analisar(arquivo, peca, perfil, opcoes = {}) {
 
 /** dpi da análise, no tamanho impresso. Calibrado com arquivos reais. */
 const DPI_ANALISE = 50
+
+// A leitura direta do PDF pode mirar mais alto que o render, e PRECISA.
+//
+// Medido na parede da CRM Bonus: a 52 dpi toda região dá exatamente 1 pixel de
+// borda — o piso da métrica — e nenhuma diferença aparece. A 104 dpi o bloco
+// mole se separa do resto por 2,2×. Subamostrar demais apaga justamente a
+// evidência que se foi buscar.
+const DPI_ANALISE_DIRETA = 100
+
+// O tamanho da região em que a peça é dividida. 10 cm porque um logo ampliado
+// tem essa ordem de grandeza numa parede: célula muito maior dilui o defeito na
+// média do que está em volta, muito menor mede ruído.
+const CELULA_REGIAO_CM = 10
 /** Abaixo disto a medida mente para o lado de aprovar. */
 const DPI_MINIMO_ANALISE = 35
 /** Teto de memória: acima disso o navegador do cliente é que paga a conta. */
@@ -259,7 +273,7 @@ function medirNitidez(dadosRGBA, largura, altura, larguraCm) {
   }
 }
 
-async function medirPdf(buffer, base, peca, perfil, escalaFator) {
+async function medirPdf(buffer, base, peca, perfil, escalaFator, arquivo = null) {
   // import dinâmico: o pdf.js é pesado e só entra em cena quando é PDF
   const {
     abrirPdf, inspecionarPagina, renderizarPagina, fontesNaoIncorporadas, larguraEmPontos,
@@ -301,6 +315,7 @@ async function medirPdf(buffer, base, peca, perfil, escalaFator) {
   let miniaturaUrl = null
   let visualIndisponivel = false
   let nitidez = { medido: false, motivo: 'nao_tentado' }
+  let regioes = null
 
   try {
     const { canvas } = await renderizarPagina(doc, 1, larguraAnalise || 900)
@@ -321,10 +336,56 @@ async function medirPdf(buffer, base, peca, perfil, escalaFator) {
     visualIndisponivel = true
   }
 
+  // O NAVEGADOR DESISTIU; a ferramenta ainda não precisa desistir.
+  //
+  // Quando o render falha é quase sempre pelo mesmo motivo: a imagem embutida é
+  // grande demais para o navegador abrir de uma vez. Uma parede de 120 × 320 cm
+  // a 300 dpi tem 562 megapixels e ~2,25 GB descomprimidos — e 300 dpi numa
+  // peça desse tamanho é o que um designer competente entrega. Ou seja, era a
+  // arte BEM FEITA, na peça que mais custa reimprimir, a que ninguém conferia.
+  //
+  // Aqui a imagem é lida direto do PDF, descomprimida em fluxo e amostrada:
+  // nada existe inteiro em lugar nenhum, e sobra uma amostra de poucos
+  // megapixels que serve para medir. Não devolve a PRÉVIA — para isso é preciso
+  // desenhar a página, com fontes e vetores por cima —, então o cliente
+  // continua sem miniatura e a arte continua indo para a conferência humana.
+  // O que muda é que a nitidez deixa de ser um vazio.
+  if (visualIndisponivel && dpiImagens?.length) {
+    try {
+      const { acharImagemNoPdf, amostrarImagemFlate } = await import('./imagemPdf.js')
+      // Relê do arquivo: o pdf.js já transferiu `buffer` para o worker dele e o
+      // desanexou. Guardar uma segunda cópia desde o início custaria outros
+      // 145 MB de memória numa arte grande — e só serviria neste caminho, que
+      // é a exceção.
+      const cru = arquivo ? await arquivo.arrayBuffer() : buffer
+      const embutida = acharImagemNoPdf(cru)
+      if (embutida?.tipo === 'flate') {
+        const alvo = Math.round((declaradoLarguraCm / CM_POR_POL) * DPI_ANALISE_DIRETA)
+        const amostra = await amostrarImagemFlate(embutida, { larguraAlvo: alvo })
+        if (amostra) {
+          const dpi = amostra.largura / (declaradoLarguraCm / CM_POR_POL)
+          const borda = larguraDeBorda(amostra.cinza, amostra.largura, amostra.altura)
+          nitidez = borda == null
+            ? { medido: false, motivo: 'sem_bordas', dpi, direto: true }
+            : { medido: true, dpi, direto: true, bordaPx: borda, bordaMm: (borda / dpi) * 25.4 }
+          regioes = bordaPorRegiao(amostra.cinza, amostra.largura, amostra.altura, {
+            celulaPx: Math.round(dpi * (CELULA_REGIAO_CM / CM_POR_POL)),
+          })
+        }
+      }
+    } catch (erro) {
+      // Ler o PDF na unha é palpite educado sobre um formato que aceita muita
+      // variação. Falhar aqui devolve o comportamento de antes, que já é
+      // seguro: a arte vai para a conferência humana.
+      console.warn('não foi possível ler a imagem embutida direto do PDF', erro)
+    }
+  }
+
   // Página só de vetor pode ser legitimamente clara e uniforme — aí "vazio"
   // não significa falha. O sintoma só vale quando havia raster para aparecer.
   visualIndisponivel = visualIndisponivel && Boolean(dpiImagens?.length)
-  if (visualIndisponivel) nitidez = { medido: false, motivo: 'render_vazio' }
+  // A leitura direta, quando deu certo, vale mais que o render que falhou.
+  if (visualIndisponivel && !nitidez.direto) nitidez = { medido: false, motivo: 'render_vazio' }
   // Peça inteiramente vetorial não tem o que medir: vetor não tem resolução.
   if (info.puroVetor) nitidez = { medido: false, motivo: 'vetor' }
 
@@ -355,6 +416,9 @@ async function medirPdf(buffer, base, peca, perfil, escalaFator) {
     fonteVisual,
     visualIndisponivel,
     nitidez,
+    // A borda medida região a região. Fica no laudo técnico e no painel, e por
+    // enquanto NÃO decide veredicto — ver a nota em `regras.js`.
+    nitidezRegioes: regioes,
     tamanhoDeclaradoCm: { largura: declaradoLarguraCm, altura: declaradoAlturaCm },
     escalaSugerida: escalaFator === 1 ? escalaProvavel(info.larguraMm / 10, peca.larguraCm) : null,
     cmyk: false,

@@ -286,3 +286,56 @@ export function larguraDeBorda(gray, w, h, { maxAmostras = 20000 } = {}) {
   const m = larguras.length >> 1
   return larguras.length % 2 ? larguras[m] : (larguras[m - 1] + larguras[m]) / 2
 }
+
+/**
+ * A borda medida REGIÃO A REGIÃO, e não numa mediana só.
+ *
+ * A mediana da peça inteira responde "esta arte é mole?" e é cega para "esta
+ * arte tem uma parte mole". São perguntas diferentes, e a segunda é a que a
+ * operação faz: um logo ampliado dentro de uma arte boa ocupa 1% da área e não
+ * move mediana nenhuma.
+ *
+ * Medido na parede da CRM Bonus (120 × 320 cm, amostrada a 104 dpi, células de
+ * 10 cm): a mediana das regiões deu 0,25 mm e um bloco em x≈40-90 cm, y≈210-260
+ * cm deu 0,55 mm — 2,2× o resto. Pelo limiar absoluto de 1,2 mm nada aparecia;
+ * pela RAZÃO, aparece.
+ *
+ * Por isso o que sai daqui é a razão, não o valor. Arte fotográfica inteira é
+ * mais mole que arte vetorial inteira, e comparar uma peça com um número fixo
+ * confunde estilo com defeito. Comparar a peça consigo mesma, não.
+ */
+export function bordaPorRegiao(cinza, largura, altura, { celulaPx = 100, minimoDeRegioes = 12 } = {}) {
+  const colunas = Math.max(1, Math.floor(largura / celulaPx))
+  const linhas = Math.max(1, Math.floor(altura / celulaPx))
+  const cw = Math.floor(largura / colunas)
+  const ch = Math.floor(altura / linhas)
+  if (cw < 30 || ch < 30) return null
+
+  const medidas = []
+  const bloco = new Float32Array(cw * ch)
+  for (let l = 0; l < linhas; l++) {
+    for (let c = 0; c < colunas; c++) {
+      for (let y = 0; y < ch; y++) {
+        const origem = (l * ch + y) * largura + c * cw
+        for (let x = 0; x < cw; x++) bloco[y * cw + x] = cinza[origem + x]
+      }
+      const v = larguraDeBorda(bloco, cw, ch)
+      if (v != null) medidas.push({ px: v, coluna: c, linha: l })
+    }
+  }
+
+  // Poucas regiões com borda é arte quase toda lisa — fundo chapado, cor sólida.
+  // Uma razão calculada sobre três células não diz nada sobre a peça.
+  if (medidas.length < minimoDeRegioes) return null
+
+  const ordenadas = [...medidas].sort((a, b) => a.px - b.px)
+  const mediana = ordenadas[Math.floor(ordenadas.length / 2)].px
+  const pior = ordenadas[ordenadas.length - 1]
+  return {
+    regioes: medidas.length,
+    medianaPx: mediana,
+    piorPx: pior.px,
+    razao: mediana > 0 ? pior.px / mediana : null,
+    piorEm: { coluna: pior.coluna, linha: pior.linha, colunas, linhas },
+  }
+}
