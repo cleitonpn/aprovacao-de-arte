@@ -575,16 +575,30 @@ function CartaoPeca({ situacao, perfis, politica, projeto, onEscolher, onAtualiz
           QUAL arquivo foi aprovado, e o cliente que mandou três versões não
           tem como saber se a que está valendo é a última que ele lembra.
         */}
-        {entrega
-          ? (
-            <p className="dica-campo entrega-linha">
-              <strong>V{situacao.versaoRecebida} enviada</strong> · {fmtDataHora(entrega.em)}
-              {entrega.veredicto === 'ressalva' && ' · com ressalva'}
-              <br />
-              protocolo {entrega.protocolo}
-            </p>
-          )
-          : <p className="dica-campo">Arquivo com no mínimo {fmt(spec.minimo.largura)} × {fmt(spec.minimo.altura)} px ({spec.minimo.dpi} dpi)</p>}
+        {!entrega && (
+          <p className="dica-campo">
+            Arquivo com no mínimo {fmt(spec.minimo.largura)} × {fmt(spec.minimo.altura)} px ({spec.minimo.dpi} dpi)
+          </p>
+        )}
+
+        {/*
+          O gabarito desce para a coluna da peça, como no desenho da designer,
+          e sai de cima de "Enviar arte".
+          
+          Ele continua aqui e não escondido na tela de envio — quem desenha
+          precisa dele ANTES, e obrigar a clicar em "enviar" para achar a medida
+          é pedir que a pessoa entre na fila para descobrir o tamanho. Mas ele
+          não é a ação da peça: é material de consulta, e empilhado sobre o
+          botão principal dobrava a altura de cada linha da lista.
+        */}
+        <BotaoGabarito
+          peca={peca}
+          perfil={perfil}
+          escalaFator={peca.escalaFator || 1}
+          politica={politica}
+          className="btn btn-ghost btn-pequeno"
+          aoBaixar={aoBaixarGabarito}
+        />
 
         {/* A devolução não é bloqueio — é o contrário, ela destrava o envio.
             Por isso tem bloco próprio: o cliente precisa ler o motivo e ver o
@@ -638,21 +652,26 @@ function CartaoPeca({ situacao, perfis, politica, projeto, onEscolher, onAtualiz
         )}
       </div>
 
+      {/* O que foi enviado ganha coluna própria, entre a peça e a ação — é o
+          desenho da designer, e resolve o buraco que aparecia no cartão de
+          quem ainda não enviou nada: com tudo à esquerda, uma peça sem entrega
+          ficava com metade da altura das outras na mesma linha. */}
+      <div className="peca-cartao-envio">
+        {entrega ? (
+          <>
+            <p className="entrega-linha">
+              <strong>V{situacao.versaoRecebida} enviada</strong>
+              {entrega.veredicto === 'ressalva' && <span className="tag alerta">com ressalva</span>}
+            </p>
+            <p className="dica-campo">{fmtDataHora(entrega.em)}</p>
+            <p className="dica-campo">protocolo {entrega.protocolo}</p>
+          </>
+        ) : (
+          <p className="dica-campo">Nada enviado ainda</p>
+        )}
+      </div>
+
       <div className="peca-cartao-acao">
-        {/*
-          O gabarito fica AQUI, ao lado de enviar, e não escondido dentro da
-          tela de envio. O designer precisa dele ANTES de desenhar — obrigá-lo
-          a clicar em "enviar arte" para achar o gabarito é pedir que ele entre
-          na fila para descobrir a medida.
-        */}
-        <BotaoGabarito
-          peca={peca}
-          perfil={perfil}
-          escalaFator={peca.escalaFator || 1}
-          politica={politica}
-          className="btn btn-ghost"
-          aoBaixar={aoBaixarGabarito}
-        />
         {situacao.podeEnviar && (
           <button
             className={`btn ${entrega && status !== 'devolvida' ? 'btn-ghost' : ''}`}

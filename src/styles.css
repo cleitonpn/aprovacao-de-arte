@@ -135,6 +135,11 @@ input:focus-visible, select:focus-visible, button:focus-visible, .solta:focus-vi
 }
 .btn:hover { filter: brightness(1.07); }
 .btn-ghost { background: transparent; color: var(--texto); border: 1px solid var(--borda); }
+/* O gabarito com arquivo próprio é um `<a>`, e vinha sublinhado e azul: no meio
+   dos botões de uma peça ele parecia outra coisa. Um botão é um botão,
+   independentemente da tag que o navegador usa por baixo. */
+a.btn { text-decoration: none; display: inline-block; }
+a.btn-ghost { color: var(--texto); }
 .btn-risco { background: var(--alerta); color: var(--sobre-cor); }
 .largo { width: 100%; }
 
@@ -658,19 +663,57 @@ textarea { width: 100%; font: inherit; font-size: 13px; padding: 9px 11px; borde
 .prova-imagem span { display: block; margin-top: 6px; }
 
 /* --------------------------------------------------- cartões de peça */
-.pecas-cartoes { list-style: none; margin: 0 0 14px; padding: 0; display: grid; gap: 12px; }
+/*
+   UMA COLUNA, e a peça dividida em três: o que ela é, o que foi enviado, o que
+   fazer. É o desenho da designer, e ele conserta dois defeitos que só
+   apareceram com peças de verdade na tela:
+
+   - Numa grade de duas colunas, cartões vizinhos ficavam de alturas
+     diferentes — uma peça com bloqueio ao lado de uma sem deixava metade do
+     cartão vazia, e a lista virava um tabuleiro esburacado.
+   - Os botões empilhados um sobre o outro à direita ocupavam quase a altura do
+     cartão inteiro, e ainda mudavam de posição conforme o estado da peça. Numa
+     lista de dez, "onde clico?" passava a ter dez respostas.
+
+   Com três colunas fixas, "Enviar arte" fica sempre na mesma coluna e na mesma
+   altura, e o olho desce a lista sem procurar.
+*/
+.pecas-cartoes { list-style: none; margin: 0 0 14px; padding: 0; display: grid; gap: 10px; }
 .peca-cartao {
-  display: flex; justify-content: space-between; align-items: flex-start; gap: 14px;
-  border: 1px solid var(--borda); border-radius: var(--raio); padding: 14px 15px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 190px) auto;
+  align-items: start; gap: 14px;
+  border: 1px solid var(--borda); border-radius: var(--raio); padding: 15px 16px;
 }
-.peca-cartao-info { min-width: 0; flex: 1; }
+.peca-cartao-info { min-width: 0; }
 .peca-cartao-topo { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
-.peca-cartao-acao { flex: 0 0 auto; display: flex; flex-direction: column; gap: 6px; }
+.peca-cartao-envio { min-width: 0; }
+.peca-cartao-envio p { margin: 0; }
+.peca-cartao-envio .entrega-linha { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 2px; }
+
+/* Um botão só nesta coluna. O gabarito desceu para a coluna da peça: dois
+   botões de 40px empilhados aqui davam 80px de altura numa linha com 60 de
+   conteúdo, e a lista de dez peças ficava do tamanho de duas telas. */
+.peca-cartao-acao { display: flex; flex-direction: column; gap: 8px; align-items: stretch; min-width: 150px; }
+.peca-cartao-acao .btn { white-space: nowrap; text-align: center; }
+.btn-pequeno { font-size: 12.5px; padding: 6px 14px; margin-top: 8px; align-self: flex-start; }
+.peca-cartao-info .btn-pequeno { display: inline-block; }
 .peca-cartao strong { font-size: 14.5px; }
 .peca-cartao p { margin: 3px 0 0; }
 .peca-cartao.estado-ok { border-color: var(--ok); }
 .peca-cartao.estado-alerta { border-color: var(--alerta); background: var(--alerta-fundo); }
 .peca-cartao.estado-ruim { border-color: var(--ruim); background: var(--ruim-fundo); }
+
+/* Aviso e formulário atravessam as três colunas: espremidos na primeira, o
+   motivo da recusa — que é a única instrução da peça naquele momento — ficava
+   numa coluna de um terço da largura. */
+.peca-cartao .bloqueio,
+.peca-cartao .peca-editor { grid-column: 1 / -1; }
+
+@media (max-width: 760px) {
+  .peca-cartao { grid-template-columns: minmax(0, 1fr); }
+  .peca-cartao-acao { min-width: 0; }
+}
 
 .bloqueio { margin-top: 10px; padding: 10px 12px; border-radius: var(--raio-p); background: var(--borda); }
 .bloqueio strong { display: block; font-size: 13px; }
@@ -779,10 +822,17 @@ textarea { width: 100%; font: inherit; font-size: 13px; padding: 9px 11px; borde
 .versoes a { color: var(--acento); }
 
 /* -------------------------------------------------------------- telas */
-/* No monitor a lista de peças vira grade; no celular empilha. Antes era uma
-   coluna estreita no meio da página, com rolagem à toa. */
+/*
+   A lista de peças voltou a ser UMA coluna, e a grade de duas saiu daqui.
+   
+   Ela existia para não deixar uma coluna estreita no meio do monitor, e o
+   problema era real — mas a solução criou outro pior: com duas colunas, peças
+   vizinhas ficavam de alturas diferentes (uma com bloqueio ao lado de uma sem)
+   e a lista virava um tabuleiro esburacado. A largura agora é resolvida
+   DENTRO da peça, que se divide em três colunas — o que ela é, o que foi
+   enviado, o que fazer.
+*/
 @media (min-width: 860px) {
-  .pecas-cartoes { grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); }
   .projeto-cabecalho { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 380px); gap: 24px; align-items: start; }
   .projeto-cabecalho h2 { grid-column: 1; }
   .projeto-cabecalho > .ajuda { grid-column: 1; margin-top: -6px; }
