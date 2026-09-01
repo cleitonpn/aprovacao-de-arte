@@ -58,7 +58,14 @@ test('quem não mandou NADA é separado de quem mandou pela metade', () => {
   assert.equal(p.incompletos[0].projeto.stand, 'A', 'o mais atrasado vem primeiro')
 })
 
-test('a esteira soma as peças por estado e omite os estados vazios', () => {
+// O contrato mudou junto com a tela: os estados vazios FICAM.
+//
+// Enquanto isto era uma barra proporcional, omitir era o certo — uma faixa de
+// largura zero é invisível e a legenda enchia de lixo. Em cartões é o
+// contrário: "00 em impressão" é informação, e uma grade que não muda de forma
+// a cada dia é o que faz o time aprender onde cada número fica. O único caso
+// em que a esteira some é a feira sem peça nenhuma.
+test('a esteira soma as peças por estado e mantém os estados vazios', () => {
   const emProducao = stand('C', {
     entregas: {
       p_lona: { protocolo: 'AP-1', versao: 1, em: '2026-08-01T10:00:00Z' },
@@ -70,8 +77,32 @@ test('a esteira soma as peças por estado e omite os estados vazios', () => {
   const porId = Object.fromEntries(p.esteira.map((f) => [f.id, f.n]))
   assert.equal(porId.em_impressao, 1)
   assert.equal(porId.recebida, 1)
-  assert.equal(porId.aguardando, undefined, 'estado sem nenhuma peça não vira faixa')
+  assert.equal(porId.aguardando, 0, 'estado sem peça continua na grade, zerado')
   assert.equal(p.pecasTotal, 2)
+
+  // A soma das faixas fecha com o total. É esta conta que denuncia um estado
+  // esquecido na lista — foi assim que `devolvida`, que estava de fora,
+  // apareceu: peça recusada pelo time não constava em faixa nenhuma.
+  const somaDasFaixas = p.esteira.reduce((t, f) => t + f.n, 0)
+  assert.equal(somaDasFaixas, p.pecasTotal)
+})
+
+test('toda peça cabe em alguma faixa, inclusive a devolvida pelo time', () => {
+  const devolvida = stand('D', {
+    entregas: {
+      p_lona: { protocolo: 'AP-1', versao: 1, em: '2026-08-01T10:00:00Z' },
+      p_test: { protocolo: 'AP-2', versao: 1, em: '2026-08-01T10:00:00Z' },
+    },
+    controle: {
+      pecas: {
+        p_lona: { devolucao: { motivo: 'texto na dobra', paraVersao: 1, em: '2026-08-02T10:00:00Z' } },
+      },
+    },
+  })
+  const p = panorama([linha(devolvida, [envio('p_lona'), envio('p_test')])])
+  const porId = Object.fromEntries(p.esteira.map((f) => [f.id, f.n]))
+  assert.equal(porId.devolvida, 1, 'arte recusada pelo time precisa aparecer no panorama')
+  assert.equal(p.esteira.reduce((t, f) => t + f.n, 0), p.pecasTotal)
 })
 
 test('"precisa de você" é a fila do time, não um resumo do que existe', () => {

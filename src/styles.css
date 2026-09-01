@@ -1030,50 +1030,81 @@ textarea { width: 100%; font: inherit; font-size: 13px; padding: 9px 11px; borde
 .numero-cartao.neutro { border-left-color: var(--acento); }
 
 /* A esteira: proporção se lê antes de ler. */
-.esteira { display: flex; gap: 3px; height: 34px; margin: 4px 0 12px; }
-.esteira-faixa {
-  min-width: 28px; border-radius: 6px; border: 0; padding: 0;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 12.5px; font-weight: 700; color: var(--sobre-cor);
-  font-family: inherit; cursor: pointer;
-  transition: filter 120ms, transform 120ms;
-}
-.esteira-faixa:hover { filter: brightness(1.12); }
-/* A faixa aberta cresce um fio: sem marca, depois de rolar até a lista o
-   leitor não sabe mais de qual pedaço da barra ela veio. */
-.esteira-faixa.aberta { transform: translateY(-2px); box-shadow: 0 0 0 2px var(--texto); }
-.esteira-faixa:focus-visible { outline: 2px solid var(--texto); outline-offset: 2px; }
-.esteira-faixa.ok { background: var(--ok); }
-.esteira-faixa.alerta { background: var(--alerta); }
-.esteira-faixa.ruim { background: var(--ruim); }
-.esteira-faixa.neutro { background: var(--suave); }
+/* ---------------------------------- onde estão as peças, em cartões */
+/*
+   Substitui a barra proporcional. A barra respondia "está tudo empilhado ou já
+   foi para a impressora?", e falhava no que o time mais olha: com um estado em
+   59 e outro em 2, o segundo virava um risco de dois pixels com o número
+   ilegível dentro — e era o estado pequeno que pedia ação.
 
-.esteira-legenda {
-  list-style: none; margin: 0; padding: 0;
-  display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 12.5px; color: var(--suave);
+   O número de colunas é fixo em quatro, e não `auto-fit`. Com oito estados o
+   `auto-fit` enchia a primeira linha com sete e deixava um sozinho embaixo —
+   uma grade torta que o olho lê como erro. Quatro por linha dá dois blocos
+   iguais, e os dois primeiros cartões de cada linha caem sempre no mesmo
+   lugar, que é o que permite ler de relance sem procurar.
+*/
+.grade-estados {
+  display: grid; gap: 10px; margin: 4px 0 14px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
-.esteira-legenda li { display: flex; }
-.esteira-legenda strong { color: var(--texto); }
-/* A legenda clica igual à barra: em faixa estreita o botão da barra tem 28px
-   e o nome escrito é o alvo mais fácil de acertar, sobretudo no celular. */
-.legenda-item {
-  display: flex; align-items: center; gap: 6px;
-  background: none; border: 0; padding: 2px 0; margin: 0;
-  font: inherit; font-size: 12.5px; color: inherit; cursor: pointer;
+@media (max-width: 900px) { .grade-estados { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 620px) { .grade-estados { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.estado-cartao {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 16px 10px 12px; border-radius: 12px; cursor: pointer;
+  background: var(--fundo); border: 1px solid var(--borda);
+  font: inherit; text-align: center;
+  transition: border-color 120ms, transform 120ms;
 }
-.legenda-item:hover { color: var(--texto); }
-.legenda-item.aberta { color: var(--texto); font-weight: 600; }
+.estado-cartao:hover:not(:disabled) { border-color: var(--acento); transform: translateY(-2px); }
+.estado-cartao:focus-visible { outline: 2px solid var(--acento); outline-offset: 2px; }
+
+/* O número é a coisa maior da tela, e é ele que carrega a cor do estado: o
+   rótulo em cinza abaixo não compete com ele por atenção. */
+.estado-numero {
+  font-size: 38px; font-weight: 800; line-height: 1;
+  letter-spacing: -0.03em; font-variant-numeric: tabular-nums;
+}
+/* Duas linhas de altura reservadas: sem isso, "Impressa" e "Aguardando
+   aprovação" deixam os cartões de alturas diferentes na mesma linha. */
+.estado-rotulo {
+  font-size: 11px; font-weight: 600; letter-spacing: 0.04em;
+  text-transform: uppercase; color: var(--suave); line-height: 1.35;
+  min-height: 2.7em; display: flex; align-items: center;
+}
+.estado-acao {
+  margin-top: 6px; font-size: 10px; font-weight: 700; letter-spacing: 0.06em;
+  color: var(--suave); border: 1px solid var(--borda);
+  border-radius: 20px; padding: 3px 10px;
+}
+.estado-cartao:hover:not(:disabled) .estado-acao { color: var(--acento); border-color: var(--acento); }
+
+.estado-cartao.ok .estado-numero { color: var(--ok); }
+.estado-cartao.alerta .estado-numero { color: var(--alerta); }
+.estado-cartao.ruim .estado-numero { color: var(--ruim); }
+.estado-cartao.neutro .estado-numero { color: var(--suave); }
+
+/* O estado vazio fica na grade — é o "00" que diz "nada aqui" — e sem clique,
+   porque abrir uma lista de zero stands é um beco. Apagado só o suficiente
+   para ceder a vez: a 45% ele ficava ilegível, e um número que não se lê não
+   informa que está em zero. */
+.estado-cartao.vazio { cursor: default; opacity: .78; }
+/* O zero mantém a COR do estado, e não vira cinza. É o que faz "00 arte
+   recebida" continuar sendo lido como o estado dele, e não como um buraco na
+   grade — em cinza sobre o fundo claro, o número quase sumia. */
+.estado-cartao.vazio .estado-acao { border-color: transparent; }
+
+/* O aberto precisa se distinguir depois de a pessoa rolar até a lista, senão
+   ela não sabe mais de qual cartão aquilo veio. */
+.estado-cartao.aberto {
+  border-color: var(--acento); background: color-mix(in srgb, var(--acento) 8%, var(--cartao));
+}
+.estado-cartao.aberto .estado-acao { color: var(--acento); border-color: var(--acento); }
 
 .esteira-detalhe {
   margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--borda);
 }
 .esteira-detalhe h4 { margin: 0; font-size: 14px; }
-.ponto { width: 9px; height: 9px; border-radius: 50%; background: var(--suave); }
-.ponto.ok { background: var(--ok); }
-.ponto.alerta { background: var(--alerta); }
-.ponto.ruim { background: var(--ruim); }
-.ponto.neutro { background: var(--suave); }
-
 .grade-pendencias {
   display: grid; gap: 12px;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));

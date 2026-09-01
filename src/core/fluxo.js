@@ -31,18 +31,20 @@ import { LIMITE_REPROVACOES } from './reprovacoes.js'
 // diz ao analista que ele é quem precisa aprovar, que é o contrário do que
 // está acontecendo. Uma frase só não serve a dois leitores opostos.
 export const STATUS = {
-  aguardando: { rotulo: 'Aguardando arte', ordem: 0, cor: 'neutro' },
-  recebida: { rotulo: 'Arte recebida', ordem: 1, cor: 'ok' },
+  aguardando: { rotulo: 'Aguardando arte', curto: 'Aguardando arte', ordem: 0, cor: 'neutro' },
+  recebida: { rotulo: 'Arte recebida', curto: 'Arte recebida', ordem: 1, cor: 'ok' },
   em_prova: {
     rotulo: 'Prova aguardando sua aprovação',
     paraOTime: 'Prova aguardando o cliente',
+    curto: 'Aguardando aprovação',
     ordem: 2,
     cor: 'alerta',
   },
-  aprovada: { rotulo: 'Prova aprovada', ordem: 3, cor: 'ok' },
+  aprovada: { rotulo: 'Prova aprovada', curto: 'Prova aprovada', ordem: 3, cor: 'ok' },
   reprovada: {
     rotulo: 'Prova reprovada — refazer',
     paraOTime: 'Prova reprovada pelo cliente',
+    curto: 'Reprovada na prova',
     ordem: 4,
     cor: 'ruim',
   },
@@ -54,11 +56,25 @@ export const STATUS = {
   devolvida: {
     rotulo: 'Recusada pelo time — refazer',
     paraOTime: 'Devolvida, aguardando correção',
+    curto: 'Recusada pelo time',
     ordem: 4,
     cor: 'ruim',
   },
-  em_impressao: { rotulo: 'Em impressão', ordem: 5, cor: 'ok' },
-  impressa: { rotulo: 'Impressa', ordem: 6, cor: 'ok' },
+  em_impressao: { rotulo: 'Em impressão', curto: 'Em impressão', ordem: 5, cor: 'ok' },
+  impressa: { rotulo: 'Impressa', curto: 'Impressa', ordem: 6, cor: 'ok' },
+}
+
+/**
+ * O rótulo curto, para o cartão da grade de estados.
+ *
+ * Existe porque o rótulo do time é uma frase — "Prova aguardando o cliente" —
+ * e numa grade de oito cartões ele quebra em três linhas, desalinha a altura de
+ * todos e some debaixo do número. `curto` é o mesmo estado dito em duas
+ * palavras. Cai no rótulo completo quando alguém esquecer de definir.
+ */
+export function rotuloCurto(id) {
+  const s = STATUS[id]
+  return s?.curto || s?.paraOTime || s?.rotulo || id
 }
 
 /** O rótulo de um estado como o TIME o lê. Cai no do cliente quando é o mesmo. */

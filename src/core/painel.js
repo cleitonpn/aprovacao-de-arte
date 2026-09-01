@@ -9,7 +9,7 @@
 // consulta nova, não há contador guardado no banco para sair de sincronia: o
 // painel é uma leitura diferente dos mesmos dados que a lista mostra.
 
-import { resumoDoProjeto, STATUS, rotuloParaOTime, situacaoDoPrazo } from './fluxo.js'
+import { resumoDoProjeto, STATUS, rotuloParaOTime, rotuloCurto, situacaoDoPrazo } from './fluxo.js'
 import { dificuldadeDoProjeto } from './reprovacoes.js'
 import { sinalDeContato, correioDoProjeto, contatoDoProjeto, precisaDeIntervencao, SINAL } from './contato.js'
 import { conferenciaPendente } from './regras.js'
@@ -68,7 +68,14 @@ export function situacaoDoProjeto(projeto, envios = []) {
 // objeto STATUS. Quem olha a barra está lendo um caminho da esquerda para a
 // direita: o que ainda não chegou, o que chegou, o que está com o cliente, o
 // que já é produção.
-const ESTEIRA = ['aguardando', 'recebida', 'em_prova', 'reprovada', 'aprovada', 'em_impressao', 'impressa']
+// `devolvida` estava de fora, e isso escondia peça: uma arte que o time recebeu
+// e recusou não aparecia em faixa nenhuma, então a soma das faixas não fechava
+// com `pecasTotal` e ninguém percebia. Ela entra logo depois de `recebida`,
+// que é onde acontece — chegou, foi conferida, voltou.
+const ESTEIRA = [
+  'aguardando', 'recebida', 'devolvida', 'em_prova', 'reprovada', 'aprovada',
+  'em_impressao', 'impressa',
+]
 
 const pct = (parte, todo) => (todo ? Math.round((parte / todo) * 100) : 0)
 
@@ -91,7 +98,7 @@ export function panorama(linhas = [], { feira = null, agora = Date.now() } = {})
   // informação incompleta: a pergunta seguinte é sempre "de quem?", e ela
   // levava a abrir a lista inteira e conferir stand por stand.
   const pecas = sits.flatMap((s) => s.pecas)
-  const esteira = ESTEIRA.map((id) => {
+  const faixas = ESTEIRA.map((id) => {
     const stands = linhas
       .map(({ projeto, sit }) => ({
         projeto,
@@ -105,11 +112,22 @@ export function panorama(linhas = [], { feira = null, agora = Date.now() } = {})
       // O rótulo do TIME: esta barra é do painel, e "sua aprovação" aqui
       // apontaria para o analista em vez do cliente.
       rotulo: rotuloParaOTime(id),
+      // O mesmo estado em duas palavras, para o cartão da grade. Ver
+      // `rotuloCurto`: a frase inteira quebra em três linhas e desalinha tudo.
+      curto: rotuloCurto(id),
       cor: STATUS[id]?.cor || 'neutro',
       n: pecas.filter((p) => p.status === id).length,
       stands,
     }
-  }).filter((f) => f.n > 0)
+  })
+  // Os estados VAZIOS ficam.
+  //
+  // Numa barra proporcional eles não podiam ficar: uma faixa de largura zero é
+  // invisível e a legenda enchia de lixo. Em cartões é o contrário — um "00 em
+  // impressão" é informação, e uma grade que não muda de forma a cada dia é o
+  // que faz o time aprender onde cada número fica e ler a tela de relance. Só
+  // some quando não existe peça nenhuma na feira, que é quando não há esteira.
+  const esteira = pecas.length ? faixas : []
 
   // "Precisa de você" é a lista do que só anda com uma ação do time. Não é um
   // resumo do que existe — é a fila de trabalho, e por isso mistura coisas de

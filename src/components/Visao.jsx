@@ -242,14 +242,25 @@ function Cartao({ valor, rotulo, detalhe, cor }) {
 }
 
 /**
- * A esteira: onde estão as peças, todas elas, agora.
+ * Onde estão as peças, todas elas, agora.
  *
- * Uma barra e não uma tabela porque a pergunta é de proporção — "está tudo
- * empilhado esperando o cliente ou já foi para a impressora?" — e proporção se
- * lê antes de ler.
+ * Era uma barra proporcional, e a proporção respondia "está tudo empilhado
+ * esperando o cliente ou já foi para a impressora?". O que ela não respondia é
+ * o número: numa barra em que um estado tem 59 e outro tem 2, o segundo vira
+ * um risco de dois pixels com o número ilegível dentro — e era justamente o
+ * estado pequeno que pedia ação.
+ *
+ * Os cartões trocam proporção por LEITURA. Cada estado tem o mesmo espaço, o
+ * número é a coisa maior da tela, e os vazios ficam: um "00 em impressão" é
+ * informação, e uma grade que não muda de forma a cada dia é o que faz o time
+ * aprender onde cada número fica e ler tudo de relance.
+ *
+ * O clique continua fazendo o que a barra fazia: abrir os stands daquele
+ * estado. "Quantas" sem "de quem" é meia resposta, e a pergunta seguinte era
+ * sempre a segunda.
  */
 function Esteira({ cenario, feiraId }) {
-  // Uma faixa aberta de cada vez. Abrir várias empurraria o resto do painel
+  // Um estado aberto de cada vez. Abrir vários empurraria o resto do painel
   // para fora da tela, e ele vale justamente por caber numa olhada.
   const [aberta, setAberta] = useState(null)
 
@@ -265,41 +276,29 @@ function Esteira({ cenario, feiraId }) {
         <span className="dica-campo">{cenario.pecasTotal} peças no total</span>
       </div>
 
-      {/* Cada faixa é um botão. O número sozinho respondia "quantas" e deixava
-          "quem" para uma busca à mão na lista de stands — e "de quem?" é
-          sempre a pergunta seguinte. */}
-      <div className="esteira">
+      <div className="grade-estados">
         {cenario.esteira.map((f) => (
           <button
             type="button"
             key={f.id}
-            className={`esteira-faixa ${f.cor}${aberta === f.id ? ' aberta' : ''}`}
-            style={{ flexGrow: f.n }}
+            className={`estado-cartao ${f.cor}${aberta === f.id ? ' aberto' : ''}${f.n ? '' : ' vazio'}`}
             onClick={() => alternar(f.id)}
             aria-expanded={aberta === f.id}
-            aria-label={`${f.n} ${f.rotulo} — ver em quais stands`}
-            title={`${f.rotulo}: ${f.n} — clique para ver os stands`}
+            disabled={!f.n}
           >
-            {f.n}
+            {/*
+              Dois dígitos sempre. Não é enfeite: com "9" e "59" lado a lado os
+              números dançam de largura e a linha inteira precisa ser relida.
+              Com "09" e "59" a coluna fica estável e o olho compara sozinho.
+            */}
+            <span className="estado-numero">{String(f.n).padStart(2, '0')}</span>
+            <span className="estado-rotulo">{f.curto}</span>
+            <span className="estado-acao" aria-hidden>
+              {f.n ? (aberta === f.id ? 'FECHAR' : 'VER STANDS') : '—'}
+            </span>
           </button>
         ))}
       </div>
-
-      <ul className="esteira-legenda">
-        {cenario.esteira.map((f) => (
-          <li key={f.id}>
-            <button
-              type="button"
-              className={`legenda-item${aberta === f.id ? ' aberta' : ''}`}
-              onClick={() => alternar(f.id)}
-              aria-expanded={aberta === f.id}
-            >
-              <span className={`ponto ${f.cor}`} aria-hidden />
-              {f.rotulo} <strong>{f.n}</strong>
-            </button>
-          </li>
-        ))}
-      </ul>
 
       {faixa && (
         <div className="esteira-detalhe">
