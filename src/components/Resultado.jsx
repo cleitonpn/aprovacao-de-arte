@@ -109,10 +109,30 @@ export default function Resultado({
           <dl className="numeros">
             <div><dt>Arquivo</dt><dd>{medidas.arquivo?.nome}</dd></div>
             <div><dt>Formato</dt><dd>{medidas.formatoRotulo || medidas.formato}</dd></div>
-            {medidas.larguraPx ? (
+            {/*
+              Num PDF, `larguraPx` não é o arquivo: é quantos pixels ele teria
+              se tivesse o tamanho da peça. Mostrar isso como "Pixels" entrega
+              ao cliente um número que ele não encontra em lugar nenhum se for
+              conferir no editor — e este quadro existe justamente para ele
+              confirmar que mandou o arquivo certo.
+            */}
+            {medidas.pixelsDaImagem ? (
+              <div>
+                <dt>Maior imagem no PDF</dt>
+                <dd>{fmt(medidas.pixelsDaImagem.largura)} × {fmt(medidas.pixelsDaImagem.altura)} px</dd>
+              </div>
+            ) : medidas.larguraPx ? (
               <div><dt>Pixels</dt><dd>{fmt(medidas.larguraPx)} × {fmt(medidas.alturaPx)}</dd></div>
             ) : (
               <div><dt>Conteúdo</dt><dd>Vetorial</dd></div>
+            )}
+            {medidas.tamanhoDeclaradoCm && (
+              <div>
+                <dt>Arquivo montado em</dt>
+                <dd>
+                  {fmt(medidas.tamanhoDeclaradoCm.largura)} × {fmt(medidas.tamanhoDeclaradoCm.altura)} cm
+                </dd>
+              </div>
             )}
             {resultado.resolucao?.dpi > 0 && !medidas.puroVetor && (
               <div>

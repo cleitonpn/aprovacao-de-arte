@@ -17,6 +17,11 @@ const ESPERA_MS = 450
 export function usarAnalise({ peca, perfil, escalaFator = 1, politica, detectorNitidez }) {
   const [arquivo, setArquivo] = useState(null)
   const [analisando, setAnalisando] = useState(false)
+  // A etapa em que a análise está. Existe porque a espera é longa e opaca: num
+  // PDF de 138 MB o navegador fica quieto por dezenas de segundos, e um
+  // "Analisando…" parado é indistinguível de uma página travada — a reação
+  // treinada é recarregar, e recarregar recomeça tudo do zero.
+  const [etapa, setEtapa] = useState(null)
   const [resultado, setResultado] = useState(null)
   const [erro, setErro] = useState(null)
   const [registroAtual, setRegistroAtual] = useState(null)
@@ -27,8 +32,11 @@ export function usarAnalise({ peca, perfil, escalaFator = 1, politica, detectorN
     setErro(null)
     setResultado(null)
     setRegistroAtual(null)
+    setEtapa('lendo')
     try {
-      const r = await analisar(arq, peca, perfil, { escalaFator, politica, detectorNitidez })
+      const r = await analisar(arq, peca, perfil, {
+        escalaFator, politica, detectorNitidez, aoAndar: setEtapa,
+      })
       setResultado(r)
       const reg = registrar({
         hash: r.medidas.arquivo?.hash,
@@ -44,6 +52,7 @@ export function usarAnalise({ peca, perfil, escalaFator = 1, politica, detectorN
       setErro(e?.message || 'Não foi possível ler este arquivo.')
     } finally {
       setAnalisando(false)
+      setEtapa(null)
     }
   }, [peca, perfil, escalaFator, politica, detectorNitidez])
 
@@ -89,7 +98,7 @@ export function usarAnalise({ peca, perfil, escalaFator = 1, politica, detectorN
   }, [])
 
   return {
-    arquivo, analisando, resultado, erro,
+    arquivo, analisando, etapa, resultado, erro,
     registroAtual, riscoAceito: registroAtual?.riscoAceito,
     registros, setRegistros,
     receberArquivo, aceitarRisco, limpar,

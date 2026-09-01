@@ -17,6 +17,10 @@ import Avulsos from './Avulsos.jsx'
 import ConversaFlutuante from './ConversaFlutuante.jsx'
 import Tutorial from './Tutorial.jsx'
 import { jaViuTutorial, marcarTutorialVisto } from '../store/tutorial.js'
+import {
+  anotarReprovacao, reprovacoesDaPeca, limparPeca,
+  conviteDispensado, dispensarConvite, TENTATIVAS_ATE_OFERECER,
+} from '../store/tentativas.js'
 
 // A tela do cliente quando o projeto está cadastrado.
 //
@@ -838,9 +842,21 @@ const tentativasRegistradas = new Set()
  * é da conta dele.
  */
 function usarLogDeReprovacao(token, peca, versao, resultado) {
+  // Quantas vezes ESTE navegador já viu esta peça ser reprovada. É a conta que
+  // decide se a ferramenta se oferece para ajudar — ver `store/tentativas.js`.
+  const [tentativas, setTentativas] = useState(() => reprovacoesDaPeca(token, peca.id))
+
   useEffect(() => {
-    if (!token || !resultado || resultado.veredicto !== 'reprovado') return
+    if (!token || !resultado) return
+    // Passou: a peça sai da conta. O próximo problema, se houver, começa do
+    // zero — senão o convite de ajuda apareceria numa arte que deu certo.
+    if (resultado.veredicto !== 'reprovado') {
+      limparPeca(token, peca.id)
+      setTentativas(0)
+      return
+    }
     const chave = chaveDaTentativa(token, peca.id, resultado)
+    setTentativas(anotarReprovacao(token, peca.id, chave))
     if (tentativasRegistradas.has(chave)) return
     tentativasRegistradas.add(chave)
     registrarReprovacao(token, eventoDeReprovacao({ peca, resultado, versao }))
@@ -849,6 +865,114 @@ function usarLogDeReprovacao(token, peca, versao, resultado) {
         console.warn('não foi possível registrar a tentativa reprovada', e)
       })
   }, [token, peca, versao, resultado])
+
+  return tentativas
+}
+
+/**
+ * Quando a ferramenta percebe que o cliente está penando, e diz isso a ele.
+ *
+ * O time já tinha esse alerta: passou de três reprovações, o stand acende no
+ * painel. Quem não tinha era o próprio cliente — e é ele quem está travado. Um
+ * expositor tentou dez vezes com o mesmo arquivo em 1:10 e desistiu; do lado
+ * dele, a décima tela era idêntica à primeira, e nada nela sugeria que existe
+ * gente do outro lado.
+ *
+ * Não é modal, de propósito. Interromper com uma caixa que precisa ser fechada
+ * para ver o laudo tira da frente justamente a informação que ele foi buscar, e
+ * a reação treinada é fechar sem ler. Ele aparece no topo do resultado, com
+ * destaque, e some quando dispensado — um aviso que volta depois de fechado é o
+ * que ensina alguém a ignorar todos os avisos da tela.
+ */
+function ConviteDeAjuda({ token, peca, tentativas, onFalarComTime }) {
+  const [dispensado, setDispensado] = useState(() => conviteDispensado(token, peca.id))
+  if (dispensado || !onFalarComTime || tentativas < TENTATIVAS_ATE_OFERECER) return null
+
+  return (
+    <div className="cartao convite-de-ajuda">
+      <strong>Já são {tentativas} arquivos que não passaram nesta peça</strong>
+      <p>
+        Isso costuma ser um detalhe do arquivo que dá trabalho descobrir sozinho —
+        e não custa nada perguntar. Nossa equipe abre o seu caso já sabendo de
+        que stand e de que peça se trata, e o que a análise apontou nas suas
+        tentativas. Você não precisa explicar nada disso.
+      </p>
+      <div className="acoes">
+        <button className="btn" onClick={onFalarComTime}>Quero ajuda com esta peça</button>
+        <button
+          className="btn btn-ghost"
+          onClick={() => { dispensarConvite(token, peca.id); setDispensado(true) }}
+        >
+          Consigo resolver, obrigado
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * A escala de trabalho, agora que a ferramenta a descobre sozinha.
+ *
+ * O campo ficava aberto no alto da coluna, do mesmo tamanho de tudo o mais, e
+ * isso deixou de fazer sentido: desde que a detecção existe, ele é a exceção —
+ * serve para o arquivo que não declara medida confiável, e para desfazer um
+ * palpite errado da ferramenta. Um seletor sempre aberto para um caso raro é
+ * uma pergunta a mais na tela de alguém que já está com dúvida.
+ *
+ * Ele aparece por conta própria em três situações, e todas são "aqui ele
+ * resolve alguma coisa": a ferramenta detectou uma escala (e ele pode discordar),
+ * o cliente já escolheu uma, ou o laudo apontou tamanho/escala — que é
+ * exatamente o achado que uma escala errada produz.
+ */
+function Escala({ escalaFator, onEscala, resultado }) {
+  const [pedido, setPedido] = useState(false)
+  const automatica = resultado?.escalaAutomatica || null
+  const achouProblemaDeMedida = (resultado?.achados || [])
+    .some((a) => (a.id === 'dimensao' || a.id === 'escala') && a.nivel !== 'ok')
+  const aberto = pedido || escalaFator !== 1 || Boolean(automatica) || achouProblemaDeMedida
+
+  return (
+    <div className="escala">
+      {/*
+        A ferramenta conta o que fez. Silêncio aqui seria trocar um erro
+        silencioso por outro: o cliente veria 1:1 e um laudo aprovando arte de
+        30 dpi, sem entender o que aconteceu no meio.
+      */}
+      {automatica && (
+        <p className="nota destaque-extra">
+          Percebemos que esta arte foi montada em{' '}
+          <strong>escala 1:{automatica}</strong> — o arquivo tem exatamente a
+          fração da medida da peça, e a conferência já considerou isso.
+        </p>
+      )}
+
+      {aberto ? (
+        <>
+          <label className="campo">
+            <span>Em que escala a arte foi montada</span>
+            <select value={escalaFator} onChange={(e) => onEscala(Number(e.target.value))}>
+              <option value={1}>1:1 — tamanho real</option>
+              <option value={2}>1:2 — metade do tamanho</option>
+              <option value={4}>1:4 — um quarto</option>
+              <option value={10}>1:10 — um décimo</option>
+            </select>
+          </label>
+          <p className="nota">
+            {automatica
+              ? 'Só mexa aqui se a escala que reconhecemos não for a certa.'
+              : 'Montar a arte reduzida é praxe no grande formato. Normalmente reconhecemos sozinhos pelo tamanho do arquivo; use este campo quando não der para adivinhar.'}
+          </p>
+        </>
+      ) : (
+        <p className="nota">
+          A escala é reconhecida sozinha pelo tamanho do arquivo.{' '}
+          <button type="button" className="link" onClick={() => setPedido(true)}>
+            A arte foi montada reduzida?
+          </button>
+        </p>
+      )}
+    </div>
+  )
 }
 
 function PainelDaPeca({ situacao, projeto, resumo, cadastro, perfis, politica, detectorNitidez, onVoltar, onEnviado, onFalarComTime }) {
@@ -864,7 +988,7 @@ function PainelDaPeca({ situacao, projeto, resumo, cadastro, perfis, politica, d
   const spec = especificacao(alvo, perfil, politica)
   const ehExtra = String(peca.id).startsWith('extra_')
 
-  usarLogDeReprovacao(projeto.token, peca, situacao.proximaVersao, analise.resultado)
+  const tentativas = usarLogDeReprovacao(projeto.token, peca, situacao.proximaVersao, analise.resultado)
 
   return (
     <>
@@ -974,35 +1098,11 @@ function PainelDaPeca({ situacao, projeto, resumo, cadastro, perfis, politica, d
               </dl>
             </div>
 
-            <label className="campo">
-              <span>Em que escala a arte foi montada</span>
-              <select value={escalaFator} onChange={(e) => setEscalaFator(Number(e.target.value))}>
-                <option value={1}>1:1 — tamanho real</option>
-                <option value={2}>1:2 — metade do tamanho</option>
-                <option value={4}>1:4 — um quarto</option>
-                <option value={10}>1:10 — um décimo</option>
-              </select>
-            </label>
-            {/*
-              A ferramenta detecta a escala sozinha e conta o que fez. Silêncio
-              aqui seria trocar um erro silencioso por outro: o cliente veria o
-              seletor em 1:1 e o laudo aprovando uma arte de 30 dpi, sem
-              entender o que aconteceu no meio.
-            */}
-            {analise.resultado?.escalaAutomatica ? (
-              <p className="nota destaque-extra">
-                Percebemos que esta arte foi montada em{' '}
-                <strong>escala 1:{analise.resultado.escalaAutomatica}</strong> — o
-                arquivo tem exatamente a fração da medida da peça. A conferência
-                já considerou isso. Se não for o caso, troque a escala acima.
-              </p>
-            ) : (
-              <p className="nota">
-                Montar a arte reduzida é praxe no grande formato. A ferramenta
-                reconhece a escala sozinha pelo tamanho do arquivo; este campo é
-                para os casos em que ela não tem como adivinhar.
-              </p>
-            )}
+            <Escala
+              escalaFator={escalaFator}
+              onEscala={setEscalaFator}
+              resultado={analise.resultado}
+            />
           </div>
 
           <Gabarito peca={alvo} perfil={perfil} escalaFator={escalaFator} politica={politica} />
@@ -1012,6 +1112,7 @@ function PainelDaPeca({ situacao, projeto, resumo, cadastro, perfis, politica, d
           <Upload
             onArquivo={analise.receberArquivo}
             analisando={analise.analisando}
+            etapa={analise.etapa}
             nomeAtual={analise.arquivo?.name}
             titulo={situacao.proximaVersao > 1
               ? `Traga a versão ${situacao.proximaVersao} da arte`
@@ -1024,6 +1125,15 @@ function PainelDaPeca({ situacao, projeto, resumo, cadastro, perfis, politica, d
               <p>{analise.erro}</p>
               <p className="acao">→ Tente exportar a arte em PDF, JPG ou PNG e enviar novamente.</p>
             </div>
+          )}
+
+          {analise.resultado?.veredicto === 'reprovado' && (
+            <ConviteDeAjuda
+              token={projeto.token}
+              peca={peca}
+              tentativas={tentativas}
+              onFalarComTime={onFalarComTime}
+            />
           )}
 
           {analise.resultado && (

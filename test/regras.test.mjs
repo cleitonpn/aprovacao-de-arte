@@ -276,6 +276,15 @@ test('detector ligado, mas sem confiança na medição: silêncio', () => {
   assert.equal(r.veredicto, 'aprovado')
 })
 
+// A medida certa passou a ser DITA, não só tolerada.
+//
+// Estes testes checavam a ausência do achado `dimensao`, e isso estava certo
+// enquanto o PDF também recebia um "proporção compatível" da regra de
+// proporção. Essa regra saiu do PDF — ela comparava a peça consigo mesma e
+// aprovava a forma de qualquer arquivo —, e sem nenhuma linha sobre tamanho um
+// arquivo na medida certa ficaria indistinguível de um que ninguém mediu.
+// Agora `dimensao` aparece nos dois casos: `ok` quando bate, e o resto quando
+// não bate. O que continua valendo é que `ok` não muda veredicto.
 test('escala de trabalho não faz o arquivo ser reprovado por dimensão', () => {
   // arte montada a 1:10 de uma peça de 200x290 cm => página de 20x29 cm
   const medidas = {
@@ -283,7 +292,7 @@ test('escala de trabalho não faz o arquivo ser reprovado por dimensão', () => 
     tamanhoDeclaradoCm: { largura: 200, altura: 290 },
   }
   const r = avaliar({ peca: pecaLona, perfil: lona, medidas, escalaFator: 10 })
-  assert.equal(achado(r, 'dimensao'), undefined)
+  assert.equal(achado(r, 'dimensao').nivel, 'ok')
   assert.equal(r.veredicto, 'aprovado')
 })
 
@@ -341,7 +350,7 @@ test('arquivo montado com a sangria não é acusado de medida errada', () => {
       tamanhoDeclaradoCm: { largura: 130, altura: 295 },
     },
   })
-  assert.equal(achado(r, 'dimensao'), undefined)
+  assert.equal(achado(r, 'dimensao').nivel, 'ok')
   assert.equal(r.veredicto, 'aprovado')
 })
 
@@ -355,7 +364,7 @@ test('arquivo montado no corte continua aceito', () => {
       tamanhoDeclaradoCm: { largura: 110, altura: 275 },
     },
   })
-  assert.equal(achado(r, 'dimensao'), undefined)
+  assert.equal(achado(r, 'dimensao').nivel, 'ok')
 })
 
 // A sangria não pode virar desculpa para qualquer medida passar: o que não é
@@ -392,7 +401,7 @@ test('sangria grande em peça estreita não bloqueia o envio', () => {
       tamanhoDeclaradoCm: { largura: 80, altura: 220 },
     },
   })
-  assert.equal(achado(r, 'dimensao'), undefined)
+  assert.equal(achado(r, 'dimensao').nivel, 'ok')
   assert.notEqual(r.veredicto, 'reprovado')
 })
 
@@ -512,4 +521,53 @@ test('envio sem laudo não inventa pendência', () => {
   // Arquivo de apoio não tem laudo — não é peça impressa, não tem o que olhar.
   assert.equal(conferenciaPendente({ tipoEnvio: 'avulso' }), false)
   assert.equal(conferenciaPendente(null), false)
+})
+
+// O caso real, do print de uma peça de 90 × 90 cm.
+//
+// O laudo dizia, na mesma tela: "O tamanho do arquivo não bate com o da peça —
+// foi montado em 130 × 295 cm" e, oito linhas abaixo, "Proporção compatível com
+// a peça — a arte encaixa no formato 90 × 90 cm sem corte relevante".
+//
+// Não era um erro de arredondamento: num PDF, `larguraPx`/`alturaPx` são
+// derivados da MEDIDA DA PEÇA (ver `medirPdf`), então a regra de proporção
+// comparava a peça consigo mesma e respondia "compatível" em todo PDF que já
+// passou por aqui. Um laudo que se contradiz não é lido pela metade — ele para
+// de ser lido.
+test('em PDF, a proporção não é mais respondida com a medida da peça', () => {
+  const peca = { larguraCm: 90, alturaCm: 90 }
+  // Exatamente o que `medirPdf` entrega: px projetados na forma da peça.
+  const px = Math.round((82.6 * 90) / 2.54)
+  const r = avaliar({
+    peca,
+    perfil: balcao,
+    medidas: {
+      formato: 'pdf', formatoSuportado: true, paginas: 1,
+      larguraPx: px, alturaPx: px,
+      tamanhoDeclaradoCm: { largura: 130, altura: 295 },
+    },
+  })
+  assert.equal(achado(r, 'proporcao'), undefined, 'PDF não pode responder sobre proporção pelos px projetados')
+  const dim = achado(r, 'dimensao')
+  assert.ok(dim && dim.nivel !== 'ok', 'o tamanho errado continua sendo apontado')
+  // E nada no laudo pode afirmar que este arquivo encaixa na peça.
+  for (const a of r.achados) {
+    assert.ok(
+      !/encaixa no formato/i.test(a.detalhe || ''),
+      `um achado ainda diz que a arte encaixa: ${a.titulo}`,
+    )
+  }
+})
+
+test('em JPG a proporção continua sendo medida — ali os pixels são o arquivo', () => {
+  // A regra não foi desligada: num raster `larguraPx` é o arquivo de verdade,
+  // e é o único lugar onde essa pergunta tem resposta.
+  const r = avaliar({
+    peca: { larguraCm: 90, alturaCm: 90 },
+    perfil: balcao,
+    medidas: { formato: 'jpg', formatoSuportado: true, larguraPx: 4000, alturaPx: 1000 },
+  })
+  const a = achado(r, 'proporcao')
+  assert.ok(a, 'raster desproporcional precisa ser apontado')
+  assert.equal(a.nivel, 'bloqueante')
 })

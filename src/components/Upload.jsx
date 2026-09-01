@@ -13,7 +13,7 @@ import { FORMATOS_ACEITOS } from '../data/perfis.js'
  * existe um "1. A peça" logo acima. Na tela do cliente a peça já veio do
  * projeto do stand, e um passo 2 sem passo 1 é uma pergunta a mais.
  */
-export default function Upload({ onArquivo, analisando, nomeAtual, titulo = '2. A arte' }) {
+export default function Upload({ onArquivo, analisando, etapa, nomeAtual, titulo = '2. A arte' }) {
   const inputRef = useRef(null)
   const [sobre, setSobre] = useState(false)
 
@@ -36,11 +36,7 @@ export default function Upload({ onArquivo, analisando, nomeAtual, titulo = '2. 
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') inputRef.current?.click() }}
       >
         {analisando ? (
-          <>
-            <div className="girando" aria-hidden />
-            <strong>Analisando…</strong>
-            <span>Medindo resolução, proporção e nitidez real.</span>
-          </>
+          <Analisando etapa={etapa} />
         ) : (
           <>
             <div className="icone" aria-hidden>⬆</div>
@@ -61,5 +57,51 @@ export default function Upload({ onArquivo, analisando, nomeAtual, titulo = '2. 
         onChange={(e) => { receber(e.target.files); e.target.value = '' }}
       />
     </section>
+  )
+}
+
+/**
+ * A espera, contada como ela realmente acontece.
+ *
+ * O que havia antes era um disco girando e a palavra "Analisando…", parada. Num
+ * PDF de 138 MB o navegador fica quieto por dezenas de segundos, e um aviso que
+ * não muda é indistinguível de uma página travada — a reação treinada é
+ * recarregar, e recarregar recomeça tudo do zero.
+ *
+ * As etapas são as REAIS, emitidas por `analisar()` na ordem em que acontecem.
+ * Nada de barra que anda sozinha: o tempo de cada etapa varia demais entre um
+ * JPG de 4 MB e um PDF com uma imagem de 562 megapixels, e uma barra que promete
+ * 80% e para ali é pior que nenhuma. Aqui o que muda é o passo — a pessoa vê
+ * que ALGO está acontecendo, sem que a tela finja saber quanto falta.
+ */
+const ETAPAS = [
+  { id: 'lendo', texto: 'Lendo o arquivo' },
+  { id: 'abrindo', texto: 'Abrindo a arte' },
+  { id: 'medindo', texto: 'Medindo resolução, proporção e nitidez' },
+  { id: 'escala', texto: 'Refazendo a conta na escala que reconhecemos' },
+  { id: 'decidindo', texto: 'Comparando com o que esta peça exige' },
+]
+
+function Analisando({ etapa }) {
+  // A etapa de escala só existe quando a ferramenta detecta uma; fora desse
+  // caso ela nem aparece na lista, para ninguém ficar esperando um passo que
+  // não vai acontecer.
+  const visiveis = ETAPAS.filter((e) => e.id !== 'escala' || etapa === 'escala')
+  const atual = Math.max(visiveis.findIndex((e) => e.id === etapa), 0)
+
+  return (
+    <>
+      <div className="girando" aria-hidden />
+      <strong>Analisando a sua arte…</strong>
+      <ol className="etapas-analise" aria-live="polite">
+        {visiveis.map((e, i) => (
+          <li key={e.id} className={i < atual ? 'feita' : i === atual ? 'agora' : ''}>
+            <span className="etapa-marca" aria-hidden>{i < atual ? '✓' : '·'}</span>
+            {e.texto}
+          </li>
+        ))}
+      </ol>
+      <span>Tudo isto acontece no seu computador — o arquivo ainda não saiu daqui.</span>
+    </>
   )
 }

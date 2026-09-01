@@ -130,6 +130,26 @@ input:focus-visible, select:focus-visible, button:focus-visible, .solta:focus-vi
 .solta:hover, .solta.sobre { border-color: var(--acento); background: color-mix(in srgb, var(--acento) 6%, transparent); }
 .solta.ocupado { cursor: progress; }
 .solta .icone { font-size: 26px; color: var(--acento); }
+
+/* As etapas da análise. A lista inteira fica visível desde o começo — é ela
+   que diz quanto falta, sem precisar de uma barra que finge saber. O passo
+   atual tem peso; os já feitos ficam suaves com a marca de concluído. */
+.etapas-analise {
+  list-style: none; margin: 4px 0 2px; padding: 0;
+  display: flex; flex-direction: column; gap: 5px;
+  font-size: 13px; color: var(--suave); text-align: left;
+}
+.etapas-analise li { display: flex; gap: 8px; align-items: baseline; opacity: .45; }
+.etapas-analise li.feita { opacity: .7; }
+.etapas-analise li.agora { opacity: 1; color: var(--texto); font-weight: 600; }
+.etapa-marca { width: 12px; flex: 0 0 12px; text-align: center; }
+.etapas-analise li.feita .etapa-marca { color: var(--ok); }
+/* Só o passo em curso pulsa: um bloco inteiro piscando cansa e não informa. */
+.etapas-analise li.agora .etapa-marca { animation: pulsar-etapa 1.1s ease-in-out infinite; }
+@keyframes pulsar-etapa { 0%, 100% { opacity: .3; } 50% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .etapas-analise li.agora .etapa-marca { animation: none; }
+}
 .solta strong { font-size: 15px; }
 .solta span { color: var(--suave); font-size: 13px; }
 
@@ -604,6 +624,15 @@ textarea { width: 100%; font: inherit; font-size: 13px; padding: 9px 11px; borde
 .conferir-a-mao > strong { display: block; font-size: 13px; }
 .conferir-a-mao p { margin: 4px 0 8px; font-size: 12.5px; color: var(--suave); line-height: 1.5; }
 .conferir-a-mao .btn { font-size: 12.5px; padding: 6px 11px; }
+
+/* O convite de ajuda depois de várias tentativas. Chama a atenção sem virar
+   parede: o laudo continua logo abaixo, inteiro e legível. */
+.convite-de-ajuda {
+  border-left: 4px solid var(--acento);
+  background: color-mix(in srgb, var(--acento) 9%, var(--cartao));
+}
+.convite-de-ajuda > strong { display: block; font-size: 15px; }
+.convite-de-ajuda p { margin: 7px 0 12px; font-size: 13.5px; line-height: 1.55; color: var(--suave); }
 
 .destaque-extra { border-color: var(--alerta); background: var(--alerta-fundo); }
 .destaque-extra p { font-size: 13px; line-height: 1.55; }

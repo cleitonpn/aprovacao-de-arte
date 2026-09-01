@@ -113,6 +113,13 @@ export async function analisar(arquivo, peca, perfil, opcoes = {}) {
   const escalaFator = opcoes.escalaFator || 1
   const politica = opcoes.politica || {}
   const detectorNitidez = opcoes.detectorNitidez === true
+  // Em que etapa a análise está. Quem escuta é a tela de espera; quem não
+  // escuta não paga nada. Os nomes são ETAPAS REAIS, na ordem em que
+  // acontecem — inventar uma barra que anda sozinha seria mentir sobre o que
+  // está demorando, e o que demora aqui varia muito de arquivo para arquivo.
+  const andar = typeof opcoes.aoAndar === 'function' ? opcoes.aoAndar : () => {}
+
+  andar('lendo')
   const buffer = await arquivo.arrayBuffer()
   const formatoReal = detectarFormato(buffer)
   const ext = extensao(arquivo.name || '')
@@ -131,6 +138,7 @@ export async function analisar(arquivo, peca, perfil, opcoes = {}) {
     formatoRotulo: ROTULO_FORMATO[formato] || formato?.toUpperCase(),
     analisadoEm: new Date().toISOString(),
   }
+  andar('abrindo')
 
   if (formato !== 'jpeg' && formato !== 'png' && formato !== 'pdf' && formato !== 'ai') {
     const medidas = { ...base, formatoSuportado: false }
@@ -172,6 +180,7 @@ export async function analisar(arquivo, peca, perfil, opcoes = {}) {
     }
   }
 
+  andar('medindo')
   let medidas = await medir(escalaFator)
 
   // A escala que o cliente esqueceu de trocar.
@@ -192,9 +201,13 @@ export async function analisar(arquivo, peca, perfil, opcoes = {}) {
   // reversível — o seletor está na tela e o laudo diz, com todas as letras,
   // qual escala foi considerada.
   const detectada = escalaFator === 1 ? medidas.escalaSugerida : null
-  if (detectada) medidas = await medir(detectada)
+  if (detectada) {
+    andar('escala')
+    medidas = await medir(detectada)
+  }
   const escalaUsada = detectada || escalaFator
 
+  andar('decidindo')
   const resultado = avaliar({ peca, perfil, medidas, escalaFator: escalaUsada, politica, detectorNitidez })
   return {
     medidas,
@@ -410,8 +423,25 @@ async function medirPdf(buffer, base, peca, perfil, escalaFator, arquivo = null)
     fontesFaltando,
     fracaoRaster: info.fracaoRaster,
     dpiImagens,
+    // ATENÇÃO ao ler estes dois num PDF: eles NÃO são as dimensões do arquivo.
+    // São uma projeção — quantos pixels ele teria se tivesse o tamanho da peça,
+    // na densidade da imagem embutida (ver o cálculo acima). Servem para a
+    // conta de resolução, que é a pergunta "o detalhe se sustenta no tamanho
+    // impresso?", e para mais nada. Quem quiser a forma do arquivo usa
+    // `proporcaoArquivo`, logo abaixo.
     larguraPx,
     alturaPx,
+    // A maior imagem de verdade dentro do PDF, em pixels dela mesma. É o que
+    // se mostra ao cliente: dizer "2.925 × 2.925 px" sobre um arquivo que não
+    // tem essa dimensão é inventar um número que ele não encontra em lugar
+    // nenhum se for conferir.
+    pixelsDaImagem: info.imagemPrincipal
+      ? { largura: info.imagemPrincipal.px, altura: info.imagemPrincipal.py }
+      : null,
+    // A forma do arquivo, medida onde ela existe de verdade: o tamanho
+    // declarado na página. Não muda com a escala de trabalho — 1:10 encolhe os
+    // dois lados igualmente — então entra sem o fator.
+    proporcaoArquivo: info.alturaMm > 0 ? info.larguraMm / info.alturaMm : null,
     miniaturaUrl,
     fonteVisual,
     visualIndisponivel,

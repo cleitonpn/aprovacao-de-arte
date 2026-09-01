@@ -215,6 +215,46 @@ export function avisosPendentes(projeto, {
     })
   }
 
+  // -------------------------------------------------- resposta do time no chat
+  //
+  // Não existe notificação nativa numa página que o cliente abre de vez em
+  // quando por um link — então a resposta do analista ficava esperando na tela
+  // até alguém lembrar de voltar. Na prática o cliente perguntava e ia embora,
+  // e a conversa morria por falta de aviso, exatamente como morria no WhatsApp
+  // antes de ela existir.
+  //
+  // O gatilho já está de pé sem custo nenhum: `resumirConversa` espelha a
+  // última mensagem no documento do projeto, e é essa gravação que acorda o
+  // `onDocumentWritten`. Não é preciso escutar a subcoleção.
+  //
+  // A chave é a HORA da última mensagem, e é o que faz a dedução funcionar nos
+  // dois sentidos: reprocessar o mesmo estado não manda de novo (a chave já
+  // está gravada), e uma resposta nova depois disso tem hora diferente e
+  // manda. O efeito colateral aceito é o analista que escreve três parágrafos
+  // em três mensagens gerar até três avisos — preferível a agrupar por janela
+  // de tempo e deixar a última resposta sem aviso nenhum.
+  const conversa = projeto.conversa
+  if (conversa?.ultimoAutor === 'time' && conversa.ultimaEm) {
+    avisos.push({
+      chave: `conversa:${conversa.ultimaEm}`,
+      tipo: 'conversa',
+      para,
+      assunto: `A equipe respondeu você${fim}`,
+      ...corpo({
+        saudacao: `Olá${cliente ? `, ${cliente}` : ''}! Nossa equipe respondeu a sua mensagem sobre as artes ${ondeExpoe(projeto)}.`,
+        paragrafos: [
+          // Sem o texto da resposta, de propósito. A conversa é o registro da
+          // peça e vive junto dela; copiada para o e-mail, ela vira uma thread
+          // paralela em que alguém responde por engano — e a regra da casa é
+          // que toda a tratativa acontece no sistema.
+          'A resposta está na conversa da sua página, junto das artes do stand — é lá também que você responde, para tudo ficar registrado no mesmo lugar.',
+        ],
+        acao: 'Ler a resposta',
+        link,
+      }),
+    })
+  }
+
   // ---------------------------------------------------------------- prazo
   //
   // Só faz sentido cobrar quem tem o que enviar. Lembrar do prazo quem já

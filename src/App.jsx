@@ -277,7 +277,8 @@ function Ferramenta() {
         </div>
 
         <div className="coluna">
-          <Upload onArquivo={analise.receberArquivo} analisando={analise.analisando} nomeAtual={analise.arquivo?.name} />
+          <Upload onArquivo={analise.receberArquivo} analisando={analise.analisando}
+            etapa={analise.etapa} nomeAtual={analise.arquivo?.name} />
 
           {analise.erro && (
             <div className="cartao erro">

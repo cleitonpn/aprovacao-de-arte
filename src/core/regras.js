@@ -324,7 +324,26 @@ export function avaliar(ctx) {
   }
 
   // ------------------------------------------------------------- proporção
-  if (peca.larguraCm > 0 && peca.alturaCm > 0 && larguraPx && alturaPx) {
+  //
+  // Só para arquivo RASTER, e a exclusão do PDF é a correção de um achado que
+  // dizia o contrário do que estava ao lado dele.
+  //
+  // Num PDF, `larguraPx`/`alturaPx` não são as dimensões do arquivo: são uma
+  // projeção — quantos pixels ele teria SE tivesse o tamanho da peça, na
+  // densidade da imagem embutida (ver `medirPdf`). Por construção elas nascem
+  // na proporção da PEÇA, então este teste comparava a peça consigo mesma e
+  // respondia "compatível" em todo PDF, sempre.
+  //
+  // Aconteceu de verdade, e o cliente reparou: um arquivo montado em
+  // 130 × 295 cm, numa peça de 90 × 90, saiu no laudo com "Proporção
+  // compatível com a peça — encaixa em 90 × 90 sem corte relevante" logo
+  // abaixo de "o tamanho do arquivo não bate com o da peça". Duas frases
+  // opostas na mesma tela destroem a confiança nas duas.
+  //
+  // Em PDF quem responde é a regra de dimensão, mais abaixo: ela lê o tamanho
+  // declarado na página, que é onde a forma do arquivo existe de verdade.
+  const temMedidaDeclarada = Boolean(medidas.tamanhoDeclaradoCm)
+  if (!temMedidaDeclarada && peca.larguraCm > 0 && peca.alturaCm > 0 && larguraPx && alturaPx) {
     const arPeca = peca.larguraCm / peca.alturaCm
     const arArte = larguraPx / alturaPx
 
@@ -480,6 +499,18 @@ export function avaliar(ctx) {
           declarado: { largura: dl, altura: da },
           aceitos: alvos.map((t) => ({ rotulo: t.rotulo, largura: t.l, altura: t.a })),
         },
+      })
+    } else {
+      // A confirmação que o PDF perdeu quando a regra de proporção saiu dele.
+      //
+      // Ela não é enfeite: o laudo precisa mostrar que a MEDIDA foi conferida,
+      // e não só a resolução. Sem nenhuma linha sobre tamanho, um arquivo na
+      // medida certa fica indistinguível de um que a ferramenta não olhou.
+      add({
+        id: 'dimensao',
+        nivel: 'ok',
+        titulo: 'Tamanho do arquivo compatível com a peça',
+        detalhe: `O arquivo foi montado em ${num(dl)} × ${num(da)} cm, que é a medida ${melhor.rotulo} desta peça.`,
       })
     }
   }
