@@ -4,7 +4,6 @@ import {
   projetoNovo, pecaNova, validarProjeto, perfilPorTexto, listaDeEmails, MAXIMO_PECAS,
 } from '../data/projeto.js'
 import { importarProjetos, MODELO_CSV } from '../core/importacao.js'
-import { FASES, filtroDeFase } from '../core/fluxo.js'
 import { situacaoDoProjeto } from '../core/painel.js'
 import { formatarData as fmtData, paraInputData, fimDoDia } from '../core/datas.js'
 import {
@@ -84,7 +83,6 @@ export default function Projetos({ sessao, feiraInicial = '', tokenInicial = '' 
   // lista o stand em que ele acabou de clicar.
   const [painel, setPainel] = useState(tokenInicial ? { detalhe: tokenInicial } : null)
   const [filtro, setFiltro] = useState('')
-  const [fase, setFase] = useState('todos')
 
   // A escuta substitui o F5. O analista deixa esta tela aberta o dia inteiro
   // durante a montagem; obrigá-lo a recarregar para saber se chegou arte é
@@ -148,14 +146,11 @@ export default function Projetos({ sessao, feiraInicial = '', tokenInicial = '' 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projetos, enviosPorProjeto, filtro, feira, usuario?.email, versaoDoVisto])
 
-  const contagens = useMemo(() => Object.fromEntries(
-    FASES.map((f) => [f.id, universo.filter(({ sit }) => f.casa(sit)).length]),
-  ), [universo])
-
-  const linhas = useMemo(
-    () => universo.filter(({ sit }) => filtroDeFase(fase)(sit)),
-    [universo, fase],
-  )
+  // `universo` e `linhas` eram diferentes enquanto existiam as pílulas de fase:
+  // as contagens saíam do universo (todos os stands da feira) e a lista, do
+  // recorte da fase escolhida. Sem as pílulas, é a mesma coisa — e manter dois
+  // nomes para o mesmo valor é um convite a filtrar por um e contar pelo outro.
+  const linhas = universo
 
   const resumo = useMemo(() => {
     const total = linhas.reduce((s, l) => s + l.sit.total, 0)
@@ -248,26 +243,17 @@ export default function Projetos({ sessao, feiraInicial = '', tokenInicial = '' 
         </div>
 
         {/*
-          As perguntas do dia da montagem viram um clique. Antes, "quem ainda
-          não mandou nada?" era o analista lendo a lista inteira e contando de
-          cabeça — e na semana da feira essa lista tem centenas de linhas.
-          O número fica no botão mesmo quando é zero: saber que não há ninguém
-          sem arte é uma resposta tão útil quanto a lista.
+          As pílulas de fase saíram.
+          
+          Elas respondiam "quem ainda não mandou nada?" com um clique, e isso
+          continua respondido — na Visão geral, pela grade de estados, que faz
+          a mesma pergunta sobre a feira inteira e leva ao stand. Duas telas
+          respondendo a mesma coisa é uma a mais para manter em pé, e era esta
+          que ficava desatualizada: os estados aqui eram uma lista própria,
+          escrita antes de a esteira existir.
+          
+          O filtro por texto fica: procurar "After Click" é outra pergunta.
         */}
-        <div className="filtros-fase" role="group" aria-label="Filtrar por situação do envio">
-          {FASES.map((f) => (
-            <button
-              key={f.id}
-              type="button"
-              className={`chip ${fase === f.id ? 'ativo' : ''}`}
-              aria-pressed={fase === f.id}
-              onClick={() => setFase(f.id)}
-            >
-              {f.rotulo}
-              <span className="chip-conta">{contagens[f.id] ?? 0}</span>
-            </button>
-          ))}
-        </div>
 
         {podeCadastrar && (
           <div className="acoes">
@@ -325,36 +311,17 @@ export default function Projetos({ sessao, feiraInicial = '', tokenInicial = '' 
               {resumo.mensagens > 0 && <> · <strong className="destaque-pendencia">{resumo.mensagens} conversa(s) com mensagem nova</strong></>}
               {resumo.provas > 0 && <> · {resumo.provas} prova(s) com o cliente</>}
             </p>
-            {podeCobrar && (
-            <div className="acoes">
-              <button
-                className="btn btn-ghost"
-                onClick={() => baixarTexto(
-                  `links-${feiraId}.csv`,
-                  '﻿' + ['Stand;Cliente;Email;Link;Recebidas;Total'].concat(
-                    linhas.map(({ projeto, sit }) => [
-                      projeto.stand, projeto.expositor, projeto.email,
-                      linkDoProjeto(projeto.token), sit.recebidas, sit.total,
-                    ].map((v) => `"${String(v ?? '').replace(/"/g, '""')}"`).join(';')),
-                  ).join('\r\n'),
-                  'text/csv;charset=utf-8',
-                )}
-              >
-                Exportar links (CSV)
-              </button>
-              <button
-                className="btn btn-ghost"
-                onClick={() => navigator.clipboard?.writeText(
-                  [...new Set(linhas
-                    .filter(({ sit }) => sit.pendentes.length)
-                    .flatMap(({ projeto }) => (projeto.emails?.length ? projeto.emails : [projeto.email])))]
-                    .filter(Boolean).join('; '),
-                )}
-              >
-                Copiar e-mails com pendência
-              </button>
-            </div>
-            )}
+            {/*
+              "Exportar links (CSV)" e "Copiar e-mails com pendência" saíram.
+              
+              Os dois existiam para alimentar um cliente de e-mail por fora: a
+              planilha de links era para montar o disparo à mão, e a lista de
+              endereços para colar no campo "para". A ferramenta passou a mandar
+              os e-mails sozinha — boas-vindas, prazo, prova pronta, arte
+              devolvida e resposta no chat —, e um atalho que leva a fazer à mão
+              o que já é feito sozinho não é conveniência: é um jeito de duas
+              cobranças chegarem ao mesmo cliente no mesmo dia.
+            */}
           </>
         )}
       </div>
@@ -369,9 +336,7 @@ export default function Projetos({ sessao, feiraInicial = '', tokenInicial = '' 
         )}
         {!carregando && projetos.length > 0 && !linhas.length && (
           <p className="ajuda">
-            {universo.length
-              ? <>Nenhum stand em “{FASES.find((f) => f.id === fase)?.rotulo}”{filtro && <> com o texto “{filtro}”</>}.</>
-              : <>Nenhum resultado para “{filtro}”.</>}
+            Nenhum resultado para “{filtro}”.
           </p>
         )}
         {linhas.map(({ projeto, sit, temMensagemNova }) => (

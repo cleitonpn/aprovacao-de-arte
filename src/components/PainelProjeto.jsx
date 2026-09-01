@@ -7,7 +7,8 @@ import {
 } from '../services/projetos.js'
 import { enviarProva, EXTENSOES_PROVA } from '../services/envio.js'
 import { traduzirErroAuth } from '../services/sessao.js'
-import ConversaFlutuante from './ConversaFlutuante.jsx'
+import Modal from './Modal.jsx'
+import CaixaDeAlerta from './CaixaDeAlerta.jsx'
 import { formatarDataHora as fmtDataHora, paraInputData, fimDoDia } from '../core/datas.js'
 import { motivosMaisComuns, LIMITE_REPROVACOES } from '../core/reprovacoes.js'
 import { INICIO_DO_REGISTRO, DIAS_DE_SILENCIO_APOS_CONTATO } from '../core/contato.js'
@@ -26,11 +27,6 @@ import { marcarVisto } from '../store/visto.js'
 export default function PainelProjeto({ sessao, projeto, resumo, envios, podeAprovar = true, onFechar, onMudou }) {
   const [erro, setErro] = useState(null)
   const [ocupado, setOcupado] = useState(false)
-  // A conversa sai do meio da ficha e vira canto da tela. Na ficha ela ficava
-  // entre o log de reprovações e a lista de peças: a resposta do cliente
-  // chegava em tempo real e nada mudava à vista de quem estava analisando
-  // arte — era preciso rolar até lá para descobrir.
-  const [conversaAberta, setConversaAberta] = useState(false)
 
   const rodar = async (acao) => {
     setOcupado(true)
@@ -192,14 +188,12 @@ export default function PainelProjeto({ sessao, projeto, resumo, envios, podeApr
 
       <LogDeReprovacoes sessao={sessao} projeto={projeto} />
 
-      <ConversaFlutuante
-        token={projeto.token}
-        conversa={projeto.conversa}
-        ehTime
-        sessao={sessao}
-        aberta={conversaAberta}
-        onMudarAberta={setConversaAberta}
-      />
+      {/*
+        A bolha de conversa saiu daqui: ela agora acompanha TODAS as telas do
+        time (ver `ConversaDoTime`, montada em `App.jsx`), com a lista de quem
+        falou. Duas bolhas na mesma tela seriam dois caminhos para a mesma
+        conversa, e a de baixo esconderia a de cima.
+      */}
     </>
   )
 }
@@ -496,10 +490,12 @@ function NovaProva({ sessao, projeto, resumo, ocupado, onEnviar }) {
   }
 
   return (
-    <div className="cartao">
-      <h3>Enviar prova de aprovação</h3>
-
-      <p className="ajuda">Quais peças esta prova cobre?</p>
+    <Modal
+      aberto
+      titulo="Enviar prova para aprovação"
+      ajuda="Quais peças esta prova cobre?"
+      onFechar={() => setAberto(false)}
+    >
       {candidatas.map((s) => (
         <label className="alternador" key={s.peca.id}>
           <input
@@ -546,10 +542,10 @@ function NovaProva({ sessao, projeto, resumo, ocupado, onEnviar }) {
         <button className="btn btn-ghost" onClick={() => setAberto(false)}>Cancelar</button>
       </div>
       <p className="nota">
-        Aceita {EXTENSOES_PROVA.map((e) => `.${e}`).join(', ')}. Depois de enviar,
-        avise o cliente — ele não recebe e-mail automático.
+        Aceita {EXTENSOES_PROVA.map((e) => `.${e}`).join(', ')}. O cliente recebe
+        um e-mail avisando que a prova está pronta.
       </p>
-    </div>
+    </Modal>
   )
 }
 
@@ -667,28 +663,27 @@ function LogDeReprovacoes({ sessao, projeto }) {
   const mostrar = aberto ? lista : lista.slice(0, 3)
 
   return (
-    <div className={`cartao log-reprovacoes ${alerta ? 'alerta' : ''}`}>
-      <div className="titulo-secao">
-        <h3>Tentativas reprovadas ({lista.length})</h3>
-        {alerta && <span className="tag aviso">precisa de ajuda</span>}
-      </div>
-
-      {alerta
+    <CaixaDeAlerta
+      titulo="Tentativas reprovadas"
+      quantos={lista.length}
+      cor={alerta ? 'alerta' : 'neutra'}
+      etiqueta={alerta ? 'precisa de ajuda' : null}
+      // Só abre sozinha quando o cliente está de fato travado. Fora disso é
+      // histórico: útil quando se procura, ruído quando se está trabalhando —
+      // e eram dezoito linhas ocupando a ficha inteira.
+      abertaPorPadrao={alerta}
+      ajuda={alerta
         ? (
-          <p className="ajuda">
+          <>
             Este cliente já teve <strong>{lista.length} arquivos reprovados</strong> pela
             análise — e arte reprovada não chega até nós. Do lado dele, a tela
             só diz o que está errado; se ele não souber resolver, o stand fica
             em zero sem que ninguém perceba. Vale uma ligação antes de mandar
             outra cobrança.
-          </p>
+          </>
         )
-        : (
-          <p className="ajuda">
-            Arquivos que a análise recusou no navegador do cliente e que, por
-            isso, nunca chegaram. Servem para entender onde ele está travando.
-          </p>
-        )}
+        : 'Arquivos que a análise recusou no navegador do cliente e que, por isso, nunca chegaram. Servem para entender onde ele está travando.'}
+    >
 
       {comuns.length > 0 && (
         <div className="motivo-cliente">
@@ -722,7 +717,7 @@ function LogDeReprovacoes({ sessao, projeto }) {
           {aberto ? 'Mostrar só as três últimas' : `Ver todas as ${lista.length} tentativas`}
         </button>
       )}
-    </div>
+    </CaixaDeAlerta>
   )
 }
 

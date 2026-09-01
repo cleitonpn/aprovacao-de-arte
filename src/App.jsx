@@ -21,6 +21,8 @@ import Projeto from './components/Projeto.jsx'
 import { usarSessao } from './services/sessao.js'
 import { abasDe, telaInicial, pode } from './core/permissoes.js'
 import { usarAvisos } from './store/usarAvisos.js'
+import ConversaDoTime from './components/ConversaDoTime.jsx'
+import { usarFeiras } from './store/feiras.js'
 import * as cadastroStore from './data/cadastro.js'
 
 // Rota por hash, sem biblioteca de roteamento: são cinco telas e nenhuma delas
@@ -126,7 +128,7 @@ function PainelInterno({ rota }) {
           {abas.map((t) => (
             <a key={t.id} href={`#/${t.id}`} className={t.id === tela ? 'ativa' : ''}>
               {t.rotulo}
-              {avisos[t.id] > 0 && <span className="badge">{avisos[t.id] > 99 ? '99+' : avisos[t.id]}</span>}
+              {avisos.abas[t.id] > 0 && <span className="badge">{avisos.abas[t.id] > 99 ? '99+' : avisos.abas[t.id]}</span>}
             </a>
           ))}
           <span className="papel-atual">{sessao.acesso?.rotulo}</span>
@@ -143,8 +145,25 @@ function PainelInterno({ rota }) {
           {permitida && tela === 'analistas' && pode(sessao.acesso, 'gerenciarAnalistas') && <Usuarios sessao={sessao} />}
         </Acesso>
       </div>
+
+      {/*
+        A conversa acompanha TODAS as telas do time, e não só a ficha.
+
+        Antes, responder uma mensagem exigia saber de qual cliente ela era,
+        escolher a feira, achar o stand e abrir a ficha — quatro passos antes
+        de escrever a primeira letra. Quem chega de manhã com quatro respostas
+        para dar fazia isso quatro vezes, e resposta que demora um dia é a
+        mesma coisa que resposta que não veio.
+      */}
+      {sessao.liberado && <ConversaGlobal sessao={sessao} projetos={avisos.projetos} />}
     </div>
   )
+}
+
+/** A bolha de conversa, com a lista de feiras que o analista alcança. */
+function ConversaGlobal({ sessao, projetos }) {
+  const { feiras } = usarFeiras(sessao.fb, sessao.acesso)
+  return <ConversaDoTime sessao={sessao} projetos={projetos} feiras={feiras} />
 }
 
 /**

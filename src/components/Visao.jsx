@@ -7,6 +7,7 @@ import { temMensagemNova, chaveDaConversa } from '../core/conversa.js'
 import { formatarData } from '../core/datas.js'
 import { LIMITE_REPROVACOES } from '../core/reprovacoes.js'
 import { usarFeiras } from '../store/feiras.js'
+import CaixaDeAlerta from './CaixaDeAlerta.jsx'
 
 // A feira inteira numa tela.
 //
@@ -392,50 +393,6 @@ function Pendencia({ titulo, linhas, feiraId, vazio, detalhe }) {
             {linhas.length > 6 && <li className="dica-campo">e mais {linhas.length - 6}…</li>}
           </ul>
         )}
-    </div>
-  )
-}
-
-/**
- * As duas listas vermelhas, recolhidas até alguém querer vê-las.
- *
- * Elas são as mais importantes do painel e eram as que mais poluíam: abertas,
- * dezoito linhas de texto vermelho empurravam todo o resto para fora da tela,
- * e uma tela que é toda urgente não tem urgência nenhuma. Recolhidas, o que
- * fica é o que decide se vale abrir — o título, a contagem e o motivo.
- *
- * A contagem no título, e não só a badge: "Ligar hoje" com uma bolinha ao lado
- * exige um clique para saber se são dois ou trinta stands, e essa diferença
- * muda a manhã de quem está lendo.
- */
-function CaixaDeAlerta({ titulo, quantos, etiqueta, ajuda, children, abertaPorPadrao = false }) {
-  const [aberta, setAberta] = useState(abertaPorPadrao)
-  if (!quantos) return null
-
-  return (
-    <div className={`cartao log-reprovacoes alerta caixa-alerta ${aberta ? 'aberta' : ''}`}>
-      <button
-        type="button"
-        className="caixa-alerta-topo"
-        onClick={() => setAberta((v) => !v)}
-        aria-expanded={aberta}
-      >
-        <span className="caixa-alerta-titulo">
-          <span className="badge-alerta">{quantos}</span>
-          <strong>{titulo}</strong>
-        </span>
-        <span className="caixa-alerta-lado">
-          <span className="tag aviso">{etiqueta}</span>
-          <span className="caixa-alerta-mais" aria-hidden>{aberta ? '−' : '+'}</span>
-        </span>
-      </button>
-
-      {aberta && (
-        <div className="caixa-alerta-corpo">
-          <p className="ajuda">{ajuda}</p>
-          {children}
-        </div>
-      )}
     </div>
   )
 }

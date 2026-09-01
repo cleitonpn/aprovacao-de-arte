@@ -66,7 +66,15 @@ export function usarAvisos(sessao) {
     return () => { vivo = false; canceladores.forEach((c) => c()) }
   }, [fb, acesso, usuario?.email])
 
+  // Devolve as contagens E a lista de projetos.
+  //
+  // A escuta aqui já cobre todas as feiras que a pessoa alcança — era o único
+  // lugar do sistema com essa visão — e a conversa do time precisa exatamente
+  // dela: listar quem falou sem depender da feira escolhida numa tela. Abrir
+  // uma segunda escuta idêntica custaria as mesmas leituras duas vezes.
   return useMemo(() => ({
+    projetos,
+    abas: {
     // "Chegou arte nova" e "o cliente respondeu" passam a somar na mesma
     // bolinha, a de Projetos.
     //
@@ -86,6 +94,7 @@ export function usarAvisos(sessao) {
     // novo e for reprovado outra vez.
     visao: projetos.filter((p) => (p.dificuldade?.reprovacoes || 0) > LIMITE_REPROVACOES
       && dataEmMs(p.dificuldade?.ultimaEm) > vistoEm(usuario?.email, `dificuldade:${p.token}`)).length,
+    },
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [envios, projetos, usuario?.email, versaoDoVisto])
 }

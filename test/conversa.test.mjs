@@ -51,3 +51,46 @@ test('a chave do "já vi" é a mesma que o painel sempre usou', () => {
   // acenderia aviso em cada stand como se nada tivesse sido lido.
   assert.equal(chaveDaConversa('abc123'), 'conversa:abc123')
 })
+
+// A lista de conversas do time, que passou a existir com o chat global.
+//
+// Ela responde "quem falou comigo?" sem depender de abrir a ficha de cada
+// stand — o caminho antigo custava quatro passos por resposta, e resposta que
+// demora um dia é a mesma coisa que resposta que não veio.
+
+const projeto = (stand, ultimoAutor, ultimaEm, extra = {}) => ({
+  token: `tok_${stand}`, stand, expositor: `Empresa ${stand}`,
+  conversa: ultimoAutor ? { ultimoAutor, ultimaEm } : undefined,
+  ...extra,
+})
+
+/** A mesma regra que a lista usa, isolada para poder ser testada. */
+const naoLidas = (projetos, visto = {}) => projetos
+  .filter((p) => temMensagemNova({
+    conversa: p.conversa,
+    ehTime: true,
+    vistoEmMs: visto[p.token] || 0,
+  }))
+
+test('só entram na lista os stands em que o CLIENTE falou por último', () => {
+  const lista = naoLidas([
+    projeto('A', 'cliente', agora),
+    projeto('B', 'time', agora),
+    projeto('C', null),
+    projeto('D', 'cliente', antes),
+  ])
+  assert.deepEqual(lista.map((p) => p.stand), ['A', 'D'])
+})
+
+test('ler a conversa tira o stand da lista, e só ele', () => {
+  const projetos = [projeto('A', 'cliente', agora), projeto('B', 'cliente', agora)]
+  const depois = naoLidas(projetos, { tok_A: ms(agora) })
+  assert.deepEqual(depois.map((p) => p.stand), ['B'])
+})
+
+test('mensagem mais nova que a leitura traz o stand de volta', () => {
+  // O cliente responde de novo depois de o analista ter lido: precisa voltar a
+  // aparecer, senão a segunda pergunta dele fica sem resposta para sempre.
+  const projetos = [projeto('A', 'cliente', agora)]
+  assert.equal(naoLidas(projetos, { tok_A: ms(antes) }).length, 1)
+})
