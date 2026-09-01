@@ -14,7 +14,6 @@ import Historico from './components/Historico.jsx'
 import BotaoTema from './components/BotaoTema.jsx'
 import Cadastro from './components/Cadastro.jsx'
 import Acesso from './components/Acesso.jsx'
-import Admin from './components/Admin.jsx'
 import Projetos from './components/Projetos.jsx'
 import Visao from './components/Visao.jsx'
 import Usuarios from './components/Usuarios.jsx'
@@ -30,7 +29,6 @@ import * as cadastroStore from './data/cadastro.js'
 //   #/            ferramenta aberta (cliente informa as medidas)
 //   #/p/TOKEN     projeto cadastrado (medidas vêm do time) — sem login
 //   #/visao       a feira inteira numa tela  ⎫
-//   #/admin       artes recebidas            ⎪
 //   #/projetos    cadastro de projetos       ⎬ time interno, com login
 //   #/projetos/FEIRA/TOKEN  a ficha de um stand direto  ⎪
 //   #/analistas   quem tem acesso            ⎭
@@ -52,7 +50,11 @@ function usarRota() {
   if (partes[0] === 'projetos' && partes[1] && partes[2]) {
     return { tela: 'projetos', feiraId: partes[1], token: partes[2] }
   }
-  if (['visao', 'admin', 'projetos', 'analistas'].includes(partes[0])) return { tela: partes[0] }
+  // `admin` continua reconhecido, e sem tela: quem tiver o endereço antigo nos
+  // favoritos cai numa aba que não existe mais, e cair em branco é pior que
+  // cair na Visão geral. Ver `abasDe` — a aba "Artes recebidas" saiu.
+  if (partes[0] === 'admin') return { tela: 'visao' }
+  if (['visao', 'projetos', 'analistas'].includes(partes[0])) return { tela: partes[0] }
   return { tela: 'ferramenta' }
 }
 
@@ -135,7 +137,6 @@ function PainelInterno({ rota }) {
       <div className="coluna">
         <Acesso sessao={sessao}>
           {permitida && tela === 'visao' && pode(sessao.acesso, 'verPainel') && <Visao sessao={sessao} />}
-          {permitida && tela === 'admin' && pode(sessao.acesso, 'verArtes') && <Admin sessao={sessao} />}
           {permitida && tela === 'projetos' && (
             <Projetos sessao={sessao} feiraInicial={rota.feiraId} tokenInicial={rota.token} />
           )}

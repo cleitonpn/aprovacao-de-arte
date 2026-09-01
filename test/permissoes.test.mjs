@@ -93,10 +93,22 @@ test('as abas somem para quem não pode usá-las', () => {
   // A visão geral é de quem opera a feira inteira. Cadastro e cobrança seguem
   // sem ela: o painel mostra reprovações, pedidos e provas — decisões que
   // esses dois papéis não tomam, e ver o que não se pode resolver é ruído.
-  assert.deepEqual(abas('admin'), ['visao', 'admin', 'projetos', 'analistas'])
-  assert.deepEqual(abas('completo'), ['visao', 'admin', 'projetos'])
-  assert.deepEqual(abas('cadastro'), ['admin', 'projetos'])
-  assert.deepEqual(abas('cobranca'), ['admin', 'projetos'])
+  assert.deepEqual(abas('admin'), ['visao', 'projetos', 'analistas'])
+  assert.deepEqual(abas('completo'), ['visao', 'projetos'])
+  assert.deepEqual(abas('cadastro'), ['projetos'])
+  assert.deepEqual(abas('cobranca'), ['projetos'])
+})
+
+test('ninguém fica sem nenhuma aba depois que "Artes recebidas" saiu', () => {
+  // A aba saiu porque a gestão migrou para Visão geral e Projetos. O risco de
+  // remover uma aba é justamente este: um papel cujo acesso dependia só dela
+  // passa a entrar num painel sem nada, e `telaInicial` devolve `null` — tela
+  // em branco, sem erro nenhum para investigar.
+  for (const papel of Object.keys(PAPEIS)) {
+    const acesso = acessoDe({ papel })
+    assert.ok(abasDe(acesso).length > 0, `${papel} ficou sem aba nenhuma`)
+    assert.ok(telaInicial(acesso), `${papel} não tem tela inicial`)
+  }
 })
 
 test('a tela inicial é sempre uma que a pessoa consegue abrir', () => {

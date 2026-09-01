@@ -16,7 +16,8 @@ import { enviarGabarito, EXTENSOES_GABARITO } from '../services/envio.js'
 import { idDeFeira } from '../data/cadastro.js'
 import { traduzirErroAuth } from '../services/sessao.js'
 import { pode } from '../core/permissoes.js'
-import { usarFeiras, baixarTexto } from './Admin.jsx'
+import { usarFeiras } from '../store/feiras.js'
+import { baixarTexto, baixarEmLote, paraCsv } from '../core/saida.js'
 import PainelProjeto from './PainelProjeto.jsx'
 import ImportarProducao from './ImportarProducao.jsx'
 import ListaDePecas from './ListaDePecas.jsx'
@@ -460,6 +461,8 @@ function FeiraEmEdicao({ sessao, feira, feiraId, novaFeira, projetos, envios, on
         <strong>Abrir</strong> e prorrogue só para ele.
       </p>
 
+      <ArquivosDaFeira envios={envios} feiraId={feiraId} podeBaixar={pode(sessao.acesso, 'verArtes')} />
+
       {/*
         Só administrador. Cadastro e analista completo criam e editam feiras —
         apagar é outra coisa: leva junto os stands, os arquivos e as conversas,
@@ -477,6 +480,82 @@ function FeiraEmEdicao({ sessao, feira, feiraId, novaFeira, projetos, envios, on
           onApagou={onPronto}
         />
       )}
+    </div>
+  )
+}
+
+/**
+ * Levar os arquivos da feira para fora da ferramenta.
+ *
+ * Estava na aba "Artes recebidas", que saiu. Era o único recurso dela que a
+ * ficha do stand não cobre: baixar uma arte por vez resolve o caso do dia a
+ * dia, mas na semana da montagem alguém precisa levar setenta arquivos para a
+ * máquina de produção, e clicar em setenta links não é um caminho.
+ *
+ * Fica recolhido porque é operação de fim de feira, feita uma ou duas vezes —
+ * e três botões de download permanentes no alto da tela competem com o
+ * trabalho de todo dia, que é abrir stand.
+ */
+function ArquivosDaFeira({ envios, feiraId, podeBaixar }) {
+  const [aberto, setAberto] = useState(false)
+  const [baixando, setBaixando] = useState(null)
+
+  const artes = envios.filter((e) => !e.arquivado && e.link)
+  if (!podeBaixar || !artes.length) return null
+
+  const baixarTudo = async () => {
+    setBaixando(`0 de ${artes.length}`)
+    await baixarEmLote(
+      artes.map((e) => ({
+        link: e.link,
+        nomeSugerido: `${e.cadastro?.stand || 'stand'} - ${e.pecaRotulo || e.perfil?.nome || 'peca'} - ${e.arquivo?.nome || e.protocolo}`,
+      })),
+      (feitos, total) => setBaixando(`${feitos} de ${total}`),
+    )
+    setBaixando(null)
+  }
+
+  if (!aberto) {
+    return (
+      <p className="nota">
+        <button className="link" onClick={() => setAberto(true)}>
+          Baixar os arquivos desta feira
+        </button>
+        {' '}— {artes.length} arte(s) recebida(s), em lote ou em planilha.
+      </p>
+    )
+  }
+
+  return (
+    <div className="peca-editor">
+      <p className="ajuda">
+        São {artes.length} arquivo(s). O navegador vai pedir permissão para
+        baixar vários de uma vez — é preciso aceitar, senão só o primeiro desce.
+      </p>
+      <div className="acoes">
+        <button className="btn" disabled={Boolean(baixando)} onClick={baixarTudo}>
+          {baixando ? `Baixando ${baixando}…` : `Baixar os ${artes.length} arquivos`}
+        </button>
+        <button
+          className="btn btn-ghost"
+          onClick={() => baixarTexto(`artes-${feiraId}.csv`, paraCsv(artes), 'text/csv;charset=utf-8')}
+        >
+          Exportar planilha (CSV)
+        </button>
+        <button
+          className="btn btn-ghost"
+          onClick={() => baixarTexto(
+            `links-${feiraId}.txt`,
+            artes.map((e) => `${e.cadastro?.stand} — ${e.pecaRotulo || e.perfil?.nome}\n${e.link}\n`).join('\n'),
+            'text/plain;charset=utf-8',
+          )}
+        >
+          Lista de links
+        </button>
+        <button className="btn btn-ghost" disabled={Boolean(baixando)} onClick={() => setAberto(false)}>
+          Fechar
+        </button>
+      </div>
     </div>
   )
 }
@@ -663,8 +742,10 @@ function LinhaProjeto({ projeto, sit, temMensagemNova, podeCadastrar, podeCobrar
       </div>
 
       <div className="acoes compactas">
+        {/* "Detalhes ›", como no desenho da designer: a seta diz que leva a
+            outro lugar, e "Abrir" ao lado de "Editar" e "Apagar" não dizia. */}
         <button className={`btn ${temMensagemNova ? 'pulsa' : ''}`} onClick={onAbrir}>
-          Abrir{temMensagemNova && ' ·'}
+          Detalhes{temMensagemNova && ' ·'} <span aria-hidden>›</span>
         </button>
         <button className="btn btn-ghost" onClick={() => copiar(linkDoProjeto(projeto.token), 'link')}>
           {copiado === 'link' ? '✓ Link copiado' : 'Copiar link do cliente'}

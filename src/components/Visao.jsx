@@ -6,7 +6,7 @@ import { vistoEm, assinarVisto } from '../store/visto.js'
 import { temMensagemNova, chaveDaConversa } from '../core/conversa.js'
 import { formatarData } from '../core/datas.js'
 import { LIMITE_REPROVACOES } from '../core/reprovacoes.js'
-import { usarFeiras } from './Admin.jsx'
+import { usarFeiras } from '../store/feiras.js'
 
 // A feira inteira numa tela.
 //
@@ -128,11 +128,17 @@ export default function Visao({ sessao }) {
             Agora: os números, o que exige uma PESSOA hoje (ligar, ajudar), o
             que exige um CLIQUE do time, e por último o panorama e a cobrança.
           */}
-          <Numeros cenario={cenario} />
+          {/*
+            Os números e a grade de estados moram no MESMO cartão. São duas
+            leituras da mesma pergunta — "como está a feira?" — e em caixas
+            separadas o olho fazia a viagem duas vezes: contava 87% num
+            retângulo branco e ia procurar, noutro retângulo branco, de que
+            87% se tratava.
+          */}
+          <Panorama cenario={cenario} feiraId={feiraId} />
           <Intervencao linhas={cenario.acoes.intervencao} feiraId={feiraId} />
           <Dificuldade linhas={cenario.acoes.dificuldade} feiraId={feiraId} />
           <PrecisaDeVoce cenario={cenario} feiraId={feiraId} />
-          <Esteira cenario={cenario} feiraId={feiraId} />
           <QuemFalta cenario={cenario} feiraId={feiraId} />
         </>
       )}
@@ -242,63 +248,64 @@ function Cartao({ valor, rotulo, detalhe, cor }) {
 }
 
 /**
- * Onde estão as peças, todas elas, agora.
+ * O panorama da feira: os cinco números e onde estão as peças.
  *
- * Era uma barra proporcional, e a proporção respondia "está tudo empilhado
- * esperando o cliente ou já foi para a impressora?". O que ela não respondia é
- * o número: numa barra em que um estado tem 59 e outro tem 2, o segundo vira
- * um risco de dois pixels com o número ilegível dentro — e era justamente o
- * estado pequeno que pedia ação.
+ * Um cartão só, e não dois. São duas leituras da mesma pergunta, e separadas
+ * o olho fazia a viagem duas vezes — lia "87% das artes recebidas" num
+ * retângulo branco e ia procurar, noutro retângulo branco igual, de que 87% se
+ * tratava.
  *
- * Os cartões trocam proporção por LEITURA. Cada estado tem o mesmo espaço, o
- * número é a coisa maior da tela, e os vazios ficam: um "00 em impressão" é
- * informação, e uma grade que não muda de forma a cada dia é o que faz o time
- * aprender onde cada número fica e ler tudo de relance.
- *
- * O clique continua fazendo o que a barra fazia: abrir os stands daquele
- * estado. "Quantas" sem "de quem" é meia resposta, e a pergunta seguinte era
- * sempre a segunda.
+ * A grade de estados era uma barra proporcional. A proporção respondia "está
+ * tudo empilhado ou já foi para a impressora?", e falhava no que o time mais
+ * olha: com um estado em 59 e outro em 2, o segundo virava um risco de dois
+ * pixels com o número ilegível dentro — e era o estado pequeno que pedia ação.
+ * Os cartões trocam proporção por leitura.
  */
-function Esteira({ cenario, feiraId }) {
+function Panorama({ cenario, feiraId }) {
   // Um estado aberto de cada vez. Abrir vários empurraria o resto do painel
   // para fora da tela, e ele vale justamente por caber numa olhada.
   const [aberta, setAberta] = useState(null)
-
-  if (!cenario.pecasTotal) return null
 
   const faixa = cenario.esteira.find((f) => f.id === aberta) || null
   const alternar = (id) => setAberta((atual) => (atual === id ? null : id))
 
   return (
-    <div className="cartao">
-      <div className="titulo-secao">
-        <h3>Onde estão as peças</h3>
-        <span className="dica-campo">{cenario.pecasTotal} peças no total</span>
-      </div>
+    <div className="cartao painel-panorama">
+      <Numeros cenario={cenario} />
 
-      <div className="grade-estados">
-        {cenario.esteira.map((f) => (
-          <button
-            type="button"
-            key={f.id}
-            className={`estado-cartao ${f.cor}${aberta === f.id ? ' aberto' : ''}${f.n ? '' : ' vazio'}`}
-            onClick={() => alternar(f.id)}
-            aria-expanded={aberta === f.id}
-            disabled={!f.n}
-          >
-            {/*
-              Dois dígitos sempre. Não é enfeite: com "9" e "59" lado a lado os
-              números dançam de largura e a linha inteira precisa ser relida.
-              Com "09" e "59" a coluna fica estável e o olho compara sozinho.
-            */}
-            <span className="estado-numero">{String(f.n).padStart(2, '0')}</span>
-            <span className="estado-rotulo">{f.curto}</span>
-            <span className="estado-acao" aria-hidden>
-              {f.n ? (aberta === f.id ? 'FECHAR' : 'VER STANDS') : '—'}
-            </span>
-          </button>
-        ))}
-      </div>
+      {cenario.pecasTotal > 0 && (
+        <>
+          <div className="titulo-secao com-linha">
+            <h3>Onde estão as peças</h3>
+            <span className="dica-campo">{cenario.pecasTotal} peças no total</span>
+          </div>
+
+          <div className="grade-estados">
+            {cenario.esteira.map((f) => (
+              <button
+                type="button"
+                key={f.id}
+                className={`estado-cartao ${f.cor}${aberta === f.id ? ' aberto' : ''}${f.n ? '' : ' vazio'}`}
+                onClick={() => alternar(f.id)}
+                aria-expanded={aberta === f.id}
+                disabled={!f.n}
+              >
+                {/*
+                  Dois dígitos sempre. Não é enfeite: com "9" e "59" lado a lado
+                  os números dançam de largura e a linha inteira precisa ser
+                  relida. Com "09" e "59" a coluna fica estável e o olho compara
+                  sozinho.
+                */}
+                <span className="estado-numero">{String(f.n).padStart(2, '0')}</span>
+                <span className="estado-rotulo">{f.curto}</span>
+                <span className="estado-acao" aria-hidden>
+                  {f.n ? (aberta === f.id ? 'FECHAR' : 'VER STANDS') : '—'}
+                </span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
 
       {faixa && (
         <div className="esteira-detalhe">
@@ -390,6 +397,50 @@ function Pendencia({ titulo, linhas, feiraId, vazio, detalhe }) {
 }
 
 /**
+ * As duas listas vermelhas, recolhidas até alguém querer vê-las.
+ *
+ * Elas são as mais importantes do painel e eram as que mais poluíam: abertas,
+ * dezoito linhas de texto vermelho empurravam todo o resto para fora da tela,
+ * e uma tela que é toda urgente não tem urgência nenhuma. Recolhidas, o que
+ * fica é o que decide se vale abrir — o título, a contagem e o motivo.
+ *
+ * A contagem no título, e não só a badge: "Ligar hoje" com uma bolinha ao lado
+ * exige um clique para saber se são dois ou trinta stands, e essa diferença
+ * muda a manhã de quem está lendo.
+ */
+function CaixaDeAlerta({ titulo, quantos, etiqueta, ajuda, children, abertaPorPadrao = false }) {
+  const [aberta, setAberta] = useState(abertaPorPadrao)
+  if (!quantos) return null
+
+  return (
+    <div className={`cartao log-reprovacoes alerta caixa-alerta ${aberta ? 'aberta' : ''}`}>
+      <button
+        type="button"
+        className="caixa-alerta-topo"
+        onClick={() => setAberta((v) => !v)}
+        aria-expanded={aberta}
+      >
+        <span className="caixa-alerta-titulo">
+          <span className="badge-alerta">{quantos}</span>
+          <strong>{titulo}</strong>
+        </span>
+        <span className="caixa-alerta-lado">
+          <span className="tag aviso">{etiqueta}</span>
+          <span className="caixa-alerta-mais" aria-hidden>{aberta ? '−' : '+'}</span>
+        </span>
+      </button>
+
+      {aberta && (
+        <div className="caixa-alerta-corpo">
+          <p className="ajuda">{ajuda}</p>
+          {children}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/**
  * Clientes que estão penando.
  *
  * O bloco mais novo do painel e o que mais muda a operação: até agora, o
@@ -398,19 +449,15 @@ function Pendencia({ titulo, linhas, feiraId, vazio, detalhe }) {
  * cliente que nem abriu o link. Cobrança não resolve o primeiro caso.
  */
 function Dificuldade({ linhas, feiraId }) {
-  if (!linhas.length) return null
   return (
-    <div className="cartao log-reprovacoes alerta">
-      <div className="titulo-secao">
-        <h3>Clientes que precisam de ajuda ({linhas.length})</h3>
-        <span className="tag aviso">mais de {LIMITE_REPROVACOES} reprovações</span>
-      </div>
-      <p className="ajuda">
-        Estes clientes tentaram enviar e a análise recusou o arquivo — arte
-        reprovada não chega até nós, então no resto do painel eles parecem
-        apenas atrasados. Não estão parados: estão travados. Abra a ficha para
-        ver em que ponto.
-      </p>
+    <CaixaDeAlerta
+      titulo="Clientes que precisam de ajuda"
+      quantos={linhas.length}
+      etiqueta={`mais de ${LIMITE_REPROVACOES} reprovações`}
+      ajuda={'Estes clientes tentaram enviar e a análise recusou o arquivo — arte reprovada não '
+        + 'chega até nós, então no resto do painel eles parecem apenas atrasados. Não estão '
+        + 'parados: estão travados. Abra a ficha para ver em que ponto.'}
+    >
       <ul className="pecas-lista">
         {linhas.map(({ projeto, sit }) => (
           <li key={projeto.token} className="pendente">
@@ -429,7 +476,7 @@ function Dificuldade({ linhas, feiraId }) {
           </li>
         ))}
       </ul>
-    </div>
+    </CaixaDeAlerta>
   )
 }
 
@@ -450,20 +497,24 @@ function Dificuldade({ linhas, feiraId }) {
  * entra aqui.
  */
 function Intervencao({ linhas, feiraId }) {
-  if (!linhas.length) return null
   return (
-    <div className="cartao log-reprovacoes alerta">
-      <div className="titulo-secao">
-        <h3>Ligar hoje ({linhas.length})</h3>
-        <span className="tag aviso">o sistema não resolve sozinho</span>
-      </div>
-      <p className="ajuda">
-        Nestes stands o problema não é falta de cobrança automática — é que o
-        cliente não está no processo. O e-mail voltou, ou ninguém abriu o link
-        até agora e o prazo está perto. Depois de falar com ele, use{' '}
-        <strong>Já falei com o cliente</strong> na ficha do stand: o aviso sai
-        desta lista para o time inteiro.
-      </p>
+    <CaixaDeAlerta
+      titulo="Ligar hoje"
+      quantos={linhas.length}
+      etiqueta="o sistema não resolve sozinho"
+      // Esta abre por padrão: é a única lista do painel que aponta para FORA do
+      // sistema, e o custo de não ver é um cliente que não chega a tempo.
+      abertaPorPadrao
+      ajuda={(
+        <>
+          Nestes stands o problema não é falta de cobrança automática — é que o
+          cliente não está no processo. O e-mail voltou, ou ninguém abriu o link
+          até agora e o prazo está perto. Depois de falar com ele, use{' '}
+          <strong>Já falei com o cliente</strong> na ficha do stand: o aviso sai
+          desta lista para o time inteiro.
+        </>
+      )}
+    >
       <ul className="pecas-lista">
         {linhas.map(({ projeto, sit }) => (
           <li key={projeto.token} className="pendente">
@@ -493,7 +544,7 @@ function Intervencao({ linhas, feiraId }) {
           </li>
         ))}
       </ul>
-    </div>
+    </CaixaDeAlerta>
   )
 }
 

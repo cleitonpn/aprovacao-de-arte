@@ -29,7 +29,18 @@
      primário da ferramenta era ilegível no tema escuro.
   */
   --sobre-cor: #ffffff;    --sobre-cor: light-dark(#ffffff, #12141a);
-  --raio: 12px;
+  /*
+     Três raios, e não um número solto por regra.
+     
+     A designer do time desenhou tudo mais redondo, e "mais redondo" só fica
+     coerente se as curvas forem proporcionais entre si: cartão grande com
+     16px, controle com 12px, e o que é etiqueta ou botão de ação vira cápsula.
+     Com valores soltos, cada tela ficava com um arredondamento próprio e o
+     conjunto lia como remendo.
+  */
+  --raio: 16px;
+  --raio-p: 12px;
+  --raio-pill: 999px;
 }
 
 /*
@@ -91,11 +102,14 @@ body {
 .campo > span { font-size: 13px; color: var(--suave); }
 .linha { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 
+/* Campos e botões viram cápsula, como no desenho da designer. Num formulário
+   de poucos campos altos isso lê como controle e não como caixa de texto de
+   planilha — e é a diferença mais visível entre as duas telas lado a lado. */
 input[type='number'], input[type='text'], select {
   background: var(--fundo);
   border: 1px solid var(--borda);
-  border-radius: 8px;
-  padding: 9px 10px;
+  border-radius: var(--raio-pill);
+  padding: 10px 16px;
   color: var(--texto);
   font: inherit;
   width: 100%;
@@ -112,9 +126,12 @@ input:focus-visible, select:focus-visible, button:focus-visible, .solta:focus-vi
 .spec dd { margin: 0; font-variant-numeric: tabular-nums; text-align: right; }
 .spec .destaque dd { font-weight: 600; color: var(--acento); }
 
+/* Cápsula. É o que mais aproxima a tela do desenho do time, e o que faz o
+   botão parecer botão em vez de retângulo colorido. */
 .btn {
-  background: var(--acento); color: var(--sobre-cor); border: 0; border-radius: 9px;
-  padding: 10px 15px; font: inherit; font-weight: 500; cursor: pointer;
+  background: var(--acento); color: var(--sobre-cor); border: 0;
+  border-radius: var(--raio-pill);
+  padding: 10px 18px; font: inherit; font-weight: 600; cursor: pointer;
 }
 .btn:hover { filter: brightness(1.07); }
 .btn-ghost { background: transparent; color: var(--texto); border: 1px solid var(--borda); }
@@ -238,7 +255,7 @@ input:focus-visible, select:focus-visible, button:focus-visible, .solta:focus-vi
 
 .previa { display: grid; grid-template-columns: minmax(0, 200px) minmax(0, 1fr); gap: 16px; margin-bottom: 18px; }
 .previa img {
-  width: 100%; border-radius: 8px; border: 1px solid var(--borda);
+  width: 100%; border-radius: var(--raio-p); border: 1px solid var(--borda);
   background: repeating-conic-gradient(#0000 0 25%, #8883 0 50%) 0 0 / 16px 16px;
 }
 .numeros { margin: 0; display: flex; flex-direction: column; gap: 6px; }
@@ -248,7 +265,7 @@ input:focus-visible, select:focus-visible, button:focus-visible, .solta:focus-vi
 @media (max-width: 620px) { .previa { grid-template-columns: minmax(0, 1fr); } }
 
 .achados { list-style: none; margin: 0 0 18px; padding: 0; display: flex; flex-direction: column; gap: 10px; }
-.achados li { display: flex; gap: 11px; padding: 12px 13px; border-radius: 9px; align-items: flex-start; }
+.achados li { display: flex; gap: 11px; padding: 12px 13px; border-radius: var(--raio-p); align-items: flex-start; }
 .achados li strong { display: block; font-size: 14.5px; }
 .achados li p { margin: 4px 0 0; font-size: 13.5px; color: var(--suave); }
 .achados li p.acao { color: var(--texto); font-weight: 500; }
@@ -291,7 +308,7 @@ input:focus-visible, select:focus-visible, button:focus-visible, .solta:focus-vi
 /* "E agora?" — a caixa que responde à pergunta com que o cliente ficava.
    Fundo próprio de propósito: ela não é mais um achado, é a saída da tela. */
 .proximo-passo {
-  margin: 0 0 18px; padding: 15px 16px; border-radius: 10px;
+  margin: 0 0 18px; padding: 15px 16px; border-radius: var(--raio);
   background: color-mix(in srgb, var(--acento) 8%, transparent);
   border: 1px solid color-mix(in srgb, var(--acento) 28%, transparent);
 }
@@ -306,7 +323,7 @@ input:focus-visible, select:focus-visible, button:focus-visible, .solta:focus-vi
   gap: 6px; font-size: 13.5px; color: var(--suave); line-height: 1.5;
 }
 
-.risco { background: var(--alerta-fundo); border-radius: 9px; padding: 14px; margin-bottom: 16px; }
+.risco { background: var(--alerta-fundo); border-radius: var(--raio-p); padding: 14px; margin-bottom: 16px; }
 .risco p { margin: 0 0 10px; font-size: 13.5px; }
 .risco-ok { margin: 0 !important; font-weight: 500; }
 
@@ -317,12 +334,12 @@ input:focus-visible, select:focus-visible, button:focus-visible, .solta:focus-vi
 .quadros figure { margin: 0; }
 .quadros canvas {
   width: 300px; max-width: 100%; height: auto; aspect-ratio: 1;
-  border: 1px solid var(--borda); border-radius: 8px; display: block; background: #fff;
+  border: 1px solid var(--borda); border-radius: var(--raio-p); display: block; background: #fff;
 }
 .quadros figcaption { font-size: 12.5px; color: var(--suave); margin-top: 6px; text-align: center; }
 .distancia { margin-top: 14px; }
 .distancia input[type='range'] { width: 100%; accent-color: var(--acento); }
-.acuidade { font-size: 13.5px; margin: 6px 0 0; padding: 10px 12px; border-radius: 8px; }
+.acuidade { font-size: 13.5px; margin: 6px 0 0; padding: 10px 12px; border-radius: var(--raio-p); }
 .acuidade.boa { background: var(--ok-fundo); }
 .acuidade.ruim { background: var(--alerta-fundo); }
 
@@ -438,7 +455,7 @@ input:focus-visible, select:focus-visible, button:focus-visible, .solta:focus-vi
 
 .alternador.experimental {
   align-items: flex-start; gap: 10px; margin: 14px 0;
-  background: var(--alerta-fundo); padding: 12px; border-radius: 9px;
+  background: var(--alerta-fundo); padding: 12px; border-radius: var(--raio-p);
 }
 .alternador.experimental input { margin-top: 2px; flex: 0 0 16px; }
 .alternador.experimental strong { display: block; color: var(--texto); font-size: 13.5px; }
@@ -463,7 +480,7 @@ input[aria-invalid='true'] { border-color: var(--ruim); }
 .btn-enviar:disabled { background: var(--borda); color: var(--suave); cursor: not-allowed; filter: none; }
 .envio .nota { text-align: center; }
 .envio.nao-configurado p { margin: 0; font-size: 13px; color: var(--suave); }
-.envio.enviado { background: var(--ok-fundo); border-radius: 9px; padding: 14px; }
+.envio.enviado { background: var(--ok-fundo); border-radius: var(--raio-p); padding: 14px; }
 .envio.enviado h3 { margin: 0 0 6px; color: var(--ok); }
 .envio.enviado p { margin: 0 0 4px; font-size: 13.5px; }
 .erro-envio { color: var(--ruim); font-size: 13px; margin: 8px 0 0; }
@@ -511,7 +528,7 @@ input[aria-invalid='true'] { border-color: var(--ruim); }
 .escolha-modo { display: grid; gap: 8px; margin-bottom: 16px; }
 .escolha-modo label {
   display: flex; gap: 10px; align-items: flex-start; padding: 11px 13px;
-  border: 1px solid var(--borda); border-radius: 9px; cursor: pointer;
+  border: 1px solid var(--borda); border-radius: var(--raio-p); cursor: pointer;
 }
 .escolha-modo label.ativo { border-color: var(--acento); background: color-mix(in srgb, var(--acento) 7%, transparent); }
 .escolha-modo input { margin-top: 3px; flex: 0 0 auto; }
@@ -539,8 +556,20 @@ input[aria-invalid='true'] { border-color: var(--ruim); }
 .campo.cresce { flex: 2; }
 
 /* ------------------------------------------------------------- projetos */
-.projeto { border-bottom: 1px solid var(--borda); padding: 14px 0; }
-.projeto:last-child { border-bottom: 0; padding-bottom: 0; }
+/* Cada projeto vira um cartão, e não uma linha separada por filete.
+   
+   É o desenho da designer, e ele acerta uma coisa que a lista não fazia: numa
+   feira de vinte stands, filetes finos viram uma parede de texto em que o olho
+   perde a linha no meio do caminho. O cartão dá a cada stand um começo e um
+   fim, e o espaço entre eles é o que permite percorrer a lista sem reler. */
+.projeto {
+  background: var(--fundo); border-radius: var(--raio);
+  padding: 16px; margin-bottom: 10px;
+  border: 1px solid transparent;
+  transition: border-color 120ms;
+}
+.projeto:hover { border-color: var(--borda); }
+.projeto:last-child { margin-bottom: 0; }
 .projeto.completo .projeto-topo strong::before { content: '✓ '; color: var(--ok); }
 .projeto-topo { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; font-size: 13.5px; }
 .projeto-topo a { color: var(--acento); font-size: 12.5px; }
@@ -554,18 +583,20 @@ input[aria-invalid='true'] { border-color: var(--ruim); }
 .pecas-lista li.entregue .marca { background: var(--ok-fundo); color: var(--ok); border-color: var(--ok); }
 .pecas-lista li.pendente .marca { background: var(--alerta-fundo); color: var(--alerta); border-color: var(--alerta); }
 
-.peca-editor { border: 1px solid var(--borda); border-radius: 9px; padding: 12px; margin-bottom: 10px; }
+.peca-editor { border: 1px solid var(--borda); border-radius: var(--raio-p); padding: 12px; margin-bottom: 10px; }
 .peca-editor .linha:last-child { margin-bottom: 0; }
 .peca-editor .linha { align-items: flex-end; }
 
 .previa-importacao { margin: 14px 0; }
-.bloco-erros, .bloco-avisos { border-radius: 9px; padding: 11px 13px; margin: 10px 0; font-size: 13px; }
+.bloco-erros, .bloco-avisos { border-radius: var(--raio-p); padding: 11px 13px; margin: 10px 0; font-size: 13px; }
 .bloco-erros { background: var(--ruim-fundo); color: var(--ruim); }
 .bloco-avisos { background: var(--alerta-fundo); color: var(--alerta); }
 .bloco-erros ul, .bloco-avisos ul { margin: 6px 0 0; padding-left: 18px; }
 .bloco-avisos p { margin: 6px 0 0; }
-.bloco-avisos code { background: rgba(0,0,0,.08); padding: 1px 5px; border-radius: 4px; }
-textarea { width: 100%; font: inherit; font-size: 13px; padding: 9px 11px; border-radius: 9px; border: 1px solid var(--borda); background: var(--cartao); color: var(--texto); resize: vertical; }
+.bloco-avisos code { background: rgba(0,0,0,.08); padding: 1px 5px; border-radius: var(--raio-p); }
+/* A cápsula não vale para texto de várias linhas: o raio come o canto da
+   primeira e da última linha. */
+textarea { width: 100%; font: inherit; font-size: 13px; padding: 9px 11px; border-radius: var(--raio-p); border: 1px solid var(--borda); background: var(--cartao); color: var(--texto); resize: vertical; }
 
 /* ------------------------------------------------------ tela do cliente */
 .projeto-cabecalho h2 { margin-bottom: 2px; }
@@ -575,7 +606,7 @@ textarea { width: 100%; font: inherit; font-size: 13px; padding: 9px 11px; borde
 .pecas-cartoes { list-style: none; margin: 0 0 14px; padding: 0; display: grid; gap: 10px; }
 .peca-cartao {
   display: flex; justify-content: space-between; align-items: center; gap: 12px;
-  border: 1px solid var(--borda); border-radius: 10px; padding: 13px 14px;
+  border: 1px solid var(--borda); border-radius: var(--raio); padding: 13px 14px;
 }
 .peca-cartao.entregue { border-color: var(--ok); background: var(--ok-fundo); }
 .peca-cartao strong { font-size: 14.5px; }
@@ -609,7 +640,7 @@ textarea { width: 100%; font: inherit; font-size: 13px; padding: 9px 11px; borde
 .aviso-prazo.vencido { border-left-color: var(--ruim); background: var(--ruim-fundo); }
 .aviso-prazo.perto strong, .aviso-prazo.vencido strong { color: inherit; }
 
-.bloco-prazo { border: 1px solid var(--borda); border-radius: 10px; padding: 12px 14px; margin: 14px 0; }
+.bloco-prazo { border: 1px solid var(--borda); border-radius: var(--raio); padding: 12px 14px; margin: 14px 0; }
 .bloco-prazo .linha { align-items: flex-end; margin-bottom: 6px; }
 .bloco-prazo .acoes { margin: 0 0 4px; }
 .bloco-prazo input[type='date'] { max-width: 200px; }
@@ -620,7 +651,7 @@ textarea { width: 100%; font: inherit; font-size: 13px; padding: 9px 11px; borde
 .prova { border-left: 4px solid var(--alerta); }
 .prova-imagem { display: block; margin: 12px 0; text-align: center; }
 .prova-imagem img {
-  max-width: 100%; max-height: 460px; border-radius: 9px;
+  max-width: 100%; max-height: 460px; border-radius: var(--raio-p);
   border: 1px solid var(--borda); background: #fff;
 }
 .prova-imagem span { display: block; margin-top: 6px; }
@@ -629,7 +660,7 @@ textarea { width: 100%; font: inherit; font-size: 13px; padding: 9px 11px; borde
 .pecas-cartoes { list-style: none; margin: 0 0 14px; padding: 0; display: grid; gap: 12px; }
 .peca-cartao {
   display: flex; justify-content: space-between; align-items: flex-start; gap: 14px;
-  border: 1px solid var(--borda); border-radius: 10px; padding: 14px 15px;
+  border: 1px solid var(--borda); border-radius: var(--raio); padding: 14px 15px;
 }
 .peca-cartao-info { min-width: 0; flex: 1; }
 .peca-cartao-topo { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
@@ -640,7 +671,7 @@ textarea { width: 100%; font: inherit; font-size: 13px; padding: 9px 11px; borde
 .peca-cartao.estado-alerta { border-color: var(--alerta); background: var(--alerta-fundo); }
 .peca-cartao.estado-ruim { border-color: var(--ruim); background: var(--ruim-fundo); }
 
-.bloqueio { margin-top: 10px; padding: 10px 12px; border-radius: 8px; background: var(--borda); }
+.bloqueio { margin-top: 10px; padding: 10px 12px; border-radius: var(--raio-p); background: var(--borda); }
 .bloqueio strong { display: block; font-size: 13px; }
 .bloqueio p { margin: 3px 0 0; font-size: 12.5px; color: var(--suave); line-height: 1.5; }
 .bloqueio.em_producao { background: var(--ruim-fundo); }
@@ -656,20 +687,20 @@ textarea { width: 100%; font: inherit; font-size: 13px; padding: 9px 11px; borde
    pelo analista, que é a única instrução que existe naquele momento, tinha
    menos destaque que a legenda de um campo. */
 .pedido-de-correcao {
-  margin-top: 14px; padding: 13px 14px; border-radius: 9px;
+  margin-top: 14px; padding: 13px 14px; border-radius: var(--raio-p);
   background: var(--ruim-fundo); border-left: 3px solid var(--ruim);
 }
 .pedido-de-correcao > strong { display: block; font-size: 14.5px; }
 .pedido-de-correcao p { margin: 9px 0 0; font-size: 13.5px; line-height: 1.55; }
 .pedido-de-correcao .motivo {
   font-style: italic; font-size: 15px; padding: 10px 12px;
-  background: var(--cartao); border-radius: 7px;
+  background: var(--cartao); border-radius: var(--raio-p);
 }
 .pedido-de-correcao p.nota { font-size: 12.5px; color: var(--suave); font-style: normal; }
 
 /* Sangria e margem de segurança explicadas no lugar em que são exigidas. */
 .spec-glossario {
-  margin: 0 0 12px; padding: 10px 11px; border-radius: 8px;
+  margin: 0 0 12px; padding: 10px 11px; border-radius: var(--raio-p);
   background: var(--fundo); color: var(--suave);
   font-size: 12.5px; line-height: 1.6;
 }
@@ -683,7 +714,7 @@ textarea { width: 100%; font: inherit; font-size: 13px; padding: 9px 11px; borde
    e não âmbar de propósito: não é "olhe quando puder", é arte a caminho da
    impressora que ninguém viu. */
 .conferir-a-mao {
-  margin: 6px 0 2px; padding: 10px 12px; border-radius: 8px;
+  margin: 6px 0 2px; padding: 10px 12px; border-radius: var(--raio-p);
   background: var(--ruim-fundo); border-left: 3px solid var(--ruim);
 }
 .conferir-a-mao > strong { display: block; font-size: 13px; }
@@ -739,7 +770,7 @@ textarea { width: 100%; font: inherit; font-size: 13px; padding: 9px 11px; borde
 .pedido:last-child, .peca-time:last-child { border-bottom: 0; padding-bottom: 0; }
 .pedido-topo { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .motivo-cliente {
-  margin: 8px 0 4px; padding: 9px 12px; border-radius: 8px;
+  margin: 8px 0 4px; padding: 9px 12px; border-radius: var(--raio-p);
   background: var(--fundo); font-size: 13.5px; font-style: italic; line-height: 1.55;
 }
 .versoes { list-style: none; margin: 8px 0; padding: 0; display: grid; gap: 4px; font-size: 12.5px; }
@@ -842,7 +873,7 @@ textarea { width: 100%; font: inherit; font-size: 13px; padding: 9px 11px; borde
 /* Os cartões de peça ganham profundidade e um traço de estado na lateral —
    dá para varrer a lista e saber o que está pendente sem ler nenhum rótulo. */
 .peca-cartao {
-  position: relative; overflow: hidden; border-radius: 12px;
+  position: relative; overflow: hidden; border-radius: var(--raio);
   background: var(--cartao); transition: border-color .15s ease, transform .15s ease;
 }
 .peca-cartao::before {
@@ -927,7 +958,7 @@ textarea { width: 100%; font: inherit; font-size: 13px; padding: 9px 11px; borde
 
 .tutorial-fechar {
   margin-left: auto; flex: 0 0 auto;
-  width: 32px; height: 32px; border-radius: 8px; cursor: pointer;
+  width: 32px; height: 32px; border-radius: var(--raio-p); cursor: pointer;
   background: transparent; border: 1px solid var(--borda);
   color: var(--suave); font-size: 20px; line-height: 1;
 }
@@ -962,7 +993,7 @@ textarea { width: 100%; font: inherit; font-size: 13px; padding: 9px 11px; borde
    ser lida. No celular empilham, mas mantêm as cores que as separam. */
 .tutorial-fronteira { display: grid; gap: 10px; grid-template-columns: 1fr 1fr; }
 @media (max-width: 560px) { .tutorial-fronteira { grid-template-columns: 1fr; } }
-.tutorial-fronteira > div { border-radius: 8px; padding: 10px 12px; }
+.tutorial-fronteira > div { border-radius: var(--raio-p); padding: 10px 12px; }
 .tutorial-fronteira strong { display: block; font-size: 13px; margin-bottom: 5px; }
 .tutorial-fronteira ul { margin: 0; padding-left: 16px; }
 .tutorial-fronteira li { font-size: 12.5px; line-height: 1.55; color: var(--suave); }
@@ -972,13 +1003,13 @@ textarea { width: 100%; font: inherit; font-size: 13px; padding: 9px 11px; borde
 .tutorial-fronteira .nao-confere strong { color: var(--ruim); }
 .tutorial-responsabilidade {
   background: color-mix(in srgb, var(--alerta) 12%, transparent);
-  border-radius: 8px; padding: 9px 12px;
+  border-radius: var(--raio-p); padding: 9px 12px;
 }
 
 .tutorial-apoio .btn { margin-top: 4px; }
 .tutorial-horario {
   background: color-mix(in srgb, var(--acento) 8%, transparent);
-  border-radius: 8px; padding: 9px 12px;
+  border-radius: var(--raio-p); padding: 9px 12px;
 }
 
 .tutorial-rodape {
@@ -1011,13 +1042,24 @@ textarea { width: 100%; font: inherit; font-size: 13px; padding: 9px 11px; borde
    montagem.
    ========================================================================== */
 
+/* Dentro do cartão de panorama os números perdem a borda e o fundo próprios:
+   ali eles já estão dentro de uma caixa, e caixa dentro de caixa vira moldura
+   sobre moldura. A cor da esquerda continua, que é o que os distingue. */
 .numeros-painel {
   display: grid; gap: 12px; margin-bottom: 16px;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
 }
+.painel-panorama .numeros-painel { margin-bottom: 4px; }
+.painel-panorama .numero-cartao { background: transparent; border: 0; border-left-width: 3px; border-left-style: solid; padding: 4px 0 4px 14px; }
+
+/* O título com linha em cima separa as duas leituras dentro do mesmo cartão
+   sem precisar de uma segunda caixa. */
+.titulo-secao.com-linha {
+  border-top: 1px solid var(--borda); padding-top: 16px; margin-top: 16px;
+}
 .numero-cartao {
   background: var(--cartao); border: 1px solid var(--borda);
-  border-radius: 12px; padding: 16px 18px;
+  border-radius: var(--raio); padding: 16px 18px;
   display: flex; flex-direction: column; gap: 2px;
   border-left-width: 4px;
 }
@@ -1051,7 +1093,7 @@ textarea { width: 100%; font: inherit; font-size: 13px; padding: 9px 11px; borde
 @media (max-width: 620px) { .grade-estados { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .estado-cartao {
   display: flex; flex-direction: column; align-items: center; gap: 4px;
-  padding: 16px 10px 12px; border-radius: 12px; cursor: pointer;
+  padding: 16px 10px 12px; border-radius: var(--raio); cursor: pointer;
   background: var(--fundo); border: 1px solid var(--borda);
   font: inherit; text-align: center;
   transition: border-color 120ms, transform 120ms;
@@ -1105,11 +1147,56 @@ textarea { width: 100%; font: inherit; font-size: 13px; padding: 9px 11px; borde
   margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--borda);
 }
 .esteira-detalhe h4 { margin: 0; font-size: 14px; }
+/* ------------------------------------------- as caixas de alerta recolhidas */
+/*
+   As duas listas vermelhas são as mais importantes do painel e eram as que
+   mais poluíam: abertas, dezoito linhas de vermelho empurravam todo o resto
+   para fora da tela — e uma tela em que tudo é urgente não tem urgência
+   nenhuma. Recolhida, sobra o que decide se vale abrir.
+*/
+.caixa-alerta { padding: 0; overflow: hidden; }
+.caixa-alerta-topo {
+  width: 100%; display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; flex-wrap: wrap;
+  padding: 14px 16px; background: none; border: 0; cursor: pointer;
+  font: inherit; color: inherit; text-align: left;
+}
+.caixa-alerta-topo:hover .caixa-alerta-mais { background: var(--ruim); color: var(--sobre-cor); }
+.caixa-alerta-topo:focus-visible { outline: 2px solid var(--ruim); outline-offset: -2px; }
+.caixa-alerta-titulo { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.caixa-alerta-titulo strong { font-size: 15px; }
+.caixa-alerta-lado { display: flex; align-items: center; gap: 10px; }
+
+/* A contagem fica NO título, não só numa bolinha: "Ligar hoje" com um ponto ao
+   lado exige um clique para saber se são dois ou trinta stands, e essa
+   diferença muda a manhã de quem está lendo. */
+.badge-alerta {
+  min-width: 28px; height: 28px; padding: 0 8px; border-radius: var(--raio-pill);
+  background: var(--ruim); color: var(--sobre-cor);
+  display: inline-grid; place-items: center;
+  font-size: 13.5px; font-weight: 800; font-variant-numeric: tabular-nums;
+}
+.caixa-alerta-mais {
+  width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center;
+  border: 1px solid var(--ruim); color: var(--ruim);
+  font-size: 17px; font-weight: 700; line-height: 1;
+  transition: background 120ms, color 120ms;
+}
+.caixa-alerta-corpo { padding: 0 16px 16px; }
+.caixa-alerta-corpo .ajuda { margin-top: 0; }
+
+/* ------------------------------------------------- a ficha de um stand */
+.ficha-topo .btn-voltar { margin-bottom: 14px; font-size: 12.5px; padding: 6px 14px; }
+/* O nome do stand em tamanho de título: numa tela em que se entra e se sai o
+   dia inteiro, "de quem é esta ficha?" não pode custar uma leitura. */
+.ficha-nome { font-size: 26px; letter-spacing: -0.02em; margin-bottom: 4px; }
+.ficha-marcas { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-start; }
+
 .grade-pendencias {
   display: grid; gap: 12px;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
-.pendencia { border: 1px solid var(--borda); border-radius: 10px; padding: 12px 14px; }
+.pendencia { border: 1px solid var(--borda); border-radius: var(--raio); padding: 12px 14px; }
 .pendencia-topo { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
 .lista-simples { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; font-size: 13px; }
 .lista-simples a { color: var(--acento); }
@@ -1161,7 +1248,7 @@ textarea { width: 100%; font: inherit; font-size: 13px; padding: 9px 11px; borde
 .conversa-linha {
   display: grid; gap: 10px; max-height: 380px; overflow-y: auto;
   padding: 12px; margin: 10px 0 14px;
-  background: var(--fundo); border-radius: 10px;
+  background: var(--fundo); border-radius: var(--raio);
 }
 
 /* ------------------------------------------------- a conversa como popup */
@@ -1235,7 +1322,7 @@ textarea { width: 100%; font: inherit; font-size: 13px; padding: 9px 11px; borde
 
 /* No papel a conversa não existe: o laudo impresso é sobre a arte. */
 @media print { .conversa-flutuante { display: none !important; } }
-.balao { max-width: 82%; padding: 9px 12px; border-radius: 12px; background: var(--cartao); border: 1px solid var(--borda); }
+.balao { max-width: 82%; padding: 9px 12px; border-radius: var(--raio); background: var(--cartao); border: 1px solid var(--borda); }
 .balao.cliente { justify-self: start; border-bottom-left-radius: 4px; }
 .balao.time {
   justify-self: end; border-bottom-right-radius: 4px;
@@ -1252,7 +1339,7 @@ textarea { width: 100%; font: inherit; font-size: 13px; padding: 9px 11px; borde
    tem título e moldura própria — é a resposta mais convincente que a
    ferramenta dá ao cliente. */
 .bloco-simulador {
-  border: 1px solid var(--borda); border-radius: 12px;
+  border: 1px solid var(--borda); border-radius: var(--raio);
   padding: 16px; margin: 16px 0;
   background: color-mix(in srgb, var(--acento) 5%, transparent);
 }
@@ -1280,7 +1367,7 @@ textarea { width: 100%; font: inherit; font-size: 13px; padding: 9px 11px; borde
 .faixa-novidade {
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
   background: var(--ok-fundo); color: var(--ok);
-  border-radius: 9px; padding: 9px 12px; margin: 10px 0; font-size: 13.5px;
+  border-radius: var(--raio-p); padding: 9px 12px; margin: 10px 0; font-size: 13.5px;
 }
 .faixa-novidade .link { color: inherit; margin-left: auto; }
 

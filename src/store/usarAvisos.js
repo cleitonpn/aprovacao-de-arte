@@ -67,11 +67,18 @@ export function usarAvisos(sessao) {
   }, [fb, acesso, usuario?.email])
 
   return useMemo(() => ({
-    admin: envios.filter((e) => dataEmMs(e.criadoEm) > vistoEm(usuario?.email, `envios:${e.feiraId}`)).length,
-    // Bolinha só quando a última palavra é do CLIENTE: marcar por autor evita o
-    // painel acender por causa da própria resposta do time.
-    projetos: projetos.filter((p) => p.conversa?.ultimoAutor === 'cliente'
-      && dataEmMs(p.conversa?.ultimaEm) > vistoEm(usuario?.email, `conversa:${p.token}`)).length,
+    // "Chegou arte nova" e "o cliente respondeu" passam a somar na mesma
+    // bolinha, a de Projetos.
+    //
+    // Eram duas: a de envios acendia na aba "Artes recebidas", que saiu. Somar
+    // é aceitável porque as duas levam ao MESMO lugar e à mesma ação — abrir a
+    // ficha do stand. Uma bolinha que apontasse para uma aba inexistente seria
+    // pior que nenhuma.
+    projetos: envios.filter((e) => dataEmMs(e.criadoEm) > vistoEm(usuario?.email, `envios:${e.feiraId}`)).length
+      // Bolinha só quando a última palavra é do CLIENTE: marcar por autor evita
+      // o painel acender por causa da própria resposta do time.
+      + projetos.filter((p) => p.conversa?.ultimoAutor === 'cliente'
+        && dataEmMs(p.conversa?.ultimaEm) > vistoEm(usuario?.email, `conversa:${p.token}`)).length,
     // O cliente que está penando some do painel: a arte reprovada não sobe,
     // então ele fica igual a quem nem começou. Esta é a única bolinha que
     // avisa de uma coisa que NÃO aconteceu — e é por isso que ela precisa

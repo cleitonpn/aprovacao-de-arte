@@ -103,7 +103,14 @@ export function abasDe(acesso) {
   // a feira?" antes de "o que chegou agora?". Como `telaInicial` é a primeira
   // desta lista, quem tem a permissão abre o painel direto nela.
   if (pode(acesso, 'verPainel')) abas.push({ id: 'visao', rotulo: 'Visão geral' })
-  if (pode(acesso, 'verArtes')) abas.push({ id: 'admin', rotulo: 'Artes recebidas' })
+  // A aba "Artes recebidas" saiu. Ela listava todos os envios da feira com
+  // busca, e a gestão migrou inteira para Visão geral (o panorama) e Projetos
+  // (a ficha do stand, onde estão as versões, o download e a conferência).
+  // O que ela tinha de insubstituível — baixar as artes em lote e exportar a
+  // planilha — foi para Projetos, junto do seletor de feira.
+  //
+  // `verArtes` continua existindo como permissão: ela ainda governa quem pode
+  // baixar os arquivos da feira.
   if (pode(acesso, 'cadastrarProjetos') || pode(acesso, 'cobrar') || pode(acesso, 'aprovar')) {
     abas.push({ id: 'projetos', rotulo: 'Projetos' })
   }

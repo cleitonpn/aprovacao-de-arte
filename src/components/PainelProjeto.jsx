@@ -58,16 +58,31 @@ export default function PainelProjeto({ sessao, projeto, resumo, envios, podeApr
 
   return (
     <>
-      <div className="cartao">
+      <div className="cartao ficha-topo">
+        {/*
+          O nome do stand em tamanho de título, como no desenho da designer.
+          Numa tela em que se entra e se sai o dia inteiro, o primeiro segundo
+          é gasto respondendo "de quem é esta ficha?" — e com o nome do mesmo
+          tamanho do resto, essa resposta custava uma leitura.
+        */}
+        <button className="btn btn-ghost btn-voltar" onClick={onFechar}>← Todos os projetos</button>
+
         <div className="admin-topo">
           <div>
-            <h2>{projeto.stand}</h2>
+            <h2 className="ficha-nome">{projeto.stand}</h2>
             <p className="ajuda">
               {projeto.expositor} · <a href={`mailto:${projeto.email}`}>{projeto.email}</a>
               {projeto.localizacao && ` · ${projeto.localizacao}`}
             </p>
           </div>
-          <button className="btn btn-ghost" onClick={onFechar}>← Todos os projetos</button>
+          <div className="ficha-marcas">
+            {resumo.recebidas > 0 && (
+              <span className="tag aprovado">{resumo.recebidas} recebida(s)</span>
+            )}
+            {resumo.pendentes.length > 0 && (
+              <span className="tag alerta">{resumo.pendentes.length} pendente(s)</span>
+            )}
+          </div>
         </div>
 
         {erro && <p className="erro-envio">{erro}</p>}

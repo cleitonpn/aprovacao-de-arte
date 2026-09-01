@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { listarAnalistas, criarAnalista, liberarAnalista, removerAnalista, traduzirErroAuth } from '../services/sessao.js'
 import { EMAIL } from '../data/projeto.js'
 import { LISTA_DE_PAPEIS, PAPEIS, acessoDe, ROTULO_PERMISSAO } from '../core/permissoes.js'
-import { usarFeiras } from './Admin.jsx'
+import { usarFeiras } from '../store/feiras.js'
 import { formatarData as fmtData } from '../core/datas.js'
 
 // Cadastro dos analistas que têm acesso às telas internas.
