@@ -45,19 +45,32 @@ test('as etapas são anunciadas na ordem em que acontecem', async () => {
 })
 
 test('o piso segura cada etapa, e a conta bate', async () => {
+  // Só o limite INFERIOR é afirmado: uma máquina lenta faz o número subir, e
+  // isso não é defeito. O que quebraria de verdade — o piso não segurando
+  // nada — faz o número cair, e é isso que a asserção pega.
   const piso = 40
   const inicio = Date.now()
   const { vistas } = await etapasDe({ pisoDaEtapaMs: piso })
   const gasto = Date.now() - inicio
-  // Uma espera por etapa depois da primeira, mais a que segura o "pronto".
   const minimo = piso * vistas.length * 0.7
   assert.ok(gasto >= minimo, `${gasto} ms é menos que o piso de ${vistas.length} etapas`)
 })
 
 test('piso zero não espera nada — é assim que os testes rodam', async () => {
-  const inicio = Date.now()
-  await etapasDe({ pisoDaEtapaMs: 0 })
-  assert.ok(Date.now() - inicio < 150, 'com piso zero a análise não pode esperar')
+  // Medido POR COMPARAÇÃO, e não contra um número de milissegundos.
+  //
+  // A primeira versão afirmava "menos de 150 ms" e falhou uma vez com a
+  // máquina ocupada — sem nada de errado no código. Teste de relógio com
+  // limite absoluto é o que ensina um time a rodar a suíte de novo até passar,
+  // e a partir daí a suíte não reprova mais nada.
+  const cronometrar = async (piso) => {
+    const inicio = Date.now()
+    await etapasDe({ pisoDaEtapaMs: piso })
+    return Date.now() - inicio
+  }
+  const semPiso = await cronometrar(0)
+  const comPiso = await cronometrar(80)
+  assert.ok(comPiso > semPiso + 80, `com piso ${comPiso} ms, sem piso ${semPiso} ms`)
 })
 
 test('etapa que já demora ABSORVE o piso, em vez de somar a ele', async () => {
