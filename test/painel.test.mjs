@@ -244,3 +244,65 @@ test('a esteira usa o rótulo do time, não o do cliente', () => {
   assert.equal(faixa.rotulo, 'Prova aguardando o cliente')
   assert.doesNotMatch(faixa.rotulo, /sua/i, 'no painel, "sua" apontaria para o analista')
 })
+
+// A fila de conferência humana no panorama da feira.
+//
+// Ela existia só na aba de envios, atrás de um filtro que alguém precisava
+// lembrar de ligar — e essas artes NÃO estão paradas: a ferramenta não
+// desaprovou nada, só não conseguiu abrir a imagem. Elas seguem para a
+// impressora enquanto esperam. É a única fila do painel em que o custo de
+// esquecer é uma peça errada impressa, não um atraso.
+
+const envioSemConferir = (pecaId, extra = {}) => ({
+  pecaId,
+  tipoEnvio: 'arte',
+  protocolo: `AP-${pecaId}-sc`,
+  laudo: { achados: [{ id: 'visual-indisponivel', nivel: 'ressalva' }] },
+  ...extra,
+})
+
+test('arte que a ferramenta não abriu entra na fila do time', () => {
+  const p = stand('Alfa')
+  const sit = situacaoDoProjeto(p, [envio(lona.id), envioSemConferir(testeira.id)])
+  assert.equal(sit.semConferir.length, 1)
+
+  const cen = panorama([{ projeto: p, sit }], { agora: AGORA })
+  assert.equal(cen.artesSemConferir, 1)
+  assert.equal(cen.acoes.conferencia.length, 1)
+  // Entra na conta do dia: sem isso o painel diz "nada parado com a gente"
+  // com uma arte não vista a caminho da impressora.
+  assert.ok(cen.aFazer >= 1)
+})
+
+test('depois de conferida, some da fila', () => {
+  const p = stand('Beta')
+  const conferida = envioSemConferir(lona.id, { conferencia: { em: '2026-08-09T10:00:00Z', por: 'ana@x' } })
+  assert.equal(situacaoDoProjeto(p, [conferida]).semConferir.length, 0)
+})
+
+test('envio arquivado não cobra conferência', () => {
+  // Arquivar é dizer "esta versão não vale mais". Continuar cobrando o olho
+  // humano sobre ela encheria a fila de trabalho que ninguém precisa fazer —
+  // e uma fila com item morto deixa de ser lida.
+  const p = stand('Gama')
+  const arquivada = envioSemConferir(lona.id, { arquivado: true })
+  assert.equal(situacaoDoProjeto(p, [arquivada]).semConferir.length, 0)
+})
+
+test('arte que a ferramenta conseguiu ler não vira trabalho manual', () => {
+  const p = stand('Delta')
+  const sit = situacaoDoProjeto(p, [envio(lona.id), envio(testeira.id)])
+  assert.equal(sit.semConferir.length, 0)
+  assert.equal(panorama([{ projeto: p, sit }], { agora: AGORA }).artesSemConferir, 0)
+})
+
+test('a fila vem do stand com mais artes por conferir', () => {
+  const a = stand('Um')
+  const b = stand('Dois')
+  const cen = panorama([
+    { projeto: a, sit: situacaoDoProjeto(a, [envioSemConferir(lona.id)]) },
+    { projeto: b, sit: situacaoDoProjeto(b, [envioSemConferir(lona.id), envioSemConferir(testeira.id)]) },
+  ], { agora: AGORA })
+  assert.equal(cen.artesSemConferir, 3)
+  assert.deepEqual(cen.acoes.conferencia.map((l) => l.projeto.stand), ['Dois', 'Um'])
+})

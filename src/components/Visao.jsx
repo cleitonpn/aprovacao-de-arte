@@ -116,11 +116,23 @@ export default function Visao({ sessao }) {
 
       {!carregando && projetos.length > 0 && (
         <>
+          {/*
+            A ordem é a da urgência, não a do raciocínio.
+
+            Antes vinha a esteira — que é contexto, e responde "como a feira
+            está indo" — e só depois as duas listas que pedem alguém agora.
+            Num painel que existe para virar ação na mesma manhã, contexto
+            antes de ação empurra a ação para baixo da dobra: quem abre às oito
+            lê a barra bonita e rola até o café esfriar.
+
+            Agora: os números, o que exige uma PESSOA hoje (ligar, ajudar), o
+            que exige um CLIQUE do time, e por último o panorama e a cobrança.
+          */}
           <Numeros cenario={cenario} />
-          <Esteira cenario={cenario} feiraId={feiraId} />
-          <PrecisaDeVoce cenario={cenario} feiraId={feiraId} />
           <Intervencao linhas={cenario.acoes.intervencao} feiraId={feiraId} />
           <Dificuldade linhas={cenario.acoes.dificuldade} feiraId={feiraId} />
+          <PrecisaDeVoce cenario={cenario} feiraId={feiraId} />
+          <Esteira cenario={cenario} feiraId={feiraId} />
           <QuemFalta cenario={cenario} feiraId={feiraId} />
         </>
       )}
@@ -196,6 +208,24 @@ function Numeros({ cenario }) {
         rotulo="coisas esperando o time"
         detalhe={cenario.aFazer ? 'pedidos, provas, mensagens e ajuda' : 'nada parado com a gente'}
         cor={cenario.aFazer ? 'alerta' : 'ok'}
+      />
+      {/*
+        O quinto número, e o único que fala de RISCO em vez de andamento.
+
+        Os outros quatro dizem quanto falta; este diz quanto já passou sem
+        ninguém ter olhado. São artes cujo laudo promete conferência humana
+        porque a ferramenta não conseguiu abrir a imagem — e elas não estão
+        paradas: estão liberadas, andando para a impressora. Um número que fica
+        em zero na maioria dos dias e, quando não fica, é a coisa mais urgente
+        da tela.
+      */}
+      <Cartao
+        valor={cenario.artesSemConferir}
+        rotulo="artes esperando olho humano"
+        detalhe={cenario.artesSemConferir
+          ? `em ${cenario.acoes.conferencia.length} stand(s) — a ferramenta não abriu`
+          : 'nenhuma pendente'}
+        cor={cenario.artesSemConferir ? 'ruim' : 'ok'}
       />
     </div>
   )
@@ -304,8 +334,8 @@ function Esteira({ cenario, feiraId }) {
 
 /** A fila de trabalho do time: só o que não anda sem alguém daqui. */
 function PrecisaDeVoce({ cenario, feiraId }) {
-  const { pedidos, provas, mensagens } = cenario.acoes
-  if (!pedidos.length && !provas.length && !mensagens.length) {
+  const { pedidos, provas, mensagens, conferencia } = cenario.acoes
+  if (!pedidos.length && !provas.length && !mensagens.length && !conferencia.length) {
     return (
       <div className="cartao">
         <h3>Precisa de você</h3>
@@ -326,6 +356,11 @@ function PrecisaDeVoce({ cenario, feiraId }) {
         <Pendencia titulo="Mensagens novas" linhas={mensagens} feiraId={feiraId}
           vazio="nenhuma mensagem nova"
           detalhe={() => 'respondeu no chat'} />
+        {/* Esta não espera resposta de ninguém de fora: espera alguém daqui
+            abrir o arquivo. E ela não segura a peça — a arte já seguiu. */}
+        <Pendencia titulo="Conferir à mão" linhas={conferencia} feiraId={feiraId}
+          vazio="nada esperando conferência"
+          detalhe={(sit) => `${sit.semConferir.length} arte(s) que não abrimos`} />
       </div>
     </div>
   )

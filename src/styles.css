@@ -594,6 +594,17 @@ textarea { width: 100%; font: inherit; font-size: 13px; padding: 9px 11px; borde
 }
 .spec-glossario strong { color: var(--texto); }
 
+/* Aviso de arte não conferida, dentro da versão a que ele pertence. Vermelho
+   e não âmbar de propósito: não é "olhe quando puder", é arte a caminho da
+   impressora que ninguém viu. */
+.conferir-a-mao {
+  margin: 6px 0 2px; padding: 10px 12px; border-radius: 8px;
+  background: var(--ruim-fundo); border-left: 3px solid var(--ruim);
+}
+.conferir-a-mao > strong { display: block; font-size: 13px; }
+.conferir-a-mao p { margin: 4px 0 8px; font-size: 12.5px; color: var(--suave); line-height: 1.5; }
+.conferir-a-mao .btn { font-size: 12.5px; padding: 6px 11px; }
+
 .destaque-extra { border-color: var(--alerta); background: var(--alerta-fundo); }
 .destaque-extra p { font-size: 13px; line-height: 1.55; }
 .destaque-correcao { border-left: 3px solid var(--ruim); padding-left: 10px; }

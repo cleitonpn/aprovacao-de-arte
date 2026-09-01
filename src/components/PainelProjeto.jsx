@@ -3,6 +3,7 @@ import { STATUS, AVISO_EXTRA } from '../core/fluxo.js'
 import {
   liberarNovaVersao, recusarNovaVersao, definirStatusDaPeca, registrarProva, prorrogarPrazo,
   ouvirReprovacoes, devolverArte, desfazerDevolucao, registrarContato, desfazerContato,
+  marcarConferido,
 } from '../services/projetos.js'
 import { enviarProva, EXTENSOES_PROVA } from '../services/envio.js'
 import { traduzirErroAuth } from '../services/sessao.js'
@@ -10,6 +11,7 @@ import ConversaFlutuante from './ConversaFlutuante.jsx'
 import { formatarDataHora as fmtDataHora, paraInputData, fimDoDia } from '../core/datas.js'
 import { motivosMaisComuns, LIMITE_REPROVACOES } from '../core/reprovacoes.js'
 import { INICIO_DO_REGISTRO, DIAS_DE_SILENCIO_APOS_CONTATO } from '../core/contato.js'
+import { conferenciaPendente } from '../core/regras.js'
 import { marcarVisto } from '../store/visto.js'
 
 // O que o analista faz com um projeto: responder pedidos, mandar a prova de
@@ -123,10 +125,19 @@ export default function PainelProjeto({ sessao, projeto, resumo, envios, podeApr
         onEnviar={(dados) => rodar(() => registrarProva(sessao.fb, projeto.token, { ...dados, por: sessao.usuario?.email }))}
       />}
 
-      <ArquivosDeApoio apoio={resumo.apoio} />
+      {/*
+        As peças vêm ANTES do apoio e do log, e não depois.
 
-      <LogDeReprovacoes sessao={sessao} projeto={projeto} />
+        A ordem anterior punha duas referências — os arquivos que o cliente
+        mandou por fora e o histórico de tentativas reprovadas — entre a prova
+        e a lista de peças. As duas são material de consulta: úteis quando se
+        procura algo, ruído quando se está trabalhando. E o trabalho é a lista
+        de peças: é ali que se devolve arte, se marca "em impressão" e agora se
+        confere o arquivo que a ferramenta não abriu.
 
+        Um analista abre esta ficha entre duas ligações. O que ele faz fica no
+        alto; o que ele consulta fica embaixo.
+      */}
       <div className="cartao">
         <h3>Peças</h3>
         {resumo.pecas.map((s) => (
@@ -155,9 +166,16 @@ export default function PainelProjeto({ sessao, projeto, resumo, envios, podeApr
             onDesfazerDevolucao={() => rodar(
               () => desfazerDevolucao(sessao.fb, projeto.token, s.peca.id),
             )}
+            onConferir={(protocolo) => rodar(
+              () => marcarConferido(sessao.fb, protocolo, sessao.usuario?.email),
+            )}
           />
         ))}
       </div>
+
+      <ArquivosDeApoio apoio={resumo.apoio} />
+
+      <LogDeReprovacoes sessao={sessao} projeto={projeto} />
 
       <ConversaFlutuante
         token={projeto.token}
@@ -693,8 +711,49 @@ function LogDeReprovacoes({ sessao, projeto }) {
   )
 }
 
+/**
+ * A arte que a ferramenta não conseguiu abrir.
+ *
+ * O laudo dessas artes promete, com todas as letras, que a equipe vai olhar o
+ * arquivo manualmente antes de imprimir. Até agora a promessa dependia de
+ * alguém reparar numa ressalva no meio da aba de envios — e a peça segue para
+ * produção do mesmo jeito, porque a ferramenta não desaprovou nada: ela só não
+ * enxergou.
+ *
+ * E não é caso raro. Uma parede de 120 × 320 cm a 300 dpi tem 562 megapixels e
+ * ~2,25 GB descomprimidos; nenhum navegador abre. Quem cai aqui é a arte BEM
+ * feita, na peça que mais custa reimprimir.
+ *
+ * Fica na versão, e não no topo da peça, porque é de UM arquivo que se trata:
+ * a v2 pode abrir normalmente e a v1 não.
+ */
+function ConferirAMao({ envio, ocupado, podeAprovar, onConferir }) {
+  return (
+    <div className="conferir-a-mao">
+      <strong>Ninguém viu esta arte ainda</strong>
+      <p>
+        A imagem embutida é grande demais para o navegador abrir, então a
+        pré-visualização e a medição de nitidez não puderam ser feitas — a
+        conferência de medida, sangria e resolução declarada aconteceu normal.
+        Baixe o arquivo, abra e confira se a arte se sustenta no tamanho da
+        peça.
+      </p>
+      {podeAprovar && (
+        <button
+          className="btn btn-ghost"
+          disabled={ocupado}
+          onClick={() => onConferir?.(envio.protocolo)}
+        >
+          Conferi este arquivo
+        </button>
+      )}
+    </div>
+  )
+}
+
 function PecaDoTime({
   situacao, envios, ocupado, podeAprovar, onStatus, onLiberar, onDevolver, onDesfazerDevolucao,
+  onConferir,
 }) {
   const { peca, status, rotulo, cor, controle, devolucao } = situacao
   const emProducao = status === 'em_impressao' || status === 'impressa'
@@ -722,6 +781,9 @@ function PecaDoTime({
               <strong>v{e.versao || 1}</strong> · {fmtDataHora(e.criadoEm)} ·{' '}
               <span className={`tag ${e.veredicto}`}>{e.veredicto}</span>
               {e.link && <> · <a href={e.link} download={e.arquivo?.nome} target="_blank" rel="noreferrer">baixar</a></>}
+              {conferenciaPendente(e) && (
+                <ConferirAMao envio={e} ocupado={ocupado} podeAprovar={podeAprovar} onConferir={onConferir} />
+              )}
             </li>
           ))}
         </ul>

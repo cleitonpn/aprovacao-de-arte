@@ -12,6 +12,7 @@
 import { resumoDoProjeto, STATUS, rotuloParaOTime, situacaoDoPrazo } from './fluxo.js'
 import { dificuldadeDoProjeto } from './reprovacoes.js'
 import { sinalDeContato, correioDoProjeto, contatoDoProjeto, precisaDeIntervencao, SINAL } from './contato.js'
+import { conferenciaPendente } from './regras.js'
 
 /**
  * Junta as duas fontes de verdade sobre um projeto.
@@ -44,6 +45,15 @@ export function situacaoDoProjeto(projeto, envios = []) {
     contato: contatoDoProjeto(projeto),
     pendentes: pecas.filter((s) => !comEnvio.has(s.peca.id)),
     apoio: envios.filter((e) => e.tipoEnvio === 'avulso'),
+    // Arte que a ferramenta NÃO conseguiu abrir para conferir.
+    //
+    // O laudo dela promete, com todas as letras, que a equipe vai olhar
+    // manualmente antes de imprimir. Até agora essa promessa dependia de
+    // alguém reparar numa ressalva no meio da lista de envios — e não é caso
+    // raro: 300 dpi numa parede grande produz uma imagem que nenhum navegador
+    // abre, então quem cai aqui é justamente a arte BEM feita, na peça que
+    // mais custa reimprimir.
+    semConferir: envios.filter((e) => !e.arquivado && conferenciaPendente(e)),
     // Arte que o cliente mandou por fora da lista: ele digitou a medida à mão.
     // Precisa aparecer com destaque justamente porque é o único caso em que a
     // medida voltou a ser palpite dele.
@@ -107,6 +117,9 @@ export function panorama(linhas = [], { feira = null, agora = Date.now() } = {})
   const pedidos = linhas.filter(({ sit }) => sit.pedidosEmAberto.length > 0)
   const provas = linhas.filter(({ sit }) => sit.provasAguardando > 0)
   const mensagens = linhas.filter((l) => l.temMensagemNova)
+  const conferencia = linhas
+    .filter(({ sit }) => sit.semConferir.length > 0)
+    .sort((a, b) => b.sit.semConferir.length - a.sit.semConferir.length)
   const dificuldade = linhas
     .filter(({ sit }) => sit.dificuldade.alerta)
     .sort((a, b) => b.sit.dificuldade.total - a.sit.dificuldade.total)
@@ -154,10 +167,15 @@ export function panorama(linhas = [], { feira = null, agora = Date.now() } = {})
     impressas: soma((s) => s.impressas),
     apoio: soma((s) => s.apoio.length),
     extras: soma((s) => s.extras.length),
-    acoes: { pedidos, provas, mensagens, dificuldade, intervencao },
+    acoes: { pedidos, provas, mensagens, dificuldade, intervencao, conferencia },
+    // Quantas ARTES esperam olho humano, somadas. O número de stands responde
+    // "com quantos clientes preciso falar"; este responde "quantos arquivos
+    // preciso abrir", que é o trabalho de fato.
+    artesSemConferir: soma((s) => s.semConferir.length),
     // Quantas coisas, ao todo, dependem de alguém do time agora. É o número
     // que diz se o dia está tranquilo ou não.
-    aFazer: pedidos.length + provas.length + mensagens.length + dificuldade.length + intervencao.length,
+    aFazer: pedidos.length + provas.length + mensagens.length + dificuldade.length
+      + intervencao.length + conferencia.length,
     prazo,
   }
 }
