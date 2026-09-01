@@ -25,13 +25,6 @@ const latin1 = (texto) => {
 }
 
 /**
- * Texto dentro de um parêntese de PDF.
- *
- * Os três escapes não são zelo: um nome de stand com parêntese — "Kemin (Brasil)"
- * — fecha a string no meio e produz um arquivo que nenhum leitor abre. E nomes
- * de expositor com parêntese são comuns.
- */
-/**
  * O que WinAnsiEncoding tem e o latin-1 não.
  *
  * A faixa 0x80–0x9F é onde o CP1252 põe travessão, aspas curvas e reticências —
@@ -53,6 +46,13 @@ const WIN_ANSI = {
   '\u2192': '\xbb',
 }
 
+/**
+ * Texto dentro de um parêntese de PDF.
+ *
+ * Os três primeiros escapes não são zelo: um nome de stand com parêntese —
+ * "Kemin (Brasil)" — fecha a string no meio e produz um arquivo que nenhum
+ * leitor abre. E nome de expositor com parêntese é comum.
+ */
 const escapar = (texto) => String(texto ?? '')
   .replace(/\\/g, '\\\\')
   .replace(/\(/g, '\\(')

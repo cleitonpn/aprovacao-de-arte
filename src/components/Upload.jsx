@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import { FORMATOS_ACEITOS } from '../data/perfis.js'
+import RoboAnalisando from './RoboAnalisando.jsx'
 
 /**
  * A área de soltar o arquivo.
@@ -80,18 +81,24 @@ const ETAPAS = [
   { id: 'medindo', texto: 'Medindo resolução, proporção e nitidez' },
   { id: 'escala', texto: 'Refazendo a conta na escala que reconhecemos' },
   { id: 'decidindo', texto: 'Comparando com o que esta peça exige' },
+  { id: 'pronto', texto: 'Pronto' },
 ]
 
 function Analisando({ etapa }) {
   // A etapa de escala só existe quando a ferramenta detecta uma; fora desse
   // caso ela nem aparece na lista, para ninguém ficar esperando um passo que
   // não vai acontecer.
-  const visiveis = ETAPAS.filter((e) => e.id !== 'escala' || etapa === 'escala')
+  //
+  // "Pronto" também some enquanto não chega: ele é o fecho, e anunciar o fim
+  // antes do fim é a única coisa nesta lista que seria mentira.
+  const visiveis = ETAPAS
+    .filter((e) => e.id !== 'escala' || etapa === 'escala')
+    .filter((e) => e.id !== 'pronto' || etapa === 'pronto')
   const atual = Math.max(visiveis.findIndex((e) => e.id === etapa), 0)
 
   return (
     <>
-      <div className="girando" aria-hidden />
+      <RoboAnalisando />
       <strong>Analisando a sua arte…</strong>
       <ol className="etapas-analise" aria-live="polite">
         {visiveis.map((e, i) => (

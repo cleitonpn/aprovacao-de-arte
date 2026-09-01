@@ -118,13 +118,42 @@ export async function analisar(arquivo, peca, perfil, opcoes = {}) {
   // acontecem — inventar uma barra que anda sozinha seria mentir sobre o que
   // está demorando, e o que demora aqui varia muito de arquivo para arquivo.
   const bruto = typeof opcoes.aoAndar === 'function' ? opcoes.aoAndar : () => {}
-  // Anunciar a etapa E DEVOLVER A THREAD. Sem o segundo passo o React agenda a
-  // pintura e o trabalho pesado começa antes dela: a lista de etapas só
-  // aparecia quando tudo já tinha acabado, que é o mesmo que não existir. O
-  // `setTimeout(0)` custa um quadro e é o que faz a tela responder.
+  // Quanto tempo cada etapa fica visível, no mínimo.
+  //
+  // Numa testeira de 1,8 MB a análise inteira leva uns 200 ms: as cinco etapas
+  // passam antes de o navegador pintar a primeira, e o cliente vê a tela piscar
+  // e cuspir um veredicto. Isso não parece rápido — parece que nada foi
+  // conferido, e a desconfiança recai justamente sobre o "aprovado".
+  //
+  // O piso NÃO inventa etapa nem inverte a ordem: cada uma continua sendo
+  // anunciada no ponto real em que acontece. O que ele faz é segurar a anterior
+  // na tela tempo suficiente para ser lida. O custo é cerca de um segundo e meio
+  // no arquivo pequeno, e zero no arquivo grande — ali o trabalho já demora
+  // mais que o piso, e nada é somado.
+  const piso = Number.isFinite(opcoes.pisoDaEtapaMs) ? opcoes.pisoDaEtapaMs : PISO_DA_ETAPA_MS
+  let mostradaEm = 0
   const andar = async (etapa) => {
+    const restante = mostradaEm ? piso - (Date.now() - mostradaEm) : 0
+    if (restante > 0) await new Promise((pronto) => setTimeout(pronto, restante))
     bruto(etapa)
+    mostradaEm = Date.now()
+    // Devolve a thread para o navegador pintar a etapa nova ANTES de o trabalho
+    // pesado começar. Sem isto o React agenda a pintura e ela só acontece
+    // quando tudo já acabou — que é o mesmo que não existir.
     await new Promise((pronto) => setTimeout(pronto, 0))
+  }
+  /**
+   * Fecha a lista de etapas e segura o "Pronto" na tela.
+   *
+   * Existe como função porque a análise tem DUAS saídas — o formato que não
+   * sabemos ler sai cedo — e a primeira versão disto fechava só a saída longa.
+   * O efeito no arquivo `.cdr` era a lista parando em "Abrindo a arte" e o
+   * resultado tomando a tela por cima dela: exatamente o piscar que este piso
+   * existe para acabar, e justo em quem já vai receber uma recusa.
+   */
+  const encerrar = async () => {
+    await andar('pronto')
+    if (piso > 0) await new Promise((pronto) => setTimeout(pronto, piso))
   }
 
   await andar('lendo')
@@ -150,6 +179,7 @@ export async function analisar(arquivo, peca, perfil, opcoes = {}) {
 
   if (formato !== 'jpeg' && formato !== 'png' && formato !== 'pdf' && formato !== 'ai') {
     const medidas = { ...base, formatoSuportado: false }
+    await encerrar()
     return { medidas, ...avaliar({ peca, perfil, medidas, escalaFator, politica, detectorNitidez }), peca, perfil, escalaFator, politica }
   }
 
@@ -226,6 +256,10 @@ export async function analisar(arquivo, peca, perfil, opcoes = {}) {
 
   await andar('decidindo')
   const resultado = avaliar({ peca, perfil, medidas, escalaFator: escalaUsada, politica, detectorNitidez })
+  // Fecha a lista com tudo marcado. Sem esta última passagem a etapa final
+  // some no mesmo quadro em que aparece, e o passo mais importante — "comparei
+  // com o que esta peça exige" — é o único que ninguém chega a ler.
+  await encerrar()
   return {
     medidas,
     ...resultado,
@@ -251,6 +285,15 @@ export async function analisar(arquivo, peca, perfil, opcoes = {}) {
 // uns 35 dpi ele cabe dentro de um pixel e some. Medir numa resolução em que
 // o defeito não aparece é pior do que não medir — devolve "está tudo certo"
 // justamente nos arquivos que a checagem existe para pegar.
+
+/**
+ * Tempo mínimo de cada etapa na tela.
+ *
+ * Ver a nota em `analisar`. Exposto como constante para os testes poderem
+ * zerá-lo: uma suíte que espera um segundo e meio por análise é uma suíte que
+ * as pessoas param de rodar.
+ */
+export const PISO_DA_ETAPA_MS = 300
 
 /** dpi da análise, no tamanho impresso. Calibrado com arquivos reais. */
 const DPI_ANALISE = 50
