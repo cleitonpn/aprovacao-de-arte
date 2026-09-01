@@ -117,9 +117,17 @@ export async function analisar(arquivo, peca, perfil, opcoes = {}) {
   // escuta não paga nada. Os nomes são ETAPAS REAIS, na ordem em que
   // acontecem — inventar uma barra que anda sozinha seria mentir sobre o que
   // está demorando, e o que demora aqui varia muito de arquivo para arquivo.
-  const andar = typeof opcoes.aoAndar === 'function' ? opcoes.aoAndar : () => {}
+  const bruto = typeof opcoes.aoAndar === 'function' ? opcoes.aoAndar : () => {}
+  // Anunciar a etapa E DEVOLVER A THREAD. Sem o segundo passo o React agenda a
+  // pintura e o trabalho pesado começa antes dela: a lista de etapas só
+  // aparecia quando tudo já tinha acabado, que é o mesmo que não existir. O
+  // `setTimeout(0)` custa um quadro e é o que faz a tela responder.
+  const andar = async (etapa) => {
+    bruto(etapa)
+    await new Promise((pronto) => setTimeout(pronto, 0))
+  }
 
-  andar('lendo')
+  await andar('lendo')
   const buffer = await arquivo.arrayBuffer()
   const formatoReal = detectarFormato(buffer)
   const ext = extensao(arquivo.name || '')
@@ -138,15 +146,24 @@ export async function analisar(arquivo, peca, perfil, opcoes = {}) {
     formatoRotulo: ROTULO_FORMATO[formato] || formato?.toUpperCase(),
     analisadoEm: new Date().toISOString(),
   }
-  andar('abrindo')
+  await andar('abrindo')
 
   if (formato !== 'jpeg' && formato !== 'png' && formato !== 'pdf' && formato !== 'ai') {
     const medidas = { ...base, formatoSuportado: false }
     return { medidas, ...avaliar({ peca, perfil, medidas, escalaFator, politica, detectorNitidez }), peca, perfil, escalaFator, politica }
   }
 
+  // Aberto uma vez e reaproveitado. Ver a nota em `medirPdf`: reabrir não é só
+  // caro, é impossível — o buffer já foi transferido para o worker.
+  let docPdf = null
   const medir = async (fator) => {
-    if (formato === 'pdf' || formato === 'ai') return medirPdf(buffer, base, peca, perfil, fator, arquivo)
+    if (formato === 'pdf' || formato === 'ai') {
+      if (!docPdf) {
+        const { abrirPdf } = await import('./pdf.js')
+        docPdf = await abrirPdf(buffer)
+      }
+      return medirPdf(docPdf, base, peca, perfil, fator, arquivo)
+    }
 
     const meta = formato === 'jpeg' ? lerJpeg(buffer) : lerPng(buffer)
     const r = await medirRaster(arquivo, formato, meta, peca, perfil)
@@ -180,7 +197,7 @@ export async function analisar(arquivo, peca, perfil, opcoes = {}) {
     }
   }
 
-  andar('medindo')
+  await andar('medindo')
   let medidas = await medir(escalaFator)
 
   // A escala que o cliente esqueceu de trocar.
@@ -202,12 +219,12 @@ export async function analisar(arquivo, peca, perfil, opcoes = {}) {
   // qual escala foi considerada.
   const detectada = escalaFator === 1 ? medidas.escalaSugerida : null
   if (detectada) {
-    andar('escala')
+    await andar('escala')
     medidas = await medir(detectada)
   }
   const escalaUsada = detectada || escalaFator
 
-  andar('decidindo')
+  await andar('decidindo')
   const resultado = avaliar({ peca, perfil, medidas, escalaFator: escalaUsada, politica, detectorNitidez })
   return {
     medidas,
@@ -252,15 +269,35 @@ const DPI_ANALISE_DIRETA = 100
 const CELULA_REGIAO_CM = 10
 /** Abaixo disto a medida mente para o lado de aprovar. */
 const DPI_MINIMO_ANALISE = 35
-/** Teto de memória: acima disso o navegador do cliente é que paga a conta. */
-const MAX_PIXELS_ANALISE = 40e6
+/**
+ * Teto de memória.
+ *
+ * Cada pixel do render custa 4 bytes no `getImageData`, mais 1 no mapa de
+ * cinza. A 40 milhões isso era 200 MB de arrays vivos na thread da interface —
+ * e a interface é a mesma que precisa desenhar a tela de espera. Num celular
+ * com a página de um stand aberta, é onde ela deixava de responder.
+ *
+ * 18 milhões cobre a peça grande de verdade desta operação (uma parede de
+ * 130 × 295 cm com sangria dá 14,9 MP a 50 dpi) e corta o extremo.
+ */
+const MAX_PIXELS_ANALISE = 18e6
 
-function larguraParaAnalise(larguraCm, alturaCm) {
+export function larguraParaAnalise(larguraCm, alturaCm) {
   if (!(larguraCm > 0) || !(alturaCm > 0)) return null
   const largura = Math.round((larguraCm / CM_POR_POL) * DPI_ANALISE)
   const altura = Math.round((alturaCm / CM_POR_POL) * DPI_ANALISE)
-  if (largura * altura > MAX_PIXELS_ANALISE) return null
-  return largura
+  const pixels = largura * altura
+  if (pixels <= MAX_PIXELS_ANALISE) return largura
+
+  // Reduz até caber, em vez de desistir.
+  //
+  // Desistir devolvia `null`, e quem chama caía num render de 900 px — que numa
+  // peça de 3 m dá 8 dpi, resolução em que toda arte parece nítida. Ou seja: a
+  // peça MAIOR do stand, a que mais custa reimprimir, era exatamente a que
+  // ficava sem medida de nitidez. Reduzido proporcionalmente, o que sobra ainda
+  // mede; e se cair abaixo de `DPI_MINIMO_ANALISE`, `medirNitidez` recusa a
+  // medida pelo motivo certo, em vez de por falta de tentativa.
+  return Math.max(1, Math.round(largura * Math.sqrt(MAX_PIXELS_ANALISE / pixels)))
 }
 
 function medirNitidez(dadosRGBA, largura, altura, larguraCm) {
@@ -286,12 +323,23 @@ function medirNitidez(dadosRGBA, largura, altura, larguraCm) {
   }
 }
 
-async function medirPdf(buffer, base, peca, perfil, escalaFator, arquivo = null) {
+/**
+ * @param {object} doc documento já aberto — ver `analisar`, que o abre uma vez.
+ *
+ * Receber o documento em vez do buffer conserta um erro que só aparecia quando
+ * a ferramenta detectava escala: o pdf.js TRANSFERE o ArrayBuffer para o worker
+ * dele, e o buffer fica destacado no fim da primeira abertura. A segunda
+ * medição — a que refaz a conta na escala reconhecida — reabria um buffer
+ * morto. Justamente o caminho do cliente que montou a arte em 1:10.
+ *
+ * De quebra é a maior economia da análise: abrir e rasterizar um PDF de 138 MB
+ * duas vezes é o que fazia a página parecer travada.
+ */
+async function medirPdf(doc, base, peca, perfil, escalaFator, arquivo = null) {
   // import dinâmico: o pdf.js é pesado e só entra em cena quando é PDF
   const {
-    abrirPdf, inspecionarPagina, renderizarPagina, fontesNaoIncorporadas, larguraEmPontos,
+    inspecionarPagina, renderizarPagina, fontesNaoIncorporadas, larguraEmPontos,
   } = await import('./pdf.js')
-  const doc = await abrirPdf(buffer)
   const info = await inspecionarPagina(doc, 1)
   const fontesFaltando = await fontesNaoIncorporadas(doc, 1)
 
@@ -345,6 +393,13 @@ async function medirPdf(buffer, base, peca, perfil, escalaFator, arquivo = null)
       miniaturaUrl = await miniatura(canvas, 900)
       nitidez = medirNitidez(data, canvas.width, canvas.height, declaradoLarguraCm)
     }
+    // O canvas de análise pode passar de 15 megapixels — 60 MB que o navegador
+    // segura enquanto houver referência a ele. A miniatura já foi extraída e a
+    // medida já foi feita: zerar as dimensões devolve a memória agora, em vez
+    // de na próxima coleta de lixo, que numa análise seguida da outra chega
+    // tarde demais.
+    canvas.width = 0
+    canvas.height = 0
   } catch {
     visualIndisponivel = true
   }
@@ -370,7 +425,8 @@ async function medirPdf(buffer, base, peca, perfil, escalaFator, arquivo = null)
       // desanexou. Guardar uma segunda cópia desde o início custaria outros
       // 145 MB de memória numa arte grande — e só serviria neste caminho, que
       // é a exceção.
-      const cru = arquivo ? await arquivo.arrayBuffer() : buffer
+      const cru = arquivo ? await arquivo.arrayBuffer() : null
+      if (!cru) throw new Error('sem arquivo para reler')
       const embutida = acharImagemNoPdf(cru)
       if (embutida?.tipo === 'flate') {
         const alvo = Math.round((declaradoLarguraCm / CM_POR_POL) * DPI_ANALISE_DIRETA)

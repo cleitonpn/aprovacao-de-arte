@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { ROTULO_VEREDICTO, especificacao } from '../core/regras.js'
 import { agruparAchados, chamadaDoVeredicto, TENTAR_DE_NOVO_E_LIVRE } from '../core/laudo.js'
 import { mensagemParaDesigner, laudoJson } from '../core/mensagem.js'
+import { especificacaoEmPdf, nomeDoArquivo } from '../core/especificacaoPdf.js'
 import Simulador from './Simulador.jsx'
 import Envio from './Envio.jsx'
 
@@ -229,17 +230,43 @@ export default function Resultado({
         <button className="btn btn-ghost" onClick={copiar}>
           {copiado ? '✓ Copiado' : 'Copiar mensagem para o designer'}
         </button>
+        {/*
+          O JSON saiu daqui. Ele foi escrito pensando em integração — máquina
+          lendo máquina — e integração nunca houve: na prática o botão oferecia
+          ao cliente um arquivo que ninguém no caminho dele sabe abrir. Quem
+          recebe a arte para corrigir é um designer, e o que ele precisa não é o
+          laudo: é a medida, em vetor, no tamanho da peça.
+
+          O laudo estruturado continua existindo e continua sendo gravado com
+          cada envio (`laudoJson`, em `Envio.jsx`) — o que deixou de existir é o
+          botão que o entregava a quem não tem o que fazer com ele.
+        */}
         <button
           className="btn btn-ghost"
           onClick={() => baixar(
-            `laudo-${(medidas.arquivo?.nome || 'arte').replace(/\.[^.]+$/, '')}.json`,
-            JSON.stringify(laudoJson(resultado), null, 2),
-            'application/json',
+            nomeDoArquivo(peca, perfil),
+            especificacaoEmPdf({
+              peca, perfil, politica: resultado.politica,
+              escalaFator: resultado.escalaFator, cadastro, resultado,
+            }),
+            'application/pdf',
           )}
         >
-          Baixar laudo (JSON)
+          Baixar especificação (PDF)
         </button>
-        <button className="btn btn-ghost" onClick={() => window.print()}>Imprimir / PDF</button>
+        <button className="btn btn-ghost" onClick={() => window.print()}>Imprimir o laudo</button>
+        {modoTecnico && (
+          <button
+            className="btn btn-ghost"
+            onClick={() => baixar(
+              `laudo-${(medidas.arquivo?.nome || 'arte').replace(/\.[^.]+$/, '')}.json`,
+              JSON.stringify(laudoJson(resultado), null, 2),
+              'application/json',
+            )}
+          >
+            Laudo (JSON)
+          </button>
+        )}
       </div>
 
       {modoTecnico && <PainelTecnico resultado={resultado} />}

@@ -1087,15 +1087,31 @@ function PainelDaPeca({ situacao, projeto, resumo, cadastro, perfis, politica, d
                   <dt>Margem de segurança</dt>
                   <dd>{perfil.margemMm} mm</dd>
                 </div>
-                <div className="destaque">
-                  <dt>Mínimo com sangria ({spec.minimo.dpi} dpi)</dt>
-                  <dd>{fmt(spec.minimo.largura)} × {fmt(spec.minimo.altura)} px</dd>
-                </div>
-                <div className="destaque">
-                  <dt>Ideal com sangria ({spec.ideal.dpi} dpi)</dt>
-                  <dd>{fmt(spec.ideal.largura)} × {fmt(spec.ideal.altura)} px</dd>
-                </div>
               </dl>
+
+              {/*
+                Pixel é vocabulário de designer, e quem abriu esta tela na
+                última feira foi o cliente. Ele não digita 5.906 × 5.906 em
+                lugar nenhum — quem faz isso é quem monta a arte, e essa pessoa
+                agora recebe os mesmos números por escrito na especificação em
+                PDF, ao lado do gabarito. Aqui eles ficam a um clique, para o
+                caso de o designer ser o próprio.
+              */}
+              <details className="numeros-do-designer">
+                <summary>Números para quem monta a arte</summary>
+                <dl>
+                  <div className="destaque">
+                    <dt>Mínimo com sangria ({spec.minimo.dpi} dpi)</dt>
+                    <dd>{fmt(spec.minimo.largura)} × {fmt(spec.minimo.altura)} px</dd>
+                  </div>
+                  {spec.ideal.dpi > spec.minimo.dpi && (
+                    <div className="destaque">
+                      <dt>Ideal com sangria ({spec.ideal.dpi} dpi)</dt>
+                      <dd>{fmt(spec.ideal.largura)} × {fmt(spec.ideal.altura)} px</dd>
+                    </div>
+                  )}
+                </dl>
+              </details>
             </div>
 
             <Escala
