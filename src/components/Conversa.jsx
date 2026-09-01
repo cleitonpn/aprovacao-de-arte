@@ -3,6 +3,7 @@ import {
   ouvirConversa, enviarMensagemDoCliente, enviarMensagemDoTime,
 } from '../services/projetos.js'
 import { marcarVisto } from '../store/visto.js'
+import { chaveDaConversa } from '../core/conversa.js'
 
 // A conversa entre o cliente e o time, dentro da ferramenta.
 //
@@ -29,7 +30,7 @@ const fmtQuando = (v) => {
   return new Date(ms).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
 }
 
-export default function Conversa({ token, ehTime = false, sessao = null, identidade = null }) {
+export default function Conversa({ token, ehTime = false, sessao = null, identidade = null, embutida = false }) {
   const [mensagens, setMensagens] = useState([])
   const [aberta, setAberta] = useState(false)
   const [texto, setTexto] = useState('')
@@ -69,9 +70,18 @@ export default function Conversa({ token, ehTime = false, sessao = null, identid
   // Estar com a conversa na tela É ter visto. Quem redesenha as bolinhas
   // descobre sozinho: `marcarVisto` avisa seus assinantes, e as telas que
   // pintam aviso estão inscritas nele.
+  //
+  // Vale para os DOIS lados desde que a conversa virou um popup com badge. Do
+  // lado do cliente a marca fica sob `anon`, no navegador dele — que é a mesma
+  // granularidade do resto: o link é a credencial, e quem tem o link tem a
+  // tela. O preço é o de sempre: trocar de navegador reacende o aviso uma vez.
   useEffect(() => {
-    if (!ehTime || !mensagens.length) return
-    marcarVisto(sessao?.usuario?.email, `conversa:${token}`, mensagens[mensagens.length - 1].em)
+    if (!mensagens.length) return
+    marcarVisto(
+      ehTime ? sessao?.usuario?.email : null,
+      chaveDaConversa(token),
+      mensagens[mensagens.length - 1].em,
+    )
   }, [ehTime, mensagens, token, sessao?.usuario?.email])
 
   const enviar = async () => {
@@ -114,7 +124,9 @@ export default function Conversa({ token, ehTime = false, sessao = null, identid
   // qualquer lado, e a conversa abre e fica aberta: aí ela é assunto pendente,
   // não decoração. Do lado do time isso não se aplica: o analista abre o painel
   // justamente para falar com o cliente.
-  if (!ehTime && !aberta && !mensagens.length) {
+  // Dentro do popup o convite não faz sentido: quem clicou na bolha já disse
+  // que quer falar. Ele existia para a versão em cartão, no meio da página.
+  if (!embutida && !ehTime && !aberta && !mensagens.length) {
     return (
       <div className="cartao conversa-convite">
         <div>
@@ -133,13 +145,15 @@ export default function Conversa({ token, ehTime = false, sessao = null, identid
   }
 
   return (
-    <div className="cartao conversa">
-      <div className="titulo-secao">
-        <h3>{ehTime ? 'Conversa com o cliente' : 'Dúvidas com o time'}</h3>
-        <span className="dica-campo ao-vivo">ao vivo</span>
-      </div>
+    <div className={embutida ? 'conversa embutida' : 'cartao conversa'}>
+      {!embutida && (
+        <div className="titulo-secao">
+          <h3>{ehTime ? 'Conversa com o cliente' : 'Dúvidas com o time'}</h3>
+          <span className="dica-campo ao-vivo">ao vivo</span>
+        </div>
+      )}
 
-      {!ehTime && (
+      {!ehTime && !embutida && (
         <p className="ajuda">
           Dúvida sobre medida, material ou prazo? Pergunte por aqui. Fica tudo
           registrado junto com as artes deste stand — sem precisar procurar

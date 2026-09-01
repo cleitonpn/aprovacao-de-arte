@@ -1002,6 +1002,78 @@ textarea { width: 100%; font: inherit; font-size: 13px; padding: 9px 11px; borde
   padding: 12px; margin: 10px 0 14px;
   background: var(--fundo); border-radius: 10px;
 }
+
+/* ------------------------------------------------- a conversa como popup */
+/*
+   A bolha fica no canto e não cobre nada: são ~46 px de altura sobre a barra
+   inferior, fora da coluna de conteúdo. É a caixa ABERTA que cobre — e no
+   celular ela cobre tudo de propósito, porque meia tela de chat com meio
+   formulário atrás não serve para nenhum dos dois.
+*/
+.conversa-flutuante {
+  position: fixed; right: 18px; bottom: 18px; z-index: 60;
+  display: flex; flex-direction: column; align-items: flex-end; gap: 10px;
+}
+
+.conversa-bolha {
+  display: inline-flex; align-items: center; gap: 9px;
+  padding: 11px 16px; border: 0; border-radius: 30px; cursor: pointer;
+  background: var(--acento); color: #fff; font: inherit; font-weight: 600;
+  font-size: 14px; box-shadow: 0 6px 20px rgb(0 0 0 / 0.22);
+  position: relative;
+}
+.conversa-bolha:hover { filter: brightness(1.07); }
+.conversa-bolha-icone { font-size: 16px; line-height: 1; }
+
+.badge-nova {
+  position: absolute; top: -3px; right: -3px;
+  width: 14px; height: 14px; border-radius: 50%;
+  background: var(--ruim); border: 2px solid var(--cartao);
+}
+/* Pulsa três vezes e para. Um ponto que pisca para sempre vira parte do
+   cenário, e o time deixa de vê-lo — que é o oposto do objetivo. */
+.badge-nova { animation: pulsar-badge 1.1s ease-out 3; }
+@keyframes pulsar-badge {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.35); }
+}
+
+.so-leitor {
+  position: absolute; width: 1px; height: 1px; overflow: hidden;
+  clip-path: inset(50%); white-space: nowrap;
+}
+
+.conversa-painel {
+  width: min(400px, calc(100vw - 36px));
+  max-height: min(560px, calc(100vh - 120px));
+  display: flex; flex-direction: column;
+  background: var(--cartao); border: 1px solid var(--borda);
+  border-radius: var(--raio); box-shadow: 0 14px 40px rgb(0 0 0 / 0.26);
+  overflow: hidden;
+}
+.conversa-painel-topo {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 12px; padding: 13px 14px; border-bottom: 1px solid var(--borda);
+}
+.conversa-painel-topo strong { display: block; font-size: 14.5px; }
+.conversa-painel-topo .dica-campo { display: block; margin-top: 2px; }
+.conversa-fechar {
+  background: none; border: 0; cursor: pointer; color: var(--suave);
+  font-size: 22px; line-height: 1; padding: 0 2px;
+}
+.conversa-painel-corpo { overflow-y: auto; padding: 14px; }
+.conversa.embutida .conversa-linha { max-height: 260px; margin-top: 0; }
+
+@media (max-width: 620px) {
+  .conversa-flutuante { right: 12px; bottom: 12px; left: 12px; align-items: stretch; }
+  .conversa-painel { width: auto; max-height: calc(100vh - 96px); }
+  .conversa-bolha { align-self: flex-end; }
+}
+
+@media (prefers-reduced-motion: reduce) { .badge-nova { animation: none; } }
+
+/* No papel a conversa não existe: o laudo impresso é sobre a arte. */
+@media print { .conversa-flutuante { display: none !important; } }
 .balao { max-width: 82%; padding: 9px 12px; border-radius: 12px; background: var(--cartao); border: 1px solid var(--borda); }
 .balao.cliente { justify-self: start; border-bottom-left-radius: 4px; }
 .balao.time {

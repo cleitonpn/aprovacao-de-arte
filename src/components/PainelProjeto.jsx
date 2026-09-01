@@ -6,7 +6,7 @@ import {
 } from '../services/projetos.js'
 import { enviarProva, EXTENSOES_PROVA } from '../services/envio.js'
 import { traduzirErroAuth } from '../services/sessao.js'
-import Conversa from './Conversa.jsx'
+import ConversaFlutuante from './ConversaFlutuante.jsx'
 import { formatarDataHora as fmtDataHora, paraInputData, fimDoDia } from '../core/datas.js'
 import { motivosMaisComuns, LIMITE_REPROVACOES } from '../core/reprovacoes.js'
 import { INICIO_DO_REGISTRO, DIAS_DE_SILENCIO_APOS_CONTATO } from '../core/contato.js'
@@ -24,6 +24,11 @@ import { marcarVisto } from '../store/visto.js'
 export default function PainelProjeto({ sessao, projeto, resumo, envios, podeAprovar = true, onFechar, onMudou }) {
   const [erro, setErro] = useState(null)
   const [ocupado, setOcupado] = useState(false)
+  // A conversa sai do meio da ficha e vira canto da tela. Na ficha ela ficava
+  // entre o log de reprovações e a lista de peças: a resposta do cliente
+  // chegava em tempo real e nada mudava à vista de quem estava analisando
+  // arte — era preciso rolar até lá para descobrir.
+  const [conversaAberta, setConversaAberta] = useState(false)
 
   const rodar = async (acao) => {
     setOcupado(true)
@@ -122,8 +127,6 @@ export default function PainelProjeto({ sessao, projeto, resumo, envios, podeApr
 
       <LogDeReprovacoes sessao={sessao} projeto={projeto} />
 
-      <Conversa token={projeto.token} ehTime sessao={sessao} />
-
       <div className="cartao">
         <h3>Peças</h3>
         {resumo.pecas.map((s) => (
@@ -155,6 +158,15 @@ export default function PainelProjeto({ sessao, projeto, resumo, envios, podeApr
           />
         ))}
       </div>
+
+      <ConversaFlutuante
+        token={projeto.token}
+        conversa={projeto.conversa}
+        ehTime
+        sessao={sessao}
+        aberta={conversaAberta}
+        onMudarAberta={setConversaAberta}
+      />
     </>
   )
 }

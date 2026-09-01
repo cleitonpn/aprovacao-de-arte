@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { panorama, situacaoDoProjeto } from '../core/painel.js'
 import { ouvirProjetos, ouvirEnvios } from '../services/projetos.js'
 import { traduzirErroAuth } from '../services/sessao.js'
-import { vistoEm, dataEmMs, assinarVisto } from '../store/visto.js'
+import { vistoEm, assinarVisto } from '../store/visto.js'
+import { temMensagemNova, chaveDaConversa } from '../core/conversa.js'
 import { formatarData } from '../core/datas.js'
 import { LIMITE_REPROVACOES } from '../core/reprovacoes.js'
 import { usarFeiras } from './Admin.jsx'
@@ -63,8 +64,14 @@ export default function Visao({ sessao }) {
     const linhas = projetos.map((p) => ({
       projeto: p,
       sit: situacaoDoProjeto(comPrazo(p), enviosPorProjeto.get(p.token) || []),
-      temMensagemNova: p.conversa?.ultimoAutor === 'cliente'
-        && dataEmMs(p.conversa?.ultimaEm) > vistoEm(usuario?.email, `conversa:${p.token}`),
+      // A mesma conta da badge do popup, e por isso vem de `core/conversa.js`:
+      // duas cópias derivariam, e o jeito de a bolinha perder a confiança do
+      // time é acender quando não devia.
+      temMensagemNova: temMensagemNova({
+        conversa: p.conversa,
+        ehTime: true,
+        vistoEmMs: vistoEm(usuario?.email, chaveDaConversa(p.token)),
+      }),
     }))
     return panorama(linhas, { feira })
     // eslint-disable-next-line react-hooks/exhaustive-deps

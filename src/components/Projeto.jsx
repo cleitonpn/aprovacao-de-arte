@@ -14,7 +14,7 @@ import Upload from './Upload.jsx'
 import Resultado from './Resultado.jsx'
 import Gabarito, { BotaoGabarito } from './Gabarito.jsx'
 import Avulsos from './Avulsos.jsx'
-import Conversa from './Conversa.jsx'
+import ConversaFlutuante from './ConversaFlutuante.jsx'
 import Tutorial from './Tutorial.jsx'
 import { jaViuTutorial, marcarTutorialVisto } from '../store/tutorial.js'
 
@@ -43,6 +43,11 @@ export default function Projeto({ token }) {
   const [erro, setErro] = useState(null)
   const [pecaAtivaId, setPecaAtivaId] = useState(null)
   const [extra, setExtra] = useState(null)
+  // A conversa é um canto da tela, e o estado dela mora aqui em cima porque a
+  // tela de resultado precisa poder abri-la: depois de uma reprovação, "não
+  // sei o que fazer com isso" é um dos três caminhos, e ele não pode exigir
+  // que o cliente volte duas telas para achar onde perguntar.
+  const [conversaAberta, setConversaAberta] = useState(false)
   // Abre sozinho só na primeira visita a ESTE stand, e num navegador que
   // nunca viu. Ver `store/tutorial.js` para o porquê de ser por stand.
   const [tutorial, setTutorial] = useState(false)
@@ -173,44 +178,48 @@ export default function Projeto({ token }) {
     )
   }
 
+  // A bolha da conversa acompanha as duas telas — a lista e a peça. Antes ela
+  // era uma seção no fim da lista, e o cliente que travava dentro de um envio
+  // teria de voltar para achá-la.
+  const conversa = (
+    <ConversaFlutuante
+      token={projeto.token}
+      conversa={projeto.conversa}
+      identidade={{ nome: '', email: '' }}
+      aberta={conversaAberta}
+      onMudarAberta={setConversaAberta}
+    />
+  )
+
   if (ativa) {
     return (
-      <PainelDaPeca
-        situacao={ativa}
-        projeto={projeto}
-        resumo={resumo}
-        cadastro={cadastro}
-        perfis={perfis}
-        politica={politica}
-        detectorNitidez={detectorNitidez}
-        onVoltar={() => { setPecaAtivaId(null); setExtra(null); carregar() }}
-        onFalarComTime={() => {
-          setPecaAtivaId(null)
-          setExtra(null)
-          // Depois da volta à lista, para o elemento existir. Mesmo padrão do
-          // "me mostre onde fica" do tutorial.
-          setTimeout(() => {
-            const alvo = document.getElementById('conversa-do-stand')
-            if (!alvo) return
-            alvo.scrollIntoView({ behavior: 'smooth', block: 'center' })
-            alvo.classList.add('piscando')
-            setTimeout(() => alvo.classList.remove('piscando'), 2400)
-          }, 60)
-        }}
-        onEnviado={async (recibo) => {
-          const peca = ativa.peca
-          if (!String(peca.id).startsWith('extra_')) {
-            await marcarEntrega(projeto.token, peca.id, {
-              protocolo: recibo.protocolo,
-              veredicto: recibo.veredicto,
-              riscoAceito: recibo.riscoAceito,
-              arquivo: recibo.nomeNoStorage,
-              versao: ativa.proximaVersao,
-            })
-          }
-          await carregar()
-        }}
-      />
+      <>
+        <PainelDaPeca
+          situacao={ativa}
+          projeto={projeto}
+          resumo={resumo}
+          cadastro={cadastro}
+          perfis={perfis}
+          politica={politica}
+          detectorNitidez={detectorNitidez}
+          onVoltar={() => { setPecaAtivaId(null); setExtra(null); carregar() }}
+          onFalarComTime={() => setConversaAberta(true)}
+          onEnviado={async (recibo) => {
+            const peca = ativa.peca
+            if (!String(peca.id).startsWith('extra_')) {
+              await marcarEntrega(projeto.token, peca.id, {
+                protocolo: recibo.protocolo,
+                veredicto: recibo.veredicto,
+                riscoAceito: recibo.riscoAceito,
+                arquivo: recibo.nomeNoStorage,
+                versao: ativa.proximaVersao,
+              })
+            }
+            await carregar()
+          }}
+        />
+        {conversa}
+      </>
     )
   }
 
@@ -262,11 +271,7 @@ export default function Projeto({ token }) {
 
       {projeto.aceitaAvulsos !== false && <Avulsos projeto={projeto} cadastro={cadastro} />}
 
-      {/* Âncora para o "Falar com a equipe" da tela de resultado: de lá o
-          cliente está dentro de uma peça, e a conversa vive na lista. */}
-      <div id="conversa-do-stand">
-        <Conversa token={projeto.token} identidade={{ nome: '', email: '' }} />
-      </div>
+      {conversa}
     </>
   )
 }
