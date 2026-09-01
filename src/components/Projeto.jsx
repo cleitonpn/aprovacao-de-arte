@@ -293,13 +293,17 @@ function Capa({ projeto, resumo, compacta = false, legenda = null, onVoltar = nu
   return (
     <section className={`capa ${compacta ? 'compacta' : ''}`}>
       <div className="capa-texto">
+        {/* A etiqueta da feira vai para o alto à direita no desenho dela; aqui
+            ela fica acima do nome porque o medidor já ocupa aquele canto, e
+            dois elementos disputando o mesmo lugar é o que faz uma tela
+            "quase igual ao desenho" ficar pior que as duas versões. */}
         <span className="capa-etiqueta">{projeto.feira}</span>
         <h2>{projeto.stand}</h2>
         {compacta
           ? legenda && <p className="capa-local">{legenda}</p>
           : (
             <>
-              {projeto.localizacao && <p className="capa-local">{projeto.localizacao}</p>}
+              {projeto.localizacao && <p className="capa-local forte">{projeto.localizacao}</p>}
               <p className="capa-frase">
                 As medidas de cada peça já vêm do projeto do seu stand — você
                 não precisa informar tamanho nenhum. A conferência acontece no
@@ -336,11 +340,12 @@ function Capa({ projeto, resumo, compacta = false, legenda = null, onVoltar = nu
         <p className="capa-medidor-texto">
           {resumo.completo
             ? 'Todas as artes enviadas'
-            : `${resumo.recebidas} de ${resumo.total} artes enviadas`}
+            : `${resumo.total - resumo.recebidas} ${resumo.total - resumo.recebidas === 1 ? 'arte ainda falta' : 'artes ainda faltam'}`}
         </p>
-        {resumo.emProducao > 0 && (
-          <p className="dica-campo">{resumo.emProducao} já em produção</p>
-        )}
+        <p className="dica-campo">
+          {resumo.recebidas} de {resumo.total} enviadas
+          {resumo.emProducao > 0 && ` · ${resumo.emProducao} em produção`}
+        </p>
       </div>
     </section>
   )
@@ -350,24 +355,43 @@ function Capa({ projeto, resumo, compacta = false, legenda = null, onVoltar = nu
  * Anel de progresso.
  *
  * Substitui a barra reta por um motivo simples: o cliente abre esta tela para
- * saber "quanto falta", e o anel responde isso de relance, sem ler. A diretoria
- * achou a tela técnica demais — o número continua lá, mas agora vem embrulhado
- * em algo que se entende antes de ler.
+ * saber "quanto falta", e o anel responde isso de relance, sem ler.
+ *
+ * Duas diferenças em relação ao desenho da designer, e as duas vêm de o mesmo
+ * anel ter aparecido num print real com "66%" e "Todas as artes enviadas"
+ * lado a lado:
+ *
+ * 1. O número dentro é a CONTAGEM, não a porcentagem. "66%" de três peças é
+ *    "duas de três", e a segunda forma é a que a pessoa usa para falar do
+ *    próprio stand. Porcentagem de um total pequeno também mente: 2 de 3 vira
+ *    67%, e ninguém sabe se sobrou uma ou dez.
+ * 2. O que falta fica CINZA, não vermelho. Vermelho é a cor de erro em toda a
+ *    ferramenta — nos achados, nas recusas, no prazo vencido. Usá-lo para
+ *    "ainda não chegou" ensina o cliente a ler alarme onde só há trabalho por
+ *    fazer, e depois ele ignora o vermelho que importa.
  */
 function Anel({ feito, total }) {
   const fracao = total ? feito / total : 0
   const raio = 42
   const volta = 2 * Math.PI * raio
   return (
-    <svg className="anel" viewBox="0 0 100 100" role="img" aria-label={`${feito} de ${total} artes enviadas`}>
+    <svg
+      className="anel"
+      viewBox="0 0 100 100"
+      role="img"
+      aria-label={`${feito} de ${total} artes enviadas`}
+    >
       <circle className="anel-trilho" cx="50" cy="50" r={raio} />
       <circle
         className={`anel-marca ${fracao >= 1 ? 'completo' : ''}`}
         cx="50" cy="50" r={raio}
         strokeDasharray={`${volta * fracao} ${volta}`}
       />
-      <text className="anel-numero" x="50" y="50" dominantBaseline="central" textAnchor="middle">
-        {total ? Math.round(fracao * 100) : 0}%
+      <text className="anel-numero" x="50" y="46" dominantBaseline="central" textAnchor="middle">
+        {feito}
+      </text>
+      <text className="anel-total" x="50" y="64" dominantBaseline="central" textAnchor="middle">
+        de {total}
       </text>
     </svg>
   )
@@ -545,11 +569,19 @@ function CartaoPeca({ situacao, perfis, politica, projeto, onEscolher, onAtualiz
           {peca.escalaFator > 1 && ` · pode vir em escala 1:${peca.escalaFator}`}
         </p>
 
+        {/*
+          O que foi enviado fica junto da peça, com versão, data e protocolo —
+          é o desenho da designer, e ele acerta: sem isso, "Aprovado" não diz
+          QUAL arquivo foi aprovado, e o cliente que mandou três versões não
+          tem como saber se a que está valendo é a última que ele lembra.
+        */}
         {entrega
           ? (
-            <p className="dica-campo">
-              Versão {situacao.versaoRecebida} enviada em {fmtDataHora(entrega.em)} · protocolo {entrega.protocolo}
+            <p className="dica-campo entrega-linha">
+              <strong>V{situacao.versaoRecebida} enviada</strong> · {fmtDataHora(entrega.em)}
               {entrega.veredicto === 'ressalva' && ' · com ressalva'}
+              <br />
+              protocolo {entrega.protocolo}
             </p>
           )
           : <p className="dica-campo">Arquivo com no mínimo {fmt(spec.minimo.largura)} × {fmt(spec.minimo.altura)} px ({spec.minimo.dpi} dpi)</p>}

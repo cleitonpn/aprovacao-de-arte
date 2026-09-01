@@ -82,9 +82,25 @@ export default function Avulsos({ projeto, cadastro }) {
         onChange={(e) => enviar(e.target.files)}
       />
 
+      {/*
+        Botão cheio, e não fantasma.
+        
+        No desenho da designer ele é azul, e ela tem razão: é a única ação deste
+        bloco. Cinza, ele ficava com o mesmo peso do "Baixar" de cada arquivo
+        já enviado — e quem chega aqui pela primeira vez não tem nenhum arquivo
+        para baixar, só a ação de mandar o primeiro.
+      */}
+      {/* Os formatos vêm ANTES do botão: saber o que é aceito depois de escolher
+          o arquivo errado é saber tarde demais. */}
+      <p className="nota">
+        Aceita {EXTENSOES_AVULSAS.map((e) => `.${e}`).join(', ')} — até{' '}
+        {ENVIO.tamanhoMaximoAvulsoMb} MB por arquivo. Vários logos de uma vez?
+        Compacte num .zip.
+      </p>
+
       <div className="acoes">
-        <button className="btn btn-ghost" disabled={Boolean(enviando)} onClick={() => entrada.current?.click()}>
-          {enviando ? `Enviando ${enviando.nome}… ${Math.round(enviando.fracao * 100)}%` : 'Escolher arquivos'}
+        <button className="btn" disabled={Boolean(enviando)} onClick={() => entrada.current?.click()}>
+          {enviando ? `Enviando ${enviando.nome}… ${Math.round(enviando.fracao * 100)}%` : 'Carregar arquivo'}
         </button>
       </div>
 
@@ -116,12 +132,6 @@ export default function Avulsos({ projeto, cadastro }) {
       )}
 
       {erro && <p className="erro-envio">{erro}</p>}
-
-      <p className="nota">
-        Aceita {EXTENSOES_AVULSAS.map((e) => `.${e}`).join(', ')} — até{' '}
-        {ENVIO.tamanhoMaximoAvulsoMb} MB por arquivo. Vários logos de uma vez?
-        Compacte num .zip.
-      </p>
     </div>
   )
 }

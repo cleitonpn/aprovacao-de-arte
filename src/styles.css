@@ -829,8 +829,15 @@ textarea { width: 100%; font: inherit; font-size: 13px; padding: 9px 11px; borde
   background: color-mix(in srgb, var(--acento) 12%, transparent);
   padding: 4px 10px; border-radius: 999px; margin-bottom: 10px;
 }
-.capa h2 { margin: 0; font-size: 30px; line-height: 1.15; letter-spacing: -.02em; }
+.capa h2 { margin: 0; font-size: 34px; line-height: 1.1; letter-spacing: -.025em; }
 .capa-local { margin: 4px 0 0; color: var(--suave); font-size: 14px; }
+/* O local sobe de tom e vira caixa alta, como no desenho da designer: no print
+   dela "HOTEL UNIQUE" é o segundo dado da tela, e faz sentido — é por ele que o
+   cliente confere que abriu o link do stand certo. */
+.capa-local.forte {
+  color: var(--texto); font-size: 13px; font-weight: 600;
+  letter-spacing: .06em; text-transform: uppercase;
+}
 .capa-frase { margin: 12px 0 0; max-width: 62ch; font-size: 13.5px; line-height: 1.65; color: var(--suave); }
 
 /* O botão do Drive era preto sólido com um emoji de pasta: no tema escuro
@@ -862,10 +869,29 @@ textarea { width: 100%; font: inherit; font-size: 13px; padding: 9px 11px; borde
   transition: stroke-dasharray .6s cubic-bezier(.4, 0, .2, 1);
 }
 .anel-marca.completo { stroke: var(--ok); }
+/* Contagem, não porcentagem. "66%" de três peças é "duas de três", e a segunda
+   forma é a que a pessoa usa para falar do próprio stand — num total pequeno a
+   porcentagem também mente: 2 de 3 vira 67% e ninguém sabe se sobrou uma ou
+   dez. Num print real, "66%" e "Todas as artes enviadas" apareceram lado a
+   lado, dizendo coisas diferentes. */
 .anel-numero {
   transform: rotate(90deg); transform-origin: 50px 50px;
-  font-size: 21px; font-weight: 700; fill: var(--texto);
+  font-size: 30px; font-weight: 800; fill: var(--texto);
 }
+.anel-total {
+  transform: rotate(90deg); transform-origin: 50px 50px;
+  font-size: 12px; font-weight: 600; fill: var(--suave);
+}
+/* O que falta fica CINZA (o trilho), não vermelho.
+   
+   No desenho da designer o restante é vermelho, e ali está o único ponto em
+   que eu não segui: vermelho é a cor de erro em toda a ferramenta — nos
+   achados, nas recusas, no prazo vencido. Usá-lo para "ainda não chegou"
+   ensina o cliente a ler alarme onde só há trabalho por fazer, e depois ele
+   ignora o vermelho que importa. */
+
+.entrega-linha { line-height: 1.5; }
+.entrega-linha strong { color: var(--texto); }
 @media (prefers-reduced-motion: reduce) { .anel-marca { transition: none; } }
 
 .titulo-secao { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
