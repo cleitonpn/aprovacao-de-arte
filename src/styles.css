@@ -140,6 +140,7 @@ input:focus-visible, select:focus-visible, button:focus-visible, .solta:focus-vi
 
 .solta {
   border: 2px dashed var(--borda); border-radius: var(--raio);
+  background: transparent;
   padding: 34px 20px; text-align: center; cursor: pointer;
   display: flex; flex-direction: column; align-items: center; gap: 6px;
   transition: border-color .15s, background .15s;
@@ -1220,7 +1221,45 @@ textarea { width: 100%; font: inherit; font-size: 13px; padding: 9px 11px; borde
   background: none; border: 0; cursor: pointer; color: var(--suave);
   font-size: 24px; line-height: 1; padding: 0 2px;
 }
-.modal-corpo { padding: 18px 20px 20px; overflow-y: auto; }
+.modal-corpo { padding: 18px 20px; overflow-y: auto; }
+/*
+   O rodapé fica fora da área que rola, e as ações à direita.
+   
+   Duas coisas que estavam erradas e a designer resolveu no desenho dela: os
+   botões no fim do conteúdo saíam da tela numa caixa alta — quem preenchia
+   tudo ficava olhando um formulário sem botão —, e "Cancelar" ao lado de
+   "Enviar", os dois do mesmo tamanho, davam o mesmo peso a seguir e a desistir.
+   
+   À direita e nesta ordem porque é onde a mão vai depois de preencher, e
+   porque a ação que confirma é a última coisa antes do canto.
+*/
+.modal-rodape {
+  padding: 14px 20px; border-top: 1px solid var(--borda);
+  background: var(--fundo);
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 16px; flex-wrap: wrap;
+}
+.modal-rodape .nota { margin: 0; flex: 1 1 240px; }
+.modal-acoes { display: flex; gap: 10px; margin-left: auto; }
+@media (max-width: 620px) {
+  .modal-acoes { width: 100%; }
+  .modal-acoes .btn { flex: 1; }
+}
+
+/* Um grupo de caixas de seleção com respiro próprio: sem isso elas encostam no
+   campo seguinte e a lista parece continuar dentro dele. */
+.grupo-campo { margin-bottom: 16px; display: flex; flex-direction: column; gap: 8px; }
+
+/* A área de arquivo dentro do modal: menor que a da tela de envio, e é um
+   BOTÃO — o `div` com onClick da tela grande não recebe foco por teclado. */
+.solta.compacta {
+  padding: 14px; gap: 4px; width: 100%; margin-bottom: 4px;
+  font: inherit; color: inherit; cursor: pointer;
+}
+.solta.compacta .icone { font-size: 20px; }
+.solta.compacta strong { font-size: 13.5px; word-break: break-all; }
+.solta.preenchida { border-style: solid; border-color: var(--ok); }
+.solta.preenchida .icone { color: var(--ok); }
 @keyframes modal-entra { from { opacity: 0 } to { opacity: 1 } }
 @media (prefers-reduced-motion: reduce) { .modal-fundo { animation: none; } }
 @media print { .modal-fundo { display: none !important; } }

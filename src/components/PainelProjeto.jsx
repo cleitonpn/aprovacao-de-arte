@@ -495,8 +495,29 @@ function NovaProva({ sessao, projeto, resumo, ocupado, onEnviar }) {
       titulo="Enviar prova para aprovação"
       ajuda="Quais peças esta prova cobre?"
       onFechar={() => setAberto(false)}
+      rodape={(
+        <>
+          <p className="nota">
+            Aceita {EXTENSOES_PROVA.map((e) => `.${e}`).join(', ')}. O cliente
+            recebe um e-mail avisando que a prova está pronta.
+          </p>
+          <div className="modal-acoes">
+            <button className="btn btn-ghost" onClick={() => setAberto(false)}>Cancelar</button>
+            <button
+              className="btn"
+              disabled={!arquivo || !selecionadas.length || ocupado || progresso !== null}
+              onClick={enviar}
+            >
+              {progresso !== null ? `Enviando… ${Math.round(progresso * 100)}%` : 'Enviar prova'}
+            </button>
+          </div>
+        </>
+      )}
     >
-      {candidatas.map((s) => (
+      {/* Um rótulo acima do grupo: sem ele, as caixas de seleção começam
+          direto e o "Quais peças esta prova cobre?" do topo fica longe. */}
+      <div className="grupo-campo">
+        {candidatas.map((s) => (
         <label className="alternador" key={s.peca.id}>
           <input
             type="checkbox"
@@ -507,7 +528,8 @@ function NovaProva({ sessao, projeto, resumo, ocupado, onEnviar }) {
           />
           <span>{s.peca.rotulo} <em className="dica-campo">— {s.rotulo}</em></span>
         </label>
-      ))}
+        ))}
+      </div>
 
       <label className="campo">
         <span>Observação para o cliente <em className="opcional">(opcional)</em></span>
@@ -520,31 +542,29 @@ function NovaProva({ sessao, projeto, resumo, ocupado, onEnviar }) {
         onChange={(e) => setArquivo(e.target.files?.[0] || null)}
       />
 
-      <div className="acoes">
-        <button className="btn btn-ghost" onClick={() => entrada.current?.click()}>
-          {arquivo ? `Arquivo: ${arquivo.name}` : 'Escolher o print da prova'}
-        </button>
-      </div>
+      {/*
+          O arquivo ganha área própria, e não um botão a mais.
+          
+          Como botão cinza ele ficava do mesmo tamanho e da mesma cor de
+          "Cancelar", três botões empilhados sem hierarquia — e escolher o
+          arquivo não é uma alternativa a enviar, é um passo obrigatório antes.
+          Como área tracejada, ele lê como campo por preencher e mostra o nome
+          do que foi escolhido.
+      */}
+      <button
+        type="button"
+        className={`solta compacta ${arquivo ? 'preenchida' : ''}`}
+        onClick={() => entrada.current?.click()}
+      >
+        <span className="icone" aria-hidden>{arquivo ? '✓' : '⬆'}</span>
+        <strong>{arquivo ? arquivo.name : 'Escolher o print da prova'}</strong>
+        <span>{arquivo ? 'clique para trocar' : 'é o que o cliente vai ver para aprovar'}</span>
+      </button>
 
       {progresso !== null && (
         <div className="barra"><div style={{ width: `${Math.max(2, progresso * 100)}%` }} /></div>
       )}
       {erro && <p className="erro-envio">{erro}</p>}
-
-      <div className="acoes">
-        <button
-          className="btn"
-          disabled={!arquivo || !selecionadas.length || ocupado || progresso !== null}
-          onClick={enviar}
-        >
-          {progresso !== null ? `Enviando… ${Math.round(progresso * 100)}%` : 'Enviar prova ao cliente'}
-        </button>
-        <button className="btn btn-ghost" onClick={() => setAberto(false)}>Cancelar</button>
-      </div>
-      <p className="nota">
-        Aceita {EXTENSOES_PROVA.map((e) => `.${e}`).join(', ')}. O cliente recebe
-        um e-mail avisando que a prova está pronta.
-      </p>
     </Modal>
   )
 }

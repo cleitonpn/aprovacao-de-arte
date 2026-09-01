@@ -18,7 +18,7 @@ import { useEffect, useRef } from 'react'
  * - O foco entra na caixa ao abrir e volta ao botão ao fechar. Quem navega por
  *   teclado, sem isso, continua tabulando pela ficha que está atrás.
  */
-export default function Modal({ titulo, ajuda, aberto, onFechar, children }) {
+export default function Modal({ titulo, ajuda, aberto, onFechar, children, rodape }) {
   const caixa = useRef(null)
   const anterior = useRef(null)
 
@@ -62,6 +62,13 @@ export default function Modal({ titulo, ajuda, aberto, onFechar, children }) {
           <button className="modal-fechar" onClick={onFechar} aria-label="Fechar">×</button>
         </header>
         <div className="modal-corpo">{children}</div>
+        {/*
+          O rodapé é fixo, fora da área que rola. Com os botões no fim do
+          conteúdo, uma caixa alta empurrava "Enviar" para baixo da dobra: quem
+          preenchia tudo ficava olhando para um formulário sem botão e rolava
+          procurando o que fazer. Aqui a decisão está sempre à vista.
+        */}
+        {rodape && <footer className="modal-rodape">{rodape}</footer>}
       </section>
     </div>
   )
