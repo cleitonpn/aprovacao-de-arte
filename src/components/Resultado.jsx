@@ -47,6 +47,15 @@ export default function Resultado({
   const grupos = agruparAchados(achados)
   const chamada = chamadaDoVeredicto(veredicto, grupos.impedem.length)
 
+  const baixarEspecificacao = () => baixar(
+    nomeDoArquivo(peca, perfil),
+    especificacaoEmPdf({
+      peca, perfil, politica: resultado.politica,
+      escalaFator: resultado.escalaFator, cadastro, resultado,
+    }),
+    'application/pdf',
+  )
+
   const copiar = async () => {
     const texto = mensagemParaDesigner(resultado)
     try {
@@ -98,6 +107,7 @@ export default function Resultado({
       {veredicto === 'reprovado' && (
         <ProximoPasso
           onCopiar={copiar}
+          onBaixarPdf={baixarEspecificacao}
           copiado={copiado}
           onFalarComTime={onFalarComTime}
           temEnvio={Boolean(arquivo && cadastro)}
@@ -183,7 +193,12 @@ export default function Resultado({
               para produção como está.
             </p>
           ) : (
-            <AceiteDeRisco onAceitar={onAceitarRisco} onCopiar={copiar} copiado={copiado} />
+            <AceiteDeRisco
+              onAceitar={onAceitarRisco}
+              onCopiar={copiar}
+              onBaixarPdf={baixarEspecificacao}
+              copiado={copiado}
+            />
           )}
         </div>
       )}
@@ -241,17 +256,7 @@ export default function Resultado({
           cada envio (`laudoJson`, em `Envio.jsx`) — o que deixou de existir é o
           botão que o entregava a quem não tem o que fazer com ele.
         */}
-        <button
-          className="btn btn-ghost"
-          onClick={() => baixar(
-            nomeDoArquivo(peca, perfil),
-            especificacaoEmPdf({
-              peca, perfil, politica: resultado.politica,
-              escalaFator: resultado.escalaFator, cadastro, resultado,
-            }),
-            'application/pdf',
-          )}
-        >
+        <button className="btn btn-ghost" onClick={baixarEspecificacao}>
           Baixar especificação (PDF)
         </button>
         <button className="btn btn-ghost" onClick={() => window.print()}>Imprimir o laudo</button>
@@ -302,21 +307,35 @@ function ItemAchado({ achado }) {
  * cliente e vai mexer no arquivo; ele não sabe o que nada disso quer dizer. O
  * terceiro é o caso que virava telefonema, e por isso tem botão também.
  */
-function ProximoPasso({ onCopiar, copiado, onFalarComTime, temEnvio }) {
+function ProximoPasso({ onCopiar, onBaixarPdf, copiado, onFalarComTime, temEnvio }) {
   return (
     <section className="proximo-passo">
       <h3>E agora, o que eu faço?</h3>
       <ol>
         <li>
           <strong>Quem montou a arte foi outra pessoa</strong>
+          {/*
+            Dois formatos do MESMO conteúdo, e a ordem responde a como a coisa
+            de fato acontece: o cliente encaminha para a agência, e encaminhar
+            um arquivo é mais fiel que colar texto — o PDF ainda leva o gabarito
+            em vetor, no tamanho da peça, que o texto não tem como levar. O
+            texto fica porque muita conversa dessas acontece no WhatsApp, onde
+            colar é mais rápido que anexar.
+          */}
           <p>
-            Copie o texto pronto e mande para ela. Vai com as medidas exatas, o
-            que está errado e o que precisa ter no lugar — é o suficiente para
-            corrigir sem ninguém precisar perguntar nada.
+            Mande a <strong>especificação em PDF</strong> para ela: vai com as
+            medidas exatas, o que precisa mudar e o gabarito da peça em vetor,
+            no tamanho real — dá para montar a arte em cima dele. É o suficiente
+            para corrigir sem ninguém precisar perguntar nada.
           </p>
-          <button className="btn" onClick={onCopiar}>
-            {copiado ? '✓ Copiado — agora é só colar e mandar' : 'Copiar o que precisa mudar'}
-          </button>
+          <div className="acoes">
+            <button className="btn" onClick={onBaixarPdf}>
+              Baixar a especificação (PDF)
+            </button>
+            <button className="btn btn-ghost" onClick={onCopiar}>
+              {copiado ? '✓ Copiado' : 'Ou copiar como texto'}
+            </button>
+          </div>
         </li>
         <li>
           <strong>Você mesmo vai corrigir o arquivo</strong>
@@ -354,7 +373,7 @@ function ProximoPasso({ onCopiar, copiado, onFalarComTime, temEnvio }) {
  * assinatura de ninguém. Nome e e-mail transformam o registro em prova de quem
  * autorizou imprimir daquele jeito — que é o motivo de a ressalva existir.
  */
-function AceiteDeRisco({ onAceitar, onCopiar, copiado }) {
+function AceiteDeRisco({ onAceitar, onCopiar, onBaixarPdf, copiado }) {
   const [nome, setNome] = useState('')
   const [email, setEmail] = useState('')
   const valido = nome.trim().length > 2 && /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim())
@@ -390,8 +409,13 @@ function AceiteDeRisco({ onAceitar, onCopiar, copiado }) {
         >
           Aceito o risco e autorizo a impressão
         </button>
+        {/* O mesmo par do bloco de recusa: quem escolhe corrigir precisa mandar
+            isto a alguém, e o PDF leva o gabarito junto. */}
+        <button className="btn btn-ghost" onClick={onBaixarPdf}>
+          Prefiro corrigir — baixar a especificação
+        </button>
         <button className="btn btn-ghost" onClick={onCopiar}>
-          {copiado ? '✓ Copiado' : 'Prefiro corrigir — copiar o que mudar'}
+          {copiado ? '✓ Copiado' : 'Copiar como texto'}
         </button>
       </div>
       <p className="nota">
