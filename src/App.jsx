@@ -11,6 +11,7 @@ import Resultado from './components/Resultado.jsx'
 import Gabarito from './components/Gabarito.jsx'
 import PainelPerfis from './components/PainelPerfis.jsx'
 import Historico from './components/Historico.jsx'
+import BotaoTema from './components/BotaoTema.jsx'
 import Cadastro from './components/Cadastro.jsx'
 import Acesso from './components/Acesso.jsx'
 import Admin from './components/Admin.jsx'
@@ -70,6 +71,7 @@ export default function App() {
             <h1>Envio de artes</h1>
             <p>Confira e envie as artes do seu stand.</p>
           </div>
+          <BotaoTema />
         </header>
         <Projeto token={rota.token} />
         <footer className="rodape">
@@ -106,12 +108,15 @@ function PainelInterno({ rota }) {
           <h1>Aprovação de arte</h1>
           <p>Painel do time de comunicação visual.</p>
         </div>
-        {sessao.liberado && (
-          <div className="sessao-topo">
-            <span className="dica-campo">{sessao.usuario?.email}</span>
-            <button className="btn btn-ghost" onClick={sessao.sair}>Sair</button>
-          </div>
-        )}
+        <div className="sessao-topo">
+          <BotaoTema />
+          {sessao.liberado && (
+            <>
+              <span className="dica-campo">{sessao.usuario?.email}</span>
+              <button className="btn btn-ghost" onClick={sessao.sair}>Sair</button>
+            </>
+          )}
+        </div>
       </header>
 
       {sessao.liberado && (
@@ -205,6 +210,7 @@ function Ferramenta() {
             <h1>Aprovação de arte</h1>
             <p>Confira se a arte está pronta para impressão antes de enviá-la.</p>
           </div>
+          <BotaoTema />
         </header>
         <Cadastro onConfirmar={confirmarCadastro} />
       </div>
@@ -216,6 +222,7 @@ function Ferramenta() {
       <div className="app estreito">
         <header className="topo">
           <div><h1>Seus dados</h1></div>
+          <BotaoTema />
         </header>
         <Cadastro
           inicial={cadastro}
@@ -236,10 +243,13 @@ function Ferramenta() {
             <button className="link" onClick={() => setEditandoCadastro(true)}>alterar</button>
           </p>
         </div>
-        <label className="alternador">
-          <input type="checkbox" checked={modoTecnico} onChange={(e) => setModoTecnico(e.target.checked)} />
-          <span>Modo técnico</span>
-        </label>
+        <div className="sessao-topo">
+          <label className="alternador">
+            <input type="checkbox" checked={modoTecnico} onChange={(e) => setModoTecnico(e.target.checked)} />
+            <span>Modo técnico</span>
+          </label>
+          <BotaoTema />
+        </div>
       </header>
 
       <div className="colunas">

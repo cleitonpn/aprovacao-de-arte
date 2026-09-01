@@ -1,36 +1,50 @@
 :root {
-  --fundo: #f4f5f7;
-  --cartao: #ffffff;
-  --borda: #e2e5ea;
-  --texto: #16191f;
-  --suave: #5d646f;
-  --acento: #2f6fe0;
-  --ok: #1a8a4a;
-  --ok-fundo: #e8f6ee;
-  --alerta: #b07000;
-  --alerta-fundo: #fdf3e0;
-  --ruim: #c62f2f;
-  --ruim-fundo: #fdeceb;
-  --raio: 12px;
+  /*
+     Cada cor declara os DOIS temas na mesma linha, e isso é de propósito: o
+     defeito clássico de dois blocos separados é mexer numa cor e esquecer da
+     outra — o tema escuro fica com um detalhe do claro por meses, e só quem
+     usa escuro percebe.
+
+     A primeira declaração é o que navegador antigo entende; a segunda vence
+     onde `light-dark()` existe. Quem ficar na primeira vê o tema claro, que é
+     o padrão seguro.
+  */
   color-scheme: light dark;
+  --fundo: #f4f5f7;        --fundo: light-dark(#f4f5f7, #14161a);
+  --cartao: #ffffff;       --cartao: light-dark(#ffffff, #1c1f25);
+  --borda: #e2e5ea;        --borda: light-dark(#e2e5ea, #2c313a);
+  --texto: #16191f;        --texto: light-dark(#16191f, #eceef2);
+  --suave: #5d646f;        --suave: light-dark(#5d646f, #99a1ad);
+  --acento: #2a63c9;       --acento: light-dark(#2a63c9, #6ea3ff);
+  --ok: #15793c;           --ok: light-dark(#15793c, #4ec27e);
+  --ok-fundo: #e8f6ee;     --ok-fundo: light-dark(#e8f6ee, #14301f);
+  --alerta: #9a6100;       --alerta: light-dark(#9a6100, #e0a63c);
+  --alerta-fundo: #fdf3e0; --alerta-fundo: light-dark(#fdf3e0, #33280f);
+  --ruim: #c62f2f;         --ruim: light-dark(#c62f2f, #f0706b);
+  --ruim-fundo: #fdeceb;   --ruim-fundo: light-dark(#fdeceb, #351817);
+  /*
+     A tinta que vai POR CIMA de um fundo colorido — botão, selo, etiqueta.
+     Era `#fff` fixo, e no escuro isso quebrava: o verde e o azul de lá são
+     claros de propósito, e texto branco sobre eles fica em 2,3:1. Todo botão
+     primário da ferramenta era ilegível no tema escuro.
+  */
+  --sobre-cor: #ffffff;    --sobre-cor: light-dark(#ffffff, #12141a);
+  --raio: 12px;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --fundo: #14161a;
-    --cartao: #1c1f25;
-    --borda: #2c313a;
-    --texto: #eceef2;
-    --suave: #99a1ad;
-    --acento: #6ea3ff;
-    --ok: #4ec27e;
-    --ok-fundo: #14301f;
-    --alerta: #e0a63c;
-    --alerta-fundo: #33280f;
-    --ruim: #f0706b;
-    --ruim-fundo: #351817;
-  }
-}
+/*
+   O botão de tema mexe AQUI, e só aqui.
+
+   `color-scheme` é o que `light-dark()` lê, então trocar esta linha troca a
+   paleta inteira — e de quebra os controles nativos do navegador (select,
+   barra de rolagem, campo de data), que um tema feito só com variáveis deixa
+   para trás e entrega branco no meio da tela escura.
+
+   Sem o atributo, vale `light dark`: o sistema decide, que é o que a maioria
+   quer e o que a ferramenta já fazia.
+*/
+:root[data-tema='claro'] { color-scheme: light; }
+:root[data-tema='escuro'] { color-scheme: dark; }
 
 * { box-sizing: border-box; }
 
@@ -99,12 +113,12 @@ input:focus-visible, select:focus-visible, button:focus-visible, .solta:focus-vi
 .spec .destaque dd { font-weight: 600; color: var(--acento); }
 
 .btn {
-  background: var(--acento); color: #fff; border: 0; border-radius: 9px;
+  background: var(--acento); color: var(--sobre-cor); border: 0; border-radius: 9px;
   padding: 10px 15px; font: inherit; font-weight: 500; cursor: pointer;
 }
 .btn:hover { filter: brightness(1.07); }
 .btn-ghost { background: transparent; color: var(--texto); border: 1px solid var(--borda); }
-.btn-risco { background: var(--alerta); color: #fff; }
+.btn-risco { background: var(--alerta); color: var(--sobre-cor); }
 .largo { width: 100%; }
 
 .solta {
@@ -132,7 +146,7 @@ input:focus-visible, select:focus-visible, button:focus-visible, .solta:focus-vi
 .veredicto p { margin: 0; color: var(--suave); font-size: 14px; }
 .selo {
   width: 40px; height: 40px; flex: 0 0 40px; border-radius: 50%;
-  display: grid; place-items: center; font-size: 21px; font-weight: 700; color: #fff;
+  display: grid; place-items: center; font-size: 21px; font-weight: 700; color: var(--sobre-cor);
 }
 .resultado.aprovado .selo { background: var(--ok); }
 .resultado.ressalva .selo { background: var(--alerta); }
@@ -157,7 +171,7 @@ input:focus-visible, select:focus-visible, button:focus-visible, .solta:focus-vi
 .achados li strong { display: block; font-size: 14.5px; }
 .achados li p { margin: 4px 0 0; font-size: 13.5px; color: var(--suave); }
 .achados li p.acao { color: var(--texto); font-weight: 500; }
-.marca { width: 20px; height: 20px; flex: 0 0 20px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 700; color: #fff; margin-top: 1px; }
+.marca { width: 20px; height: 20px; flex: 0 0 20px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 700; color: var(--sobre-cor); margin-top: 1px; }
 .achados li.ok { background: var(--ok-fundo); } .achados li.ok .marca { background: var(--ok); }
 .achados li.info { background: color-mix(in srgb, var(--acento) 9%, transparent); } .achados li.info .marca { background: var(--acento); }
 .achados li.ressalva { background: var(--alerta-fundo); } .achados li.ressalva .marca { background: var(--alerta); }
@@ -319,7 +333,10 @@ input:focus-visible, select:focus-visible, button:focus-visible, .solta:focus-vi
   /* Fundos coloridos viram tinta e papel gasto; a marca de cada achado já
      distingue os níveis sem depender de cor. */
   .achados li { background: none !important; border: 1px solid #ddd; }
-  .marca { border: 1px solid #999; }
+  /* O glifo é branco sobre o fundo colorido da marca, e o navegador remove
+     esse fundo ao imprimir — sem isto, a numeração dos itens que impedem a
+     impressão sai invisível no laudo em papel. */
+  .marca { border: 1px solid #999; background: none !important; color: #000 !important; }
   .risco { background: none !important; border: 1px solid #ddd; }
 
   a[href]::after { content: ''; }
@@ -396,7 +413,15 @@ input[aria-invalid='true'] { border-color: var(--ruim); }
 .abas a:hover { color: var(--texto); }
 .abas a.ativa { color: var(--acento); border-bottom-color: var(--acento); }
 .abas a.fora { margin-left: auto; color: var(--suave); }
-.sessao-topo { display: flex; align-items: center; gap: 10px; }
+.sessao-topo { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+/* O botão de tema. Ícone e palavra juntos: só o ícone deixa "automático" e
+   "claro" iguais num computador claro, e o clique vira adivinhação. No celular
+   fica só o ícone, porque ali o cabeçalho não tem largura para a palavra. */
+.botao-tema { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; }
+.botao-tema-icone { font-size: 14px; line-height: 1; }
+@media (max-width: 620px) { .botao-tema-texto { display: none; } }
+@media print { .botao-tema { display: none !important; } }
 
 .acesso { max-width: 420px; }
 .separador { display: flex; align-items: center; gap: 12px; margin: 14px 0; color: var(--suave); font-size: 12px; }
@@ -426,7 +451,7 @@ input[aria-invalid='true'] { border-color: var(--ruim); }
 }
 .zona-perigo > strong { color: var(--ruim); display: block; margin-bottom: 6px; }
 .zona-perigo .campo { margin-top: 10px; }
-.btn.perigo { background: var(--ruim); border-color: var(--ruim); color: #fff !important; }
+.btn.perigo { background: var(--ruim); border-color: var(--ruim); color: var(--sobre-cor) !important; }
 .btn.perigo:disabled { opacity: .45; }
 .acoes.compactas { gap: 6px; margin-top: 10px; }
 .acoes.compactas .btn { padding: 6px 11px; font-size: 12.5px; }
@@ -904,7 +929,7 @@ textarea { width: 100%; font: inherit; font-size: 13px; padding: 9px 11px; borde
 .esteira-faixa {
   min-width: 28px; border-radius: 6px; border: 0; padding: 0;
   display: flex; align-items: center; justify-content: center;
-  font-size: 12.5px; font-weight: 700; color: #fff;
+  font-size: 12.5px; font-weight: 700; color: var(--sobre-cor);
   font-family: inherit; cursor: pointer;
   transition: filter 120ms, transform 120ms;
 }
@@ -984,7 +1009,7 @@ textarea { width: 100%; font: inherit; font-size: 13px; padding: 9px 11px; borde
   background: var(--borda); color: var(--suave);
   font-size: 11.5px; font-weight: 700; line-height: 1.5;
 }
-.chip.ativo .chip-conta { background: var(--acento); color: #fff; }
+.chip.ativo .chip-conta { background: var(--acento); color: var(--sobre-cor); }
 
 /* ------------------------------------------------------------- conversa */
 /* Fechada, a caixa é um convite — e um convite não parece um campo que ficou
@@ -1018,7 +1043,7 @@ textarea { width: 100%; font: inherit; font-size: 13px; padding: 9px 11px; borde
 .conversa-bolha {
   display: inline-flex; align-items: center; gap: 9px;
   padding: 11px 16px; border: 0; border-radius: 30px; cursor: pointer;
-  background: var(--acento); color: #fff; font: inherit; font-weight: 600;
+  background: var(--acento); color: var(--sobre-cor); font: inherit; font-weight: 600;
   font-size: 14px; box-shadow: 0 6px 20px rgb(0 0 0 / 0.22);
   position: relative;
 }
@@ -1105,7 +1130,7 @@ textarea { width: 100%; font: inherit; font-size: 13px; padding: 9px 11px; borde
 .badge {
   display: inline-flex; align-items: center; justify-content: center;
   min-width: 18px; height: 18px; padding: 0 5px; margin-left: 7px;
-  border-radius: 999px; background: var(--ruim); color: #fff;
+  border-radius: 999px; background: var(--ruim); color: var(--sobre-cor);
   font-size: 11px; font-weight: 700; line-height: 1; vertical-align: middle;
 }
 
@@ -1123,7 +1148,7 @@ textarea { width: 100%; font: inherit; font-size: 13px; padding: 9px 11px; borde
 }
 .faixa-novidade .link { color: inherit; margin-left: auto; }
 
-.tag.aviso { background: var(--ruim); color: #fff; }
+.tag.aviso { background: var(--ruim); color: var(--sobre-cor); }
 .linha-nova td { background: color-mix(in srgb, var(--ok) 8%, transparent); }
 .linha-nova td:first-child { box-shadow: inset 3px 0 0 var(--ok); }
 

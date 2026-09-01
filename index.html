@@ -5,6 +5,24 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Aprovação de Arte — análise automática para impressão</title>
     <meta name="description" content="Valide a resolução, a proporção e a qualidade da sua arte antes de enviar para impressão." />
+    <!--
+      O tema precisa estar aplicado ANTES do primeiro pixel. Deixar isso para o
+      React significa desenhar a tela clara e trocar para escura um instante
+      depois — a piscada branca que todo site com tema escuro já entregou na
+      cara de alguém às onze da noite.
+
+      Por isso é inline e é aqui: qualquer arquivo separado seria uma requisição
+      a mais entre o HTML e a primeira pintura. A chave está repetida de
+      `src/store/tema.js`, e um teste guarda as duas cópias contra derivar.
+    -->
+    <script>
+      try {
+        var tema = localStorage.getItem('aprovacao-arte:tema')
+        if (tema === 'claro' || tema === 'escuro') {
+          document.documentElement.setAttribute('data-tema', tema)
+        }
+      } catch (e) { /* aba anônima: segue o sistema */ }
+    </script>
   </head>
   <body>
     <div id="root"></div>
