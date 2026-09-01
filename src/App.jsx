@@ -108,9 +108,20 @@ function PainelInterno({ rota }) {
   return (
     <div className="app">
       <header className="topo">
+        {/*
+          O cabeçalho só existe depois de entrar. Antes, a tela de login já
+          traz o próprio título centralizado, e o de cima repetia palavra por
+          palavra "Aprovação de arte" três centímetros acima — dois títulos
+          seguidos, e o segundo é o que importa. A <div> vazia fica: é ela que
+          empurra o botão de tema para a direita.
+        */}
         <div>
-          <h1>Aprovação de arte</h1>
-          <p>Painel do time de comunicação visual.</p>
+          {sessao.liberado && (
+            <>
+              <h1>Aprovação de arte</h1>
+              <p>Painel do time de comunicação visual.</p>
+            </>
+          )}
         </div>
         <div className="sessao-topo">
           <BotaoTema />

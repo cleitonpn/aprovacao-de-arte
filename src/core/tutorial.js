@@ -11,6 +11,16 @@
 
 import { DPI_MINIMO_GLOBAL, SANGRIA_MINIMA_MM } from './regras.js'
 
+/**
+ * Para onde escrever quando a ferramenta não resolve.
+ *
+ * Num lugar só porque aparece em telas de dois públicos diferentes — o rodapé
+ * do login, que é do time, e o texto de ajuda, que é do cliente. Endereço de
+ * suporte escrito à mão em duas telas é o que faz uma delas continuar
+ * apontando para a caixa de quem saiu da empresa.
+ */
+export const SUPORTE_EMAIL = 'cleitonpnascimento@gmail.com'
+
 /** Horário de atendimento humano. Um lugar só: aparece no tutorial e no chat. */
 export const SUPORTE = {
   dias: 'segunda a sexta',
