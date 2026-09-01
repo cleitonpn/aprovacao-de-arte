@@ -184,6 +184,19 @@ export default function Projeto({ token }) {
         politica={politica}
         detectorNitidez={detectorNitidez}
         onVoltar={() => { setPecaAtivaId(null); setExtra(null); carregar() }}
+        onFalarComTime={() => {
+          setPecaAtivaId(null)
+          setExtra(null)
+          // Depois da volta à lista, para o elemento existir. Mesmo padrão do
+          // "me mostre onde fica" do tutorial.
+          setTimeout(() => {
+            const alvo = document.getElementById('conversa-do-stand')
+            if (!alvo) return
+            alvo.scrollIntoView({ behavior: 'smooth', block: 'center' })
+            alvo.classList.add('piscando')
+            setTimeout(() => alvo.classList.remove('piscando'), 2400)
+          }, 60)
+        }}
         onEnviado={async (recibo) => {
           const peca = ativa.peca
           if (!String(peca.id).startsWith('extra_')) {
@@ -249,7 +262,11 @@ export default function Projeto({ token }) {
 
       {projeto.aceitaAvulsos !== false && <Avulsos projeto={projeto} cadastro={cadastro} />}
 
-      <Conversa token={projeto.token} identidade={{ nome: '', email: '' }} />
+      {/* Âncora para o "Falar com a equipe" da tela de resultado: de lá o
+          cliente está dentro de uma peça, e a conversa vive na lista. */}
+      <div id="conversa-do-stand">
+        <Conversa token={projeto.token} identidade={{ nome: '', email: '' }} />
+      </div>
     </>
   )
 }
@@ -526,19 +543,20 @@ function CartaoPeca({ situacao, perfis, politica, projeto, onEscolher, onAtualiz
               {entrega.veredicto === 'ressalva' && ' · com ressalva'}
             </p>
           )
-          : <p className="dica-campo">Mínimo {fmt(spec.minimo.largura)} × {fmt(spec.minimo.altura)} px ({spec.minimo.dpi} dpi)</p>}
+          : <p className="dica-campo">Arquivo com no mínimo {fmt(spec.minimo.largura)} × {fmt(spec.minimo.altura)} px ({spec.minimo.dpi} dpi)</p>}
 
         {/* A devolução não é bloqueio — é o contrário, ela destrava o envio.
             Por isso tem bloco próprio: o cliente precisa ler o motivo e ver o
             botão de enviar logo abaixo, não um aviso que parece uma parede. */}
         {situacao.devolucao && (
           <div className="bloqueio devolvida">
-            <strong>O time recusou esta arte</strong>
+            <strong>Nosso time pediu uma correção nesta arte</strong>
             <p>“{situacao.devolucao.motivo}”</p>
             <p className="dica-campo">
-              Recusada em {fmtDataHora(situacao.devolucao.em)}. Envie a versão{' '}
-              {situacao.proximaVersao} corrigida — não precisa pedir liberação, e o prazo
-              não conta contra você nesta correção.
+              Pedido em {fmtDataHora(situacao.devolucao.em)}. Corrija e use o
+              botão ao lado para enviar a versão {situacao.proximaVersao} — não
+              precisa pedir liberação, e esta correção não consome o prazo do
+              seu stand.
             </p>
           </div>
         )}
@@ -828,7 +846,7 @@ function usarLogDeReprovacao(token, peca, versao, resultado) {
   }, [token, peca, versao, resultado])
 }
 
-function PainelDaPeca({ situacao, projeto, resumo, cadastro, perfis, politica, detectorNitidez, onVoltar, onEnviado }) {
+function PainelDaPeca({ situacao, projeto, resumo, cadastro, perfis, politica, detectorNitidez, onVoltar, onEnviado, onFalarComTime }) {
   const peca = situacao.peca
   const perfil = perfis.find((p) => p.id === peca.perfilId) || perfis[0]
   const alvo = { larguraCm: peca.larguraCm, alturaCm: peca.alturaCm }
@@ -864,21 +882,47 @@ function PainelDaPeca({ situacao, projeto, resumo, cadastro, perfis, politica, d
           </div>
         </div>
 
+        {/*
+          Duas recusas diferentes, e confundi-las custa caro. "Reprovada" é
+          decisão DO CLIENTE na prova de impressão — foi ele quem escreveu o
+          motivo. "Devolvida" é o time recusando a arte que ele mandou. Um
+          texto só para as duas deixaria o cliente procurando um e-mail nosso
+          que nunca existiu, ou lendo como cobrança o que ele mesmo pediu.
+
+          Os dois blocos ficam visíveis ENQUANTO ele monta o arquivo novo:
+          deixar o motivo só no cartão da lista obrigaria a voltar para reler.
+        */}
         {situacao.status === 'reprovada' && (
-          <p className="nota destaque-correcao">
-            Esta peça foi reprovada na prova de aprovação. Envie a arte
-            corrigida — o prazo não conta contra você nesta correção.
-            {situacao.resposta?.observacao && <> Observação do seu retorno: <em>{situacao.resposta.observacao}</em></>}
-          </p>
+          <div className="pedido-de-correcao">
+            <strong>Você pediu ajuste nesta peça na prova de impressão</strong>
+            {situacao.resposta?.observacao && (
+              <p className="motivo">“{situacao.resposta.observacao}”</p>
+            )}
+            <p>
+              O que fazer: envie aqui a <strong>versão {situacao.proximaVersao}</strong> da
+              arte, já com o ajuste. É o mesmo caminho de sempre — traga o
+              arquivo, a conferência acontece na hora.
+            </p>
+            <p className="nota">Esta correção não consome o prazo do seu stand.</p>
+          </div>
         )}
 
-        {/* O motivo tem que estar visível ENQUANTO ele monta o arquivo novo.
-            Deixá-lo só no cartão anterior obrigaria a voltar para reler. */}
         {situacao.status === 'devolvida' && (
-          <p className="nota destaque-correcao">
-            O time recebeu esta arte e recusou: <em>“{situacao.devolucao.motivo}”</em> Envie a
-            versão corrigida — o prazo não conta contra você nesta correção.
-          </p>
+          <div className="pedido-de-correcao">
+            <strong>Nosso time conferiu esta arte e pediu uma correção</strong>
+            <p className="motivo">“{situacao.devolucao.motivo}”</p>
+            <p>
+              O que fazer: corrija o que está escrito acima e envie aqui a{' '}
+              <strong>versão {situacao.proximaVersao}</strong> da arte. Não
+              precisa responder e-mail nem pedir liberação — a peça já está
+              aberta esperando o arquivo novo.
+            </p>
+            <p className="nota">
+              Esta correção não consome o prazo do seu stand. Se o motivo não
+              ficou claro, fale com a equipe pela conversa no fim da lista de
+              peças — ela já sabe de qual peça se trata.
+            </p>
+          </div>
         )}
       </div>
 
@@ -887,13 +931,27 @@ function PainelDaPeca({ situacao, projeto, resumo, cadastro, perfis, politica, d
           <div className="cartao">
             <div className="spec">
               <div className="spec-titulo">O que o arquivo precisa ter</div>
+              {/*
+                As três palavras abaixo — sangria, margem de segurança,
+                gabarito — são óbvias para um designer e opacas para todo mundo
+                mais. E quem abriu esta tela na última feira foi o cliente, não
+                a agência dele: ele leu "com sangria 130 × 295 cm", mandou o
+                arquivo em 110 × 275 e não entendeu por que voltou.
+              */}
+              <p className="spec-glossario">
+                <strong>Sangria</strong> é a sobra de arte além do tamanho da
+                peça, para a impressão não deixar filete branco no acabamento.{' '}
+                <strong>Margem de segurança</strong> é a faixa da borda em que
+                nada importante pode ficar — perfis e calhas comem essa parte.
+                O gabarito ao lado já vem com as duas marcadas.
+              </p>
               <dl>
                 <div>
-                  <dt>Tamanho final</dt>
+                  <dt>Tamanho final da peça</dt>
                   <dd>{fmt(peca.larguraCm)} × {fmt(peca.alturaCm)} cm</dd>
                 </div>
-                <div>
-                  <dt>Com sangria ({spec.sangriaMm} mm por lado)</dt>
+                <div className="destaque">
+                  <dt>Monte o arquivo neste tamanho<br /><em className="dica-campo">já com {spec.sangriaMm} mm de sangria por lado</em></dt>
                   <dd>{fmt(spec.comSangria.larguraCm)} × {fmt(spec.comSangria.alturaCm)} cm</dd>
                 </div>
                 <div>
@@ -946,7 +1004,14 @@ function PainelDaPeca({ situacao, projeto, resumo, cadastro, perfis, politica, d
         </div>
 
         <div className="coluna">
-          <Upload onArquivo={analise.receberArquivo} analisando={analise.analisando} nomeAtual={analise.arquivo?.name} />
+          <Upload
+            onArquivo={analise.receberArquivo}
+            analisando={analise.analisando}
+            nomeAtual={analise.arquivo?.name}
+            titulo={situacao.proximaVersao > 1
+              ? `Traga a versão ${situacao.proximaVersao} da arte`
+              : 'Traga o arquivo da arte'}
+          />
 
           {analise.erro && (
             <div className="cartao erro">
@@ -970,6 +1035,7 @@ function PainelDaPeca({ situacao, projeto, resumo, cadastro, perfis, politica, d
                 versao: situacao.proximaVersao,
               }}
               onEnviado={onEnviado}
+              onFalarComTime={onFalarComTime}
             />
           )}
         </div>

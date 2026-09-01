@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { CONFERENCIA_DO_TIME, PASSOS, REQUISITOS, SUPORTE } from '../src/core/tutorial.js'
-import { DPI_PISO_ABSOLUTO, DPI_MINIMO_GLOBAL, SANGRIA_MINIMA_MM } from '../src/core/regras.js'
+import { DPI_MINIMO_GLOBAL, SANGRIA_MINIMA_MM } from '../src/core/regras.js'
 
 // localStorage de mentira, como em visto.test.mjs.
 const memoria = new Map()
@@ -14,15 +14,42 @@ const { jaViuTutorial, marcarTutorialVisto } = await import('../src/store/tutori
 
 test('o tutorial promete os números que o motor cobra', () => {
   // O ponto deste teste: os requisitos são CALCULADOS a partir de regras.js,
-  // não escritos à mão. Se alguém mudar o piso de dpi e esquecer do texto, o
+  // não escritos à mão. Se alguém mudar um número e esquecer do texto, o
   // cliente passa a ler uma instrução que a ferramenta não cumpre — foi o que
   // aconteceu quando o piso caiu de 150 para 100.
   const resolucao = REQUISITOS.find((r) => r.titulo === 'Resolução')
-  assert.ok(resolucao.texto.includes(String(DPI_PISO_ABSOLUTO)), 'o piso precisa aparecer')
   assert.ok(resolucao.texto.includes(String(DPI_MINIMO_GLOBAL)), 'o padrão de ouro precisa aparecer')
 
   const sangria = REQUISITOS.find((r) => r.titulo === 'Sangria')
   assert.ok(sangria.texto.includes(String(SANGRIA_MINIMA_MM / 10)), 'a sangria em cm precisa aparecer')
+})
+
+test('o tutorial não promete um piso de dpi único, porque não existe mais', () => {
+  // A versão anterior deste teste exigia o literal `DPI_PISO_ABSOLUTO` no
+  // texto, e estava certa enquanto o piso era um número só. Desde que ele
+  // passa a sair da distância da peça (`pisoPorDistancia`), citar 100 dpi faz
+  // o cliente achar que uma parede de 82 dpi reprova — e ela passa. Um texto
+  // que reprova o que a ferramenta aprova produz a mesma desconfiança que uma
+  // ferramenta que reprova o que o time aprova.
+  const resolucao = REQUISITOS.find((r) => r.titulo === 'Resolução')
+  assert.match(resolucao.texto, /distância/i, 'precisa dizer de onde sai o mínimo')
+  assert.ok(
+    /cada peça|daquela peça|cartão de cada peça/i.test(resolucao.texto),
+    'precisa mandar o cliente ler o mínimo da peça dele',
+  )
+})
+
+test('o tutorial não manda o cliente fazer o que a ferramenta já faz', () => {
+  // Custou dez reprovações seguidas a um expositor cuja arte estava correta,
+  // em 1:10: o texto mandava informar a escala, o campo estava escondido na
+  // tela de envio, e ele nunca soube que existia. A detecção automática já
+  // resolve; o texto tinha ficado para trás.
+  const escala = REQUISITOS.find((r) => r.titulo === 'Escala')
+  assert.match(escala.texto, /reconhece a escala sozinha/i)
+  assert.ok(
+    !/só informe a escala|informe a escala na hora/i.test(escala.texto),
+    'o texto não pode voltar a cobrar do cliente o que a análise detecta',
+  )
 })
 
 test('o horário de atendimento sai de um lugar só', () => {

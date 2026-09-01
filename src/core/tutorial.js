@@ -9,7 +9,7 @@
 //
 // Daí os requisitos serem CALCULADOS a partir de `regras.js`.
 
-import { DPI_PISO_ABSOLUTO, DPI_MINIMO_GLOBAL, SANGRIA_MINIMA_MM } from './regras.js'
+import { DPI_MINIMO_GLOBAL, SANGRIA_MINIMA_MM } from './regras.js'
 
 /** Horário de atendimento humano. Um lugar só: aparece no tutorial e no chat. */
 export const SUPORTE = {
@@ -36,8 +36,8 @@ export const PASSOS = [
     texto: 'O botão fica ao lado de cada peça. Ele traz o tamanho final, a sangria e a margem de segurança — a área que não pode ter texto nem logo porque some na dobra ou atrás da estrutura.',
   },
   {
-    titulo: 'Envie a arte e veja o resultado na hora',
-    texto: 'A conferência roda no seu próprio navegador: o arquivo só sai do seu computador quando você clica em enviar. Em segundos você recebe aprovado, aprovado com ressalva ou reprovado, com o que exatamente precisa mudar.',
+    titulo: 'Teste a arte quantas vezes quiser',
+    texto: 'A conferência roda no seu próprio navegador: o arquivo só sai do seu computador quando você clica em enviar. Enquanto a arte não passa, nada chega ao time e nada conta como entrega — então testar não custa nada e não atrapalha ninguém. Em segundos você vê o que precisa mudar, com um texto pronto para mandar a quem montou a arte.',
   },
   {
     titulo: 'Se vier com ressalva, a decisão é sua',
@@ -93,7 +93,11 @@ export const CONFERENCIA_DO_TIME = {
 export const REQUISITOS = [
   {
     titulo: 'Resolução',
-    texto: `Mínimo de ${DPI_PISO_ABSOLUTO} dpi no tamanho final impresso. O padrão de qualidade é ${DPI_MINIMO_GLOBAL} dpi — entre um e outro a arte passa, mas com ressalva.`,
+    // Sem número único aqui, e é o comentário do topo deste arquivo em ação:
+    // o piso deixou de ser um valor fixo e passou a sair da distância em que a
+    // peça é vista (`pisoPorDistancia`, em `regras.js`). Repetir "100 dpi"
+    // faria o cliente achar que uma parede de 82 dpi reprova — e ela passa.
+    texto: `Não existe um número único: o mínimo sai da distância de onde a peça é vista. Uma parede olhada a 2,5 m aceita bem menos densidade que um adesivo de balcão a meio metro, e o cartão de cada peça mostra o mínimo dela já convertido em pixels. O padrão de qualidade da casa é ${DPI_MINIMO_GLOBAL} dpi no tamanho final; entre o mínimo daquela peça e esse padrão a arte passa, com ressalva.`,
   },
   {
     titulo: 'Formato do arquivo',
@@ -105,7 +109,10 @@ export const REQUISITOS = [
   },
   {
     titulo: 'Escala',
-    texto: 'Montar a arte reduzida (1:2, 1:10) é praxe e está liberado. Só informe a escala na hora de enviar, senão um arquivo correto é reprovado por engano.',
+    // Este texto mandava o cliente fazer o que a ferramenta passou a fazer
+    // sozinha. Ele custou dez reprovações seguidas a um expositor cuja arte
+    // estava certa, em 1:10, e que não sabia que existia um campo para trocar.
+    texto: 'Montar a arte reduzida (1:2, 1:10) é praxe e está liberado. A ferramenta reconhece a escala sozinha, pelo tamanho do arquivo, e diz na tela o que reconheceu — o campo de escala existe só para o caso raro em que ela não tem como adivinhar.',
   },
   {
     titulo: 'Cor',

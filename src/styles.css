@@ -163,6 +163,54 @@ input:focus-visible, select:focus-visible, button:focus-visible, .solta:focus-vi
 .achados li.ressalva { background: var(--alerta-fundo); } .achados li.ressalva .marca { background: var(--alerta); }
 .achados li.bloqueante { background: var(--ruim-fundo); } .achados li.bloqueante .marca { background: var(--ruim); }
 
+/* ------------------------------------------- o laudo lido por quem é leigo */
+
+/* O rótulo formal ("Arte reprovada") deixa de ser o título e vira etiqueta.
+   Ele continua sendo a palavra do time e a do laudo impresso — só não é com
+   ela que o cliente age. */
+.etiqueta-veredicto {
+  display: inline-block; margin-top: 9px; padding: 2px 9px;
+  border-radius: 20px; font-size: 11.5px; font-weight: 600;
+}
+.etiqueta-veredicto.aprovado { background: var(--ok-fundo); color: var(--ok); }
+.etiqueta-veredicto.ressalva { background: var(--alerta-fundo); color: var(--alerta); }
+.etiqueta-veredicto.reprovado { background: var(--ruim-fundo); color: var(--ruim); }
+
+.bloco-achados { margin-bottom: 18px; }
+.bloco-achados h3 { margin: 0 0 10px; font-size: 15px; }
+.bloco-achados.impede h3 { color: var(--ruim); }
+.bloco-achados .achados { margin-bottom: 0; }
+
+/* Numerado porque a contagem É a informação. "1 coisa precisa mudar" no topo
+   e um "1." aqui embaixo são a mesma frase — e é ela que impede alguém de ler
+   a lista inteira como se cada linha fosse um problema a resolver. */
+.achados.numerado { counter-reset: achado; }
+.achados.numerado > li { counter-increment: achado; }
+.achados.numerado > li .marca { font-size: 0; }
+.achados.numerado > li .marca::before { content: counter(achado); font-size: 12px; }
+
+.bloco-certos { margin-bottom: 18px; }
+.bloco-certos > summary { cursor: pointer; font-size: 13px; color: var(--suave); font-weight: 500; }
+.bloco-certos .achados { margin: 10px 0 0; }
+
+/* "E agora?" — a caixa que responde à pergunta com que o cliente ficava.
+   Fundo próprio de propósito: ela não é mais um achado, é a saída da tela. */
+.proximo-passo {
+  margin: 0 0 18px; padding: 15px 16px; border-radius: 10px;
+  background: color-mix(in srgb, var(--acento) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--acento) 28%, transparent);
+}
+.proximo-passo h3 { margin: 0 0 12px; font-size: 15.5px; }
+.proximo-passo ol { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 15px; }
+.proximo-passo li strong { display: block; font-size: 14px; }
+.proximo-passo li p { margin: 4px 0 9px; font-size: 13.5px; color: var(--suave); line-height: 1.55; }
+.proximo-passo .btn { font-size: 13.5px; }
+
+.depois-do-envio {
+  margin: 10px 0 0; padding-left: 20px; display: flex; flex-direction: column;
+  gap: 6px; font-size: 13.5px; color: var(--suave); line-height: 1.5;
+}
+
 .risco { background: var(--alerta-fundo); border-radius: 9px; padding: 14px; margin-bottom: 16px; }
 .risco p { margin: 0 0 10px; font-size: 13.5px; }
 .risco-ok { margin: 0 !important; font-weight: 500; }
@@ -239,7 +287,19 @@ input:focus-visible, select:focus-visible, button:focus-visible, .solta:focus-vi
   .envio,
   .simulador,
   .risco button,
+  .proximo-passo,
   .cabecalho-colapsa { display: none !important; }
+
+  /* O "E agora?" some do papel de propósito: os três caminhos dele são
+     botões, e um botão impresso é uma frase que não faz nada. O laudo em
+     papel existe para outra coisa — provar o que foi medido. */
+
+  /* O "já está certo" fica fechado na tela; no papel o laudo precisa dele.
+     O JS abre no `beforeprint` (ver Resultado.jsx); esta regra é a rede para
+     quem não dispara o evento. */
+  .bloco-certos > summary { list-style: none; }
+  .bloco-certos:not([open]) > *:not(summary) { display: block !important; }
+  .bloco-achados h3 { color: #000 !important; }
 
   .so-impressao { display: block; }
 
@@ -484,6 +544,30 @@ textarea { width: 100%; font: inherit; font-size: 13px; padding: 9px 11px; borde
    barra à esquerda a distingue dos bloqueios de verdade. */
 .bloqueio.devolvida { background: var(--ruim-fundo); border-left: 3px solid var(--ruim); }
 .bloqueio.devolvida p:first-of-type { color: var(--texto); font-style: italic; }
+
+/* O pedido de correção, na tela em que o cliente monta o arquivo novo.
+   Antes era uma `nota` cinza de 12,5 px no meio do cartão — o motivo escrito
+   pelo analista, que é a única instrução que existe naquele momento, tinha
+   menos destaque que a legenda de um campo. */
+.pedido-de-correcao {
+  margin-top: 14px; padding: 13px 14px; border-radius: 9px;
+  background: var(--ruim-fundo); border-left: 3px solid var(--ruim);
+}
+.pedido-de-correcao > strong { display: block; font-size: 14.5px; }
+.pedido-de-correcao p { margin: 9px 0 0; font-size: 13.5px; line-height: 1.55; }
+.pedido-de-correcao .motivo {
+  font-style: italic; font-size: 15px; padding: 10px 12px;
+  background: var(--cartao); border-radius: 7px;
+}
+.pedido-de-correcao p.nota { font-size: 12.5px; color: var(--suave); font-style: normal; }
+
+/* Sangria e margem de segurança explicadas no lugar em que são exigidas. */
+.spec-glossario {
+  margin: 0 0 12px; padding: 10px 11px; border-radius: 8px;
+  background: var(--fundo); color: var(--suave);
+  font-size: 12.5px; line-height: 1.6;
+}
+.spec-glossario strong { color: var(--texto); }
 
 .destaque-extra { border-color: var(--alerta); background: var(--alerta-fundo); }
 .destaque-extra p { font-size: 13px; line-height: 1.55; }

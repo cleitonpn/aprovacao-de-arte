@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { enviarArte } from '../services/envio.js'
 import { envioConfigurado } from '../config.js'
 import { laudoJson } from '../core/mensagem.js'
+import { TENTAR_DE_NOVO_E_LIVRE } from '../core/laudo.js'
 
 // A trava: só sobe arte que passou. Reprovada nunca sobe, e "com ressalva" só
 // sobe depois de o cliente assumir o risco de forma explícita e registrada.
@@ -12,9 +13,14 @@ export function podeEnviar(veredicto, riscoAceito) {
   return false
 }
 
+// O botão desligado precisa dizer o que o LIGA.
+//
+// "A arte precisa dos ajustes acima antes de ser enviada" descreve o estado e
+// para por aí — quem chegou aqui já sabia que estava travado. O que faltava era
+// a frase seguinte: e nada do que você tentar até lá é enviado ao time.
 const MOTIVO = {
-  reprovado: 'A arte precisa dos ajustes acima antes de ser enviada.',
-  ressalva: 'Aceite o risco acima para liberar o envio.',
+  reprovado: `Este botão liga sozinho assim que uma versão da arte passar na conferência. ${TENTAR_DE_NOVO_E_LIVRE}`,
+  ressalva: 'Para liberar o envio, aceite o risco na caixa amarela acima — ou troque o arquivo, se preferir corrigir.',
 }
 
 export default function Envio({ resultado, arquivo, cadastro, riscoAceito, projeto, onEnviado }) {
@@ -41,10 +47,22 @@ export default function Envio({ resultado, arquivo, cadastro, riscoAceito, proje
       <div className="envio enviado">
         <h3>✓ Arte enviada</h3>
         <p>
-          Protocolo <strong>{recibo.protocolo}</strong>. O time de comunicação
-          visual já recebeu o arquivo e o laudo desta análise.
+          O time de comunicação visual já recebeu o arquivo e o laudo desta
+          análise. <strong>Você não precisa fazer mais nada agora.</strong>
         </p>
-        <p className="nota">Guarde o protocolo para qualquer conversa sobre esta peça.</p>
+        {/* O que vem depois, em ordem. Sem isto, "arte enviada" é o fim da
+            informação: o cliente não sabe se falta algo dele, e volta a ligar
+            para perguntar em que pé está. */}
+        <ol className="depois-do-envio">
+          <li>O time confere a arte.</li>
+          <li>Se algo precisar mudar, você recebe um e-mail e a peça volta a aceitar arte nova aqui.</li>
+          <li>Quando a prova de impressão estiver pronta, ela aparece nesta página e você recebe um e-mail para aprovar. Nada é impresso antes desse seu aceite.</li>
+        </ol>
+        <p className="nota">
+          O número deste envio é <strong>{recibo.protocolo}</strong> — é por ele
+          que o time acha esta arte se você precisar falar sobre ela. Ele também
+          fica guardado no cartão da peça, então não precisa anotar.
+        </p>
       </div>
     )
   }

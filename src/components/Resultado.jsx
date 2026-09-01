@@ -1,18 +1,12 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ROTULO_VEREDICTO, especificacao } from '../core/regras.js'
+import { agruparAchados, chamadaDoVeredicto, TENTAR_DE_NOVO_E_LIVRE } from '../core/laudo.js'
 import { mensagemParaDesigner, laudoJson } from '../core/mensagem.js'
 import Simulador from './Simulador.jsx'
 import Envio from './Envio.jsx'
 
 const ICONE = { ok: '✓', info: 'i', ressalva: '!', bloqueante: '×' }
-const ORDEM = { bloqueante: 0, ressalva: 1, info: 2, ok: 3 }
 const fmt = (n) => new Intl.NumberFormat('pt-BR').format(Math.round(n))
-
-const RESUMO = {
-  aprovado: 'A arte atende às exigências desta peça. Pode seguir para impressão.',
-  ressalva: 'A arte imprime, mas com perda perceptível. Veja os pontos abaixo e decida se aceita seguir assim.',
-  reprovado: 'A arte não pode ser impressa nesta peça sem os ajustes abaixo.',
-}
 
 function baixar(nome, conteudo, tipo) {
   const blob = new Blob([conteudo], { type: tipo })
@@ -24,10 +18,33 @@ function baixar(nome, conteudo, tipo) {
   setTimeout(() => URL.revokeObjectURL(url), 5000)
 }
 
-export default function Resultado({ resultado, modoTecnico, onAceitarRisco, riscoAceito, arquivo, cadastro, projeto, onEnviado }) {
+/** Rola até a área de soltar o arquivo e pisca, em vez de descrevê-la em texto. */
+function irParaOUpload() {
+  const alvo = document.getElementById('area-de-envio')
+  if (!alvo) return
+  alvo.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  alvo.classList.add('piscando')
+  setTimeout(() => alvo.classList.remove('piscando'), 2400)
+}
+
+export default function Resultado({
+  resultado, modoTecnico, onAceitarRisco, riscoAceito, arquivo, cadastro, projeto,
+  onEnviado, onFalarComTime,
+}) {
   const [copiado, setCopiado] = useState(false)
+  // O laudo em papel não pode depender de alguém ter clicado no triângulo.
+  // Vale para o botão "Imprimir / PDF" e para o Ctrl+P do navegador — os dois
+  // disparam `beforeprint`.
+  const [abrirTudo, setAbrirTudo] = useState(false)
+  useEffect(() => {
+    const abrir = () => setAbrirTudo(true)
+    window.addEventListener('beforeprint', abrir)
+    return () => window.removeEventListener('beforeprint', abrir)
+  }, [])
+
   const { veredicto, achados, medidas, peca, perfil } = resultado
-  const ordenados = [...achados].sort((a, b) => ORDEM[a.nivel] - ORDEM[b.nivel])
+  const grupos = agruparAchados(achados)
+  const chamada = chamadaDoVeredicto(veredicto, grupos.impedem.length)
 
   const copiar = async () => {
     const texto = mensagemParaDesigner(resultado)
@@ -44,13 +61,47 @@ export default function Resultado({ resultado, modoTecnico, onAceitarRisco, risc
     <section className={`cartao resultado ${veredicto}`}>
       <LaudoCabecalho resultado={resultado} cadastro={cadastro} />
 
+      {/*
+        A primeira frase diz o que fazer, não que nota a arte tirou. O rótulo
+        formal continua na tela, como etiqueta: ele é a palavra que o time usa
+        e a que aparece no laudo impresso, mas não é com ela que o cliente age.
+      */}
       <header className="veredicto">
         <div className="selo" aria-hidden>{veredicto === 'aprovado' ? '✓' : veredicto === 'ressalva' ? '!' : '×'}</div>
         <div>
-          <h2>{ROTULO_VEREDICTO[veredicto]}</h2>
-          <p>{RESUMO[veredicto]}</p>
+          <h2>{chamada.titulo}</h2>
+          <p>{chamada.texto}</p>
+          <span className={`etiqueta-veredicto ${veredicto}`}>{ROTULO_VEREDICTO[veredicto]}</span>
         </div>
       </header>
+
+      {/*
+        O que impede vem primeiro, numerado e sozinho. Na lista única — tudo
+        junto, ordenado por gravidade — o item que barra a impressão aparecia
+        no topo de outros sete, do mesmo tamanho: quem lia contava oito
+        problemas onde havia um, e não sabia por qual começar.
+      */}
+      {grupos.impedem.length > 0 && (
+        <section className="bloco-achados impede">
+          <h3>
+            {grupos.impedem.length === 1
+              ? 'O que precisa mudar antes de enviar'
+              : `As ${grupos.impedem.length} coisas que precisam mudar antes de enviar`}
+          </h3>
+          <ol className="achados numerado">
+            {grupos.impedem.map((a) => <ItemAchado key={a.id} achado={a} />)}
+          </ol>
+        </section>
+      )}
+
+      {veredicto === 'reprovado' && (
+        <ProximoPasso
+          onCopiar={copiar}
+          copiado={copiado}
+          onFalarComTime={onFalarComTime}
+          temEnvio={Boolean(arquivo && cadastro)}
+        />
+      )}
 
       {medidas.miniaturaUrl && (
         <div className="previa">
@@ -64,7 +115,10 @@ export default function Resultado({ resultado, modoTecnico, onAceitarRisco, risc
               <div><dt>Conteúdo</dt><dd>Vetorial</dd></div>
             )}
             {resultado.resolucao?.dpi > 0 && !medidas.puroVetor && (
-              <div><dt>No tamanho impresso</dt><dd>{fmt(resultado.resolucao.dpi)} dpi</dd></div>
+              <div>
+                <dt>Pontos por polegada<br /><em className="dica-campo">no tamanho impresso</em></dt>
+                <dd>{fmt(resultado.resolucao.dpi)} dpi</dd>
+              </div>
             )}
             <div><dt>Peça</dt><dd>{fmt(peca.larguraCm)} × {fmt(peca.alturaCm)} cm</dd></div>
             <div><dt>Tamanho</dt><dd>{medidas.arquivo?.tamanhoRotulo}</dd></div>
@@ -72,18 +126,31 @@ export default function Resultado({ resultado, modoTecnico, onAceitarRisco, risc
         </div>
       )}
 
-      <ul className="achados">
-        {ordenados.map((a) => (
-          <li key={a.id} className={a.nivel}>
-            <span className="marca" aria-hidden>{ICONE[a.nivel]}</span>
-            <div>
-              <strong>{a.titulo}</strong>
-              {a.detalhe && <p>{a.detalhe}</p>}
-              {a.acao && <p className="acao">→ {a.acao}</p>}
-            </div>
-          </li>
-        ))}
-      </ul>
+      {grupos.conferir.length > 0 && (
+        <section className="bloco-achados">
+          <h3>
+            {veredicto === 'reprovado'
+              ? 'Outros pontos — estes não impedem a impressão'
+              : 'O que vale conferir antes de seguir'}
+          </h3>
+          <ul className="achados">
+            {grupos.conferir.map((a) => <ItemAchado key={a.id} achado={a} />)}
+          </ul>
+        </section>
+      )}
+
+      {/*
+        O que está certo sai da frente, mas não some: é ele que mostra que a
+        conferência olhou a arte inteira, e não só achou defeito.
+      */}
+      {grupos.certos.length > 0 && (
+        <details className="bloco-certos" open={abrirTudo || undefined}>
+          <summary>Já está certo nesta arte ({grupos.certos.length})</summary>
+          <ul className="achados">
+            {grupos.certos.map((a) => <ItemAchado key={a.id} achado={a} />)}
+          </ul>
+        </details>
+      )}
 
       {veredicto === 'ressalva' && (
         <div className="risco">
@@ -95,7 +162,7 @@ export default function Resultado({ resultado, modoTecnico, onAceitarRisco, risc
               para produção como está.
             </p>
           ) : (
-            <AceiteDeRisco onAceitar={onAceitarRisco} />
+            <AceiteDeRisco onAceitar={onAceitarRisco} onCopiar={copiar} copiado={copiado} />
           )}
         </div>
       )}
@@ -160,6 +227,78 @@ export default function Resultado({ resultado, modoTecnico, onAceitarRisco, risc
   )
 }
 
+function ItemAchado({ achado }) {
+  return (
+    <li className={achado.nivel}>
+      <span className="marca" aria-hidden>{ICONE[achado.nivel]}</span>
+      <div>
+        <strong>{achado.titulo}</strong>
+        {achado.detalhe && <p>{achado.detalhe}</p>}
+        {achado.acao && <p className="acao">→ {achado.acao}</p>}
+      </div>
+    </li>
+  )
+}
+
+/**
+ * "E agora?" — a parte que faltava.
+ *
+ * O diagnóstico que produziu esta caixa foi literal: o cliente "não entendeu o
+ * resultado, não soube o que fazer depois da recusa". E não é falta de atenção
+ * dele. A tela terminava numa lista de defeitos, num botão de enviar desligado
+ * e em três botões cinza do mesmo tamanho, um deles escrito "Copiar mensagem
+ * para o designer" — que era o caminho certo, no rodapé, com a mesma aparência
+ * de "Baixar laudo (JSON)".
+ *
+ * Os três caminhos aqui não são uma lista de opções: são as três situações
+ * reais de quem está parado nesta tela. Ele é o cliente e tem agência; ele é o
+ * cliente e vai mexer no arquivo; ele não sabe o que nada disso quer dizer. O
+ * terceiro é o caso que virava telefonema, e por isso tem botão também.
+ */
+function ProximoPasso({ onCopiar, copiado, onFalarComTime, temEnvio }) {
+  return (
+    <section className="proximo-passo">
+      <h3>E agora, o que eu faço?</h3>
+      <ol>
+        <li>
+          <strong>Quem montou a arte foi outra pessoa</strong>
+          <p>
+            Copie o texto pronto e mande para ela. Vai com as medidas exatas, o
+            que está errado e o que precisa ter no lugar — é o suficiente para
+            corrigir sem ninguém precisar perguntar nada.
+          </p>
+          <button className="btn" onClick={onCopiar}>
+            {copiado ? '✓ Copiado — agora é só colar e mandar' : 'Copiar o que precisa mudar'}
+          </button>
+        </li>
+        <li>
+          <strong>Você mesmo vai corrigir o arquivo</strong>
+          <p>
+            Ajuste e traga o arquivo novo aqui na mesma página — a conferência é
+            na hora. {TENTAR_DE_NOVO_E_LIVRE}
+          </p>
+          <button className="btn btn-ghost" onClick={irParaOUpload}>
+            Escolher outro arquivo
+          </button>
+        </li>
+        {temEnvio && onFalarComTime && (
+          <li>
+            <strong>Não ficou claro o que fazer</strong>
+            <p>
+              Fale com a nossa equipe pela conversa desta página. Ela já sabe de
+              que stand e de que peça você está falando, e o que a análise
+              apontou — você não precisa explicar nada disso de novo.
+            </p>
+            <button className="btn btn-ghost" onClick={onFalarComTime}>
+              Falar com a equipe
+            </button>
+          </li>
+        )}
+      </ol>
+    </section>
+  )
+}
+
 /**
  * Aceite da ressalva, com identificação obrigatória.
  *
@@ -168,16 +307,23 @@ export default function Resultado({ resultado, modoTecnico, onAceitarRisco, risc
  * assinatura de ninguém. Nome e e-mail transformam o registro em prova de quem
  * autorizou imprimir daquele jeito — que é o motivo de a ressalva existir.
  */
-function AceiteDeRisco({ onAceitar }) {
+function AceiteDeRisco({ onAceitar, onCopiar, copiado }) {
   const [nome, setNome] = useState('')
   const [email, setEmail] = useState('')
   const valido = nome.trim().length > 2 && /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim())
 
   return (
     <>
+      {/*
+        Duas saídas, e a segunda existe porque a ressalva é uma pergunta de
+        verdade: "aceito assim" e "prefiro corrigir" são as duas respostas. Sem
+        a segunda visível, quem não queria aceitar ficava sem nada para clicar.
+      */}
       <p>
         Nada aqui impede a impressão. Se o resultado descrito acima é aceitável
-        para você, identifique-se e a peça segue para produção.
+        para você, identifique-se e a peça segue para produção. Se preferir
+        corrigir antes, o caminho é o mesmo de sempre — trocar o arquivo aqui em
+        cima, sem custo e sem limite de tentativas.
       </p>
       <div className="linha">
         <label className="campo">
@@ -189,13 +335,18 @@ function AceiteDeRisco({ onAceitar }) {
           <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
         </label>
       </div>
-      <button
-        className="btn btn-risco"
-        disabled={!valido}
-        onClick={() => onAceitar({ nome: nome.trim(), email: email.trim().toLowerCase() })}
-      >
-        Aceito o risco e autorizo a impressão
-      </button>
+      <div className="acoes">
+        <button
+          className="btn btn-risco"
+          disabled={!valido}
+          onClick={() => onAceitar({ nome: nome.trim(), email: email.trim().toLowerCase() })}
+        >
+          Aceito o risco e autorizo a impressão
+        </button>
+        <button className="btn btn-ghost" onClick={onCopiar}>
+          {copiado ? '✓ Copiado' : 'Prefiro corrigir — copiar o que mudar'}
+        </button>
+      </div>
       <p className="nota">
         Fica registrado com data e hora. Como mais de uma pessoa pode ter este
         link, o registro precisa dizer quem autorizou.
