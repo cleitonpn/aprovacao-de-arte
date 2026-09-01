@@ -52,9 +52,33 @@
      noite para quase preto. Trocar por uma cor chapada ali faria a mesma tela
      ter duas personalidades.
   */
-  --entrada-topo: #4a86e8; --entrada-topo: light-dark(#4a86e8, #24406e);
-  --entrada-meio: #2a63c9; --entrada-meio: light-dark(#2a63c9, #16233a);
-  --entrada-pe: #1b3f8f;   --entrada-pe: light-dark(#1b3f8f, #0e1420);
+  /*
+     A malha é feita de manchas, não de uma diagonal só. É o que separa o
+     desenho dela do gradiente de duas cores que estava aqui antes: o azul
+     profundo mora num canto, o ciano em outro, e o claro abre no meio — a tela
+     tem para onde olhar. Uma diagonal só dá a mesma cor em toda a largura de
+     cada faixa, e o resultado é liso demais.
+
+     Cada mancha é uma cor SÓLIDA aqui; a transparência é dada na hora de
+     compor, em `body.entrada`. Guardar a cor já transparente impediria o
+     `light-dark()`, que só troca cor.
+
+     No escuro a mesma composição vira o azul-noite com brilho arroxeado: as
+     manchas continuam nos mesmos cantos, então é a mesma tela com outra hora
+     do dia, e não um segundo desenho para manter.
+  */
+  --malha-brilho: #ffffff; --malha-brilho: light-dark(#ffffff, #4b5cc4);
+  --malha-ciano: #63cfe6;  --malha-ciano: light-dark(#63cfe6, #1f6f8f);
+  --malha-claro: #eafaff;  --malha-claro: light-dark(#eafaff, #171a35);
+  --malha-fundo: #2f63d8;  --malha-fundo: light-dark(#2f63d8, #2b2f6b);
+  --entrada-topo: #4479e6; --entrada-topo: light-dark(#4479e6, #141833);
+  --entrada-meio: #6bb8dd; --entrada-meio: light-dark(#6bb8dd, #101426);
+  --entrada-pe: #d9f2f8;   --entrada-pe: light-dark(#d9f2f8, #0a0c16);
+  /* A tinta do que fica FORA do cartão. No claro o pé da malha é quase branco,
+     então ali a tinta é escura — como no desenho dela. No escuro, o contrário.
+     Era isto que o gradiente anterior errava: ele assumia fundo escuro sempre e
+     pintava a linha de suporte de branco, o que sobre o pé claro some. */
+  --sobre-malha: #143a63;  --sobre-malha: light-dark(#143a63, #cfd6e6);
   /*
      As paradas do botão NÃO seguem o tema, e é de propósito: a tinta em cima
      dele é branca nos dois, e branco é o único par que funciona sobre azul nos
@@ -578,10 +602,62 @@ input[aria-invalid='true'] { border-color: var(--ruim); }
    cartão faz a página rolar, a diagonal recomeça e aparece uma emenda.
 */
 body.entrada {
-  background: linear-gradient(160deg, var(--entrada-topo) 0%, var(--entrada-meio) 45%, var(--entrada-pe) 100%);
+  /* Primeiro a diagonal sozinha: é o que navegador sem `in oklab` entende, e
+     ela já é uma tela apresentável. A malha logo abaixo vence onde existe. */
+  background: linear-gradient(160deg, var(--entrada-topo) 0%, var(--entrada-meio) 55%, var(--entrada-pe) 100%);
+  /*
+     `in oklab` em cada mancha, e não por elegância: o fim de um gradiente é
+     `transparent`, que é PRETO com alfa zero. Interpolado em sRGB, o caminho
+     até lá passa por cinza e cada mancha ganha uma auréola suja na borda —
+     bem visível sobre o ciano. Em oklab a interpolação é premultiplicada e a
+     mancha some limpa.
+
+     A ordem importa: a primeira camada é a de cima. O brilho branco fica por
+     último entre as manchas para clarear o canto onde o botão de tema mora.
+  */
+  background:
+    radial-gradient(58% 45% at 88% 16% in oklab, var(--malha-brilho), transparent),
+    radial-gradient(52% 52% at 102% 52% in oklab, var(--malha-ciano), transparent),
+    radial-gradient(72% 58% at 46% 104% in oklab, var(--malha-claro), transparent),
+    radial-gradient(78% 68% at -6% 8% in oklab, var(--malha-fundo), transparent),
+    linear-gradient(160deg, var(--entrada-topo) 0%, var(--entrada-meio) 55%, var(--entrada-pe) 100%);
   background-attachment: fixed;
   min-height: 100vh;
 }
+
+/*
+   As linhas das bordas. `fixed` para acompanharem a malha, que também é fixa —
+   presas à página elas deslizariam por cima de um fundo parado.
+
+   `pointer-events: none` porque é uma folha que cobre a tela inteira: sem
+   isso, ela engoliria o clique de todo o formulário.
+*/
+.fundo-entrada {
+  position: fixed; inset: 0; width: 100%; height: 100%;
+  pointer-events: none; z-index: 0;
+}
+.fundo-entrada line { stroke: rgba(255, 255, 255, 0.55); stroke-width: 1; }
+/*
+   O grupo da DIREITA, a partir da 13ª linha — as 12 primeiras são as da
+   esquerda, na ordem em que `FundoDeEntrada.jsx` as desenha.
+
+   Ele escurece no tema claro porque cai sobre o lado pálido da malha, onde
+   branco sobre quase-branco simplesmente não existe. É o mesmo traço com outra
+   tinta, não um segundo desenho.
+
+   O 13 depende do tamanho daquela lista, e um seletor CSS não sabe contar itens
+   de um array. Quem guarda esse acoplamento é um teste em `tema.test.mjs`, que
+   falha se as duas pontas se desencontrarem.
+*/
+.fundo-entrada line:nth-child(n + 13) { stroke: rgba(20, 58, 99, 0.18); }
+:root[data-tema='escuro'] .fundo-entrada line:nth-child(n + 13) { stroke: rgba(255, 255, 255, 0.3); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-tema='claro']) .fundo-entrada line:nth-child(n + 13) { stroke: rgba(255, 255, 255, 0.3); }
+}
+
+/* O conteúdo sobe acima da folha de linhas. Sem isto o cartão fica atrás
+   delas — e as linhas passariam por cima do campo de senha. */
+body.entrada .app { position: relative; z-index: 1; }
 
 .acesso { max-width: 420px; margin: 4vh auto 0; }
 
@@ -597,15 +673,18 @@ body.entrada {
 .acesso-topo h2 { font-size: 22px; margin-bottom: 2px; }
 .acesso-topo .ajuda { margin: 0; font-size: 13px; }
 
-/* O Google em cartão separado: dois caminhos que não se misturam. Colado ao
-   formulário por um "ou", o botão lia como "confirmar" logo abaixo dos campos,
-   e mais de um analista clicou nele com a senha já digitada. */
-.acesso-google {
-  margin: 16px -18px -18px; padding: 16px 18px;
-  border-top: 1px solid var(--borda); background: var(--fundo);
-  border-radius: 0 0 var(--raio) var(--raio);
+/* O Google em CARTÃO PRÓPRIO, solto abaixo do formulário — é assim no desenho
+   dela, e não como uma faixa presa ao pé do cartão.
+
+   O espaço entre os dois é o que diz que são dois caminhos, e não duas partes
+   do mesmo. Preso ao formulário por uma faixa (ou, pior, por um "ou"), o botão
+   lia como "confirmar" logo abaixo dos campos, e mais de um analista clicou
+   nele com a senha já digitada. */
+.acesso-google { margin-top: 14px; padding: 14px; }
+.acesso-google .btn {
+  display: flex; align-items: center; justify-content: center; gap: 12px;
+  background: transparent; border: 0; font-size: 15px;
 }
-.acesso-google .btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; background: var(--cartao); }
 .logo-google { width: 18px; height: 18px; flex: 0 0 18px; }
 
 /*
@@ -616,20 +695,26 @@ body.entrada {
 */
 .acesso-suporte { text-align: center; margin: 16px 0 0; font-size: 12.5px; color: var(--suave); }
 .acesso-suporte a { color: var(--acento); }
-body.entrada .acesso-suporte { color: rgba(255, 255, 255, 0.88); }
-body.entrada .acesso-suporte a { color: #fff; text-decoration: underline; }
+/* Sobre a malha a tinta é `--sobre-malha`, que acompanha o tema — no claro o pé
+   da malha é quase branco e pede tinta escura, como no desenho dela. O e-mail
+   vem em negrito em vez de link azul: azul sobre azul-claro é o mesmo problema
+   de contraste com outro nome. */
+body.entrada .acesso-suporte { color: var(--sobre-malha); }
+body.entrada .acesso-suporte a { color: inherit; font-weight: 600; text-decoration: none; }
+body.entrada .acesso-suporte a:hover { text-decoration: underline; }
 
 /*
-   O botão de tema no alto continua sendo o único controle fora do cartão, e
-   `.btn-ghost` o desenha com tinta escura e borda clara — as duas erradas
-   sobre azul. O véu escuro por baixo é o que garante o contraste sem depender
-   de onde a diagonal está naquele ponto da tela: medido, dá 5,4:1 no trecho
-   mais claro do gradiente.
+   O botão de tema é o único controle fora do cartão. `.btn-ghost` o desenha com
+   a tinta e a borda do painel, que sobre a malha somem. O véu translúcido
+   resolve os dois casos com um valor só: ele CLAREIA o que está atrás no tema
+   claro (onde aquele canto é branco) e escurece no escuro, porque a tinta em
+   cima é `--sobre-malha` nos dois.
 */
 body.entrada .topo .btn-ghost {
-  background: rgba(0, 0, 0, 0.22);
-  border-color: rgba(255, 255, 255, 0.4);
-  color: #fff;
+  background: color-mix(in srgb, var(--cartao) 70%, transparent);
+  border-color: color-mix(in srgb, var(--sobre-malha) 25%, transparent);
+  color: var(--sobre-malha);
+  backdrop-filter: blur(6px);
 }
 
 .escolha-modo { display: grid; gap: 8px; margin-bottom: 16px; }

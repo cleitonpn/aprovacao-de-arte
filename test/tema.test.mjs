@@ -130,3 +130,31 @@ test('as exceções da regra dos dois temas ainda existem no CSS', () => {
     assert.ok(css.includes(`${token}:`), `${token} saiu do CSS — tire-o da lista de exceções`)
   }
 })
+
+test('o seletor das linhas da direita acompanha o tamanho da lista da esquerda', () => {
+  /*
+    O CSS pinta o grupo da direita com `nth-child(n + N)`, e N só está certo
+    enquanto for "quantas linhas a esquerda tem, mais uma". Acrescentar um
+    traço à esquerda sem mexer no CSS não quebra nada visível de imediato: a
+    última linha da esquerda apenas passa a ser pintada com a tinta da direita,
+    some sobre o azul, e ninguém liga o sumiço à lista que mudou.
+
+    Daí o teste. Ele existe porque o acoplamento é real e não tem como sumir:
+    um seletor CSS não sabe contar itens de um array em JSX.
+  */
+  const jsx = readFileSync(new URL('../src/components/FundoDeEntrada.jsx', import.meta.url), 'utf8')
+  const css = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8')
+
+  const listaEsquerda = jsx.slice(jsx.indexOf('const ESQUERDA = ['))
+  const quantas = [...listaEsquerda.slice(0, listaEsquerda.indexOf(']')).matchAll(/\{\s*y:/g)].length
+  assert.ok(quantas > 0, 'não achei a lista ESQUERDA em FundoDeEntrada.jsx')
+
+  const usados = [...css.matchAll(/\.fundo-entrada line:nth-child\(n \+ (\d+)\)/g)].map((m) => Number(m[1]))
+  assert.ok(usados.length > 0, 'o CSS não pinta mais o grupo da direita')
+  for (const n of usados) {
+    assert.equal(
+      n, quantas + 1,
+      `o CSS começa a direita na ${n}ª linha, mas a esquerda tem ${quantas} traços`,
+    )
+  }
+})

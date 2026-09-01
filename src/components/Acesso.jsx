@@ -163,33 +163,34 @@ function FormularioDeEntrada({ sessao }) {
           </button>
         </div>
 
-        {/*
-          O Google fica numa faixa SEPARADA, como ela desenhou, e não colado ao
-          formulário por um "ou".
-
-          São dois caminhos que não se misturam: quem entra por senha nunca
-          toca no de baixo, e quem entra pelo Google nunca preenche o de cima.
-          Com os dois na mesma caixa, o botão do Google lia como "confirmar"
-          logo abaixo dos campos — e mais de um analista clicou nele com a
-          senha já digitada.
-        */}
-        <div className="acesso-google">
-          <button
-            className="btn btn-ghost largo"
-            type="button"
-            disabled={ocupado}
-            onClick={() => rodar(sessao.entrarComGoogle)}
-          >
-            <LogoGoogle />
-            Entrar com Google
-          </button>
-        </div>
       </form>
 
       {/*
-        Fora do cartão, e não como último parágrafo dentro dele. Dentro, a
-        linha caía por cima da faixa do Google — e, pior que o desalinho, ela
-        lia como parte do formulário: quem não conseguia entrar tentava o
+        O Google fica em CARTÃO PRÓPRIO, solto abaixo do formulário — é assim
+        no desenho dela.
+
+        São dois caminhos que não se misturam: quem entra por senha nunca toca
+        no de baixo, e quem entra pelo Google nunca preenche o de cima. Dentro
+        da mesma caixa, o botão do Google lia como "confirmar" logo abaixo dos
+        campos — e mais de um analista clicou nele com a senha já digitada. O
+        espaço entre os dois cartões é o que diz que são duas portas.
+      */}
+
+      <div className="cartao acesso-google">
+        <button
+          className="btn btn-ghost largo"
+          type="button"
+          disabled={ocupado}
+          onClick={() => rodar(sessao.entrarComGoogle)}
+        >
+          <LogoGoogle />
+          Entrar com Google
+        </button>
+      </div>
+
+      {/*
+        Sobre a malha, e não dentro de um cartão. Dentro, a linha lia como
+        parte do formulário: quem não conseguia entrar chegou a tentar o
         endereço de suporte no campo de e-mail.
       */}
       <p className="acesso-suporte">

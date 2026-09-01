@@ -14,6 +14,7 @@ import Historico from './components/Historico.jsx'
 import BotaoTema from './components/BotaoTema.jsx'
 import Cadastro from './components/Cadastro.jsx'
 import Acesso from './components/Acesso.jsx'
+import FundoDeEntrada from './components/FundoDeEntrada.jsx'
 import Projetos from './components/Projetos.jsx'
 import Visao from './components/Visao.jsx'
 import Usuarios from './components/Usuarios.jsx'
@@ -146,6 +147,12 @@ function PainelInterno({ rota }) {
           <a href="#/" className="fora">Abrir a ferramenta</a>
         </nav>
       )}
+
+      {/* As linhas do fundo da tela de entrada. Ficam aqui, e não dentro do
+          `Acesso`, porque cobrem a janela inteira: dentro da coluna elas
+          herdariam a largura de 1180px e parariam antes das bordas, que é
+          exatamente onde elas precisam aparecer. */}
+      {!sessao.liberado && <FundoDeEntrada />}
 
       <div className="coluna">
         <Acesso sessao={sessao}>
