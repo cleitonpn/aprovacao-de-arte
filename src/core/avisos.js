@@ -103,6 +103,15 @@ const ondeExpoe = (p, preposicao = 'do') =>
 const etiqueta = (p) =>
   ` — stand ${nomeDoStand(p)}${nomeDaFeira(p) ? `, ${nomeDaFeira(p)}` : ''}`
 
+/**
+ * Até quando uma resposta do time ainda merece e-mail.
+ *
+ * Duas horas. É folgado para o atraso normal de um gatilho e curto o bastante
+ * para que nenhuma conversa antiga vire aviso quando o documento do projeto
+ * for reescrito por outro motivo.
+ */
+const JANELA_DA_RESPOSTA = 2 * 60 * 60 * 1000
+
 /** Medida sem casa decimal inútil: 275 e não 275,0. */
 const fmt = (v) => Number(v).toLocaleString('pt-BR', { maximumFractionDigits: 1 })
 
@@ -233,8 +242,17 @@ export function avisosPendentes(projeto, {
   // manda. O efeito colateral aceito é o analista que escreve três parágrafos
   // em três mensagens gerar até três avisos — preferível a agrupar por janela
   // de tempo e deixar a última resposta sem aviso nenhum.
+  //
+  // A janela existe por causa do primeiro dia no ar, e é o mesmo cuidado do
+  // `novo` das boas-vindas: no momento em que isto for publicado, dezenas de
+  // stands já têm `ultimoAutor: 'time'` de semanas atrás. A próxima gravação
+  // de qualquer um deles — marcar uma peça como impressa serve — dispararia
+  // "a equipe respondeu você" sobre uma conversa encerrada. Um aviso desses
+  // não se desfaz, e quem o recebe volta à ferramenta procurar uma resposta
+  // que não existe.
   const conversa = projeto.conversa
-  if (conversa?.ultimoAutor === 'time' && conversa.ultimaEm) {
+  const respondidaHa = conversa?.ultimaEm ? agora - Date.parse(conversa.ultimaEm) : Infinity
+  if (conversa?.ultimoAutor === 'time' && conversa.ultimaEm && respondidaHa < JANELA_DA_RESPOSTA) {
     avisos.push({
       chave: `conversa:${conversa.ultimaEm}`,
       tipo: 'conversa',

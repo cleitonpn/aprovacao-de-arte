@@ -316,13 +316,26 @@ test('sem prazo definido, o texto não inventa uma data', () => {
 
 const comConversa = (ultimoAutor, ultimaEm) => projeto({ conversa: { ultimoAutor, ultimaEm } })
 
+test('conversa antiga não vira aviso quando o projeto é regravado', () => {
+  // O risco do primeiro dia no ar: dezenas de stands já têm `ultimoAutor:
+  // 'time'` de semanas atrás, e o documento do projeto é reescrito por vinte
+  // motivos que não são o chat — marcar uma peça como impressa serve. Sem
+  // janela, todos eles receberiam "a equipe respondeu você" sobre uma conversa
+  // encerrada, e voltariam à ferramenta procurar uma resposta que não existe.
+  const velha = new Date(AGORA - 5 * DIA).toISOString()
+  assert.ok(!tipos(avisosPendentes(comConversa('time', velha), { agora: AGORA })).includes('conversa'))
+
+  const recente = new Date(AGORA - 3 * 60 * 1000).toISOString()
+  assert.ok(tipos(avisosPendentes(comConversa('time', recente), { agora: AGORA })).includes('conversa'))
+})
+
 test('a resposta do time vira aviso; a mensagem do cliente não', () => {
-  const doTime = avisosPendentes(comConversa('time', '2026-08-10T09:00:00Z'), { agora: AGORA })
+  const doTime = avisosPendentes(comConversa('time', '2026-08-10T11:00:00Z'), { agora: AGORA })
   assert.ok(tipos(doTime).includes('conversa'))
 
   // A própria mensagem do cliente avisando ele mesmo seria absurdo — e o time
   // já vê a badge no painel.
-  const doCliente = avisosPendentes(comConversa('cliente', '2026-08-10T09:00:00Z'), { agora: AGORA })
+  const doCliente = avisosPendentes(comConversa('cliente', '2026-08-10T11:00:00Z'), { agora: AGORA })
   assert.ok(!tipos(doCliente).includes('conversa'))
 
   // Projeto sem conversa nenhuma não inventa aviso.
@@ -336,16 +349,16 @@ test('a chave é a hora da resposta — repetir não manda, responder de novo ma
   // analista nunca chegaria; se mudasse a cada gravação, o cliente receberia o
   // mesmo aviso a cada peça marcada como impressa.
   const chaveDe = (p) => avisosPendentes(p, { agora: AGORA }).find((a) => a.tipo === 'conversa').chave
-  const primeira = chaveDe(comConversa('time', '2026-08-10T09:00:00Z'))
-  assert.equal(chaveDe(comConversa('time', '2026-08-10T09:00:00Z')), primeira)
-  assert.notEqual(chaveDe(comConversa('time', '2026-08-10T11:30:00Z')), primeira)
+  const primeira = chaveDe(comConversa('time', '2026-08-10T11:00:00Z'))
+  assert.equal(chaveDe(comConversa('time', '2026-08-10T11:00:00Z')), primeira)
+  assert.notEqual(chaveDe(comConversa('time', '2026-08-10T11:45:00Z')), primeira)
 })
 
 test('o aviso leva ao sistema e não abre uma conversa por e-mail', () => {
   // A regra da casa: toda a tratativa do cliente acontece na ferramenta. Copiar
   // a resposta para o corpo do e-mail convida a responder ali, e aí a decisão
   // que resolveu a dúvida volta a morar numa caixa de entrada particular.
-  const a = avisosPendentes(comConversa('time', '2026-08-10T09:00:00Z'), { agora: AGORA })
+  const a = avisosPendentes(comConversa('time', '2026-08-10T11:00:00Z'), { agora: AGORA })
     .find((x) => x.tipo === 'conversa')
   assert.match(a.assunto, /respondeu/i)
   assert.match(a.assunto, /Kemin Nutrição Animal/, 'o assunto precisa dizer de que stand se trata')
