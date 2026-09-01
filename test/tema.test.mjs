@@ -89,6 +89,21 @@ test('o index.html usa a MESMA chave do módulo', () => {
   assert.ok(html.includes("setAttribute('data-tema'"), 'o index.html precisa aplicar o atributo')
 })
 
+/**
+ * Os tokens que PODEM ser iguais nos dois temas — nomeados um a um.
+ *
+ * As duas paradas do gradiente do botão do login são iguais de propósito: a
+ * tinta em cima delas é branca sempre, e branco sobre azul é o único par que
+ * funciona no claro e no escuro. Um gradiente que escurecesse junto com o tema
+ * pediria tinta clara sobre fundo escuro — que é exatamente o defeito que este
+ * arquivo já pegou uma vez, no botão primário.
+ *
+ * A lista é explícita, e não uma regra do tipo "ignore tokens de botão": uma
+ * exceção que se aplica sozinha a nomes futuros deixa de ser exceção e vira o
+ * buraco que este teste existe para tapar.
+ */
+const IGUAIS_NOS_DOIS_TEMAS = new Set(['--botao-a', '--botao-b'])
+
 test('o CSS define os dois temas para toda cor, sem esquecer nenhuma', () => {
   // O motivo de as cores estarem em `light-dark()` numa linha só. Um token com
   // valor fixo passaria despercebido até alguém abrir no escuro e achar um
@@ -97,6 +112,7 @@ test('o CSS define os dois temas para toda cor, sem esquecer nenhuma', () => {
   const raiz = css.slice(css.indexOf(':root {'), css.indexOf('* { box-sizing'))
   const cores = [...raiz.matchAll(/(--[a-z-]+):\s*(#[0-9a-f]{3,8});/gi)].map((m) => m[1])
   for (const token of new Set(cores)) {
+    if (IGUAIS_NOS_DOIS_TEMAS.has(token)) continue
     assert.match(
       raiz,
       new RegExp(`${token}:\\s*light-dark\\(`),
@@ -104,4 +120,13 @@ test('o CSS define os dois temas para toda cor, sem esquecer nenhuma', () => {
     )
   }
   assert.ok(cores.length >= 10, `esperava dezenas de cores, achei ${cores.length}`)
+})
+
+test('as exceções da regra dos dois temas ainda existem no CSS', () => {
+  // Uma lista de exceções que sobrevive ao token que a motivou é pior que não
+  // ter lista: ela vira permissão silenciosa para o próximo nome parecido.
+  const css = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8')
+  for (const token of IGUAIS_NOS_DOIS_TEMAS) {
+    assert.ok(css.includes(`${token}:`), `${token} saiu do CSS — tire-o da lista de exceções`)
+  }
 })

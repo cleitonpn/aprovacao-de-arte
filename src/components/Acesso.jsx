@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { firebaseConfigurado } from '../config.js'
 import { SUPORTE_EMAIL } from '../core/tutorial.js'
 
@@ -13,33 +13,57 @@ import { SUPORTE_EMAIL } from '../core/tutorial.js'
 export default function Acesso({ sessao, children }) {
   const { usuario, carregando, liberado, verificado, erro } = sessao
 
+  /*
+    O fundo em gradiente vale enquanto ninguém entrou, e some no instante em
+    que o painel aparece.
+
+    A classe vai no `<body>` porque o gradiente é da JANELA — ver a nota em
+    `styles.css`. E ela é tirada na limpeza do efeito, não só na troca de
+    estado: sem isso, entrar deixava o painel de trabalho inteiro sobre um
+    fundo azul-marinho, e nenhuma tela de dentro foi desenhada para isso.
+
+    Toda tela anterior ao painel entra aqui — login, "confirme seu e-mail",
+    "conta não liberada" —, e não só o formulário. São todas a mesma porta,
+    vistas em momentos diferentes; com o fundo só numa delas, confirmar o
+    e-mail parecia ter jogado a pessoa em outro sistema.
+  */
+  useEffect(() => {
+    if (liberado) return undefined
+    document.body.classList.add('entrada')
+    return () => document.body.classList.remove('entrada')
+  }, [liberado])
+
   if (!firebaseConfigurado()) {
     return (
-      <div className="cartao">
-        <h2>Acesso do time</h2>
-        <p className="ajuda">
-          O Firebase ainda não está configurado nesta instalação. Preencha as
-          variáveis <code>VITE_FIREBASE_*</code> e publique novamente.
-        </p>
+      <div className="acesso">
+        <div className="cartao">
+          <h2>Acesso do time</h2>
+          <p className="ajuda">
+            O Firebase ainda não está configurado nesta instalação. Preencha as
+            variáveis <code>VITE_FIREBASE_*</code> e publique novamente.
+          </p>
+        </div>
       </div>
     )
   }
 
-  if (carregando) return <div className="cartao"><p className="ajuda">Carregando…</p></div>
+  if (carregando) return <div className="acesso"><div className="cartao"><p className="ajuda">Carregando…</p></div></div>
   if (!usuario) return <FormularioDeEntrada sessao={sessao} />
   if (!verificado) return <ConfirmeSeuEmail sessao={sessao} />
   if (!liberado) {
     return (
-      <div className="cartao">
-        <h2>Conta ainda não liberada</h2>
-        <p className="ajuda">
-          Você entrou como <strong>{usuario.email}</strong>, mas esta conta não
-          está na lista de analistas. Peça a alguém que já tem acesso para
-          incluir o seu e-mail na tela <strong>Analistas</strong>.
-        </p>
-        {erro && <p className="erro-envio">{erro}</p>}
-        <div className="acoes">
-          <button className="btn btn-ghost" onClick={sessao.sair}>Sair</button>
+      <div className="acesso">
+        <div className="cartao">
+          <h2>Conta ainda não liberada</h2>
+          <p className="ajuda">
+            Você entrou como <strong>{usuario.email}</strong>, mas esta conta não
+            está na lista de analistas. Peça a alguém que já tem acesso para
+            incluir o seu e-mail na tela <strong>Analistas</strong>.
+          </p>
+          {erro && <p className="erro-envio">{erro}</p>}
+          <div className="acoes">
+            <button className="btn btn-ghost" onClick={sessao.sair}>Sair</button>
+          </div>
         </div>
       </div>
     )
@@ -206,26 +230,28 @@ function ConfirmeSeuEmail({ sessao }) {
   }
 
   return (
-    <div className="cartao">
-      <h2>Confirme seu e-mail</h2>
-      <p className="ajuda">
-        Enviamos um link de confirmação para <strong>{sessao.usuario.email}</strong>.
-        Abra o link e volte aqui. Se não achar, veja a caixa de spam.
-      </p>
-      {reenviado && <p className="ajuda">✓ E-mail reenviado.</p>}
-      {sessao.erro && <p className="erro-envio">{sessao.erro}</p>}
-      <div className="acoes">
-        <button className="btn" disabled={ocupado} onClick={() => rodar(sessao.recarregarUsuario)}>
-          Já confirmei
-        </button>
-        <button
-          className="btn btn-ghost"
-          disabled={ocupado}
-          onClick={() => rodar(async () => { await sessao.reenviarVerificacao(); setReenviado(true) })}
-        >
-          Reenviar e-mail
-        </button>
-        <button className="btn btn-ghost" onClick={sessao.sair}>Sair</button>
+    <div className="acesso">
+      <div className="cartao">
+        <h2>Confirme seu e-mail</h2>
+        <p className="ajuda">
+          Enviamos um link de confirmação para <strong>{sessao.usuario.email}</strong>.
+          Abra o link e volte aqui. Se não achar, veja a caixa de spam.
+        </p>
+        {reenviado && <p className="ajuda">✓ E-mail reenviado.</p>}
+        {sessao.erro && <p className="erro-envio">{sessao.erro}</p>}
+        <div className="acoes">
+          <button className="btn" disabled={ocupado} onClick={() => rodar(sessao.recarregarUsuario)}>
+            Já confirmei
+          </button>
+          <button
+            className="btn btn-ghost"
+            disabled={ocupado}
+            onClick={() => rodar(async () => { await sessao.reenviarVerificacao(); setReenviado(true) })}
+          >
+            Reenviar e-mail
+          </button>
+          <button className="btn btn-ghost" onClick={sessao.sair}>Sair</button>
+        </div>
       </div>
     </div>
   )

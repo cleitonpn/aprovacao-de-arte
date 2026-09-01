@@ -41,6 +41,31 @@
   --raio: 16px;
   --raio-p: 12px;
   --raio-pill: 999px;
+  /*
+     O azul em gradiente da proposta da designer.
+
+     Três paradas em vez de duas: com duas, a diagonal fica com uma faixa clara
+     atravessando o meio da tela, bem atrás do cartão branco, e o cartão perde a
+     borda contra o fundo. A parada do meio segura o tom onde o cartão está.
+
+     No escuro ele não vira cinza: continua sendo um gradiente, só que de azul
+     noite para quase preto. Trocar por uma cor chapada ali faria a mesma tela
+     ter duas personalidades.
+  */
+  --entrada-topo: #4a86e8; --entrada-topo: light-dark(#4a86e8, #24406e);
+  --entrada-meio: #2a63c9; --entrada-meio: light-dark(#2a63c9, #16233a);
+  --entrada-pe: #1b3f8f;   --entrada-pe: light-dark(#1b3f8f, #0e1420);
+  /*
+     As paradas do botão NÃO seguem o tema, e é de propósito: a tinta em cima
+     dele é branca nos dois, e branco é o único par que funciona sobre azul nos
+     dois. Um gradiente que escurecesse no tema escuro pediria tinta clara sobre
+     fundo escuro — que é o que já quebrou o botão primário uma vez aqui.
+
+     Medido: branco sobre a parada clara dá 4,7:1 e sobre a escura 8,9:1. Passa
+     em AA na faixa inteira, não só no meio.
+  */
+  --botao-a: #3a70d4;
+  --botao-b: #1b449f;
 }
 
 /*
@@ -105,7 +130,14 @@ body {
 /* Campos e botões viram cápsula, como no desenho da designer. Num formulário
    de poucos campos altos isso lê como controle e não como caixa de texto de
    planilha — e é a diferença mais visível entre as duas telas lado a lado. */
-input[type='number'], input[type='text'], select {
+/* A lista de tipos existe porque `input` puro pegaria checkbox e radio, que
+   viram bolinha de 999px de raio e somem. Mas ela precisa cobrir TODOS os
+   campos de texto: com só `number` e `text`, o login — que usa `email` e
+   `password` — era a única tela da ferramenta com campo quadrado, bem ao lado
+   de um botão em cápsula. */
+input[type='number'], input[type='text'], input[type='email'],
+input[type='password'], input[type='search'], input[type='tel'],
+input[type='url'], input[type='date'], select {
   background: var(--fundo);
   border: 1px solid var(--borda);
   border-radius: var(--raio-pill);
@@ -534,7 +566,33 @@ input[aria-invalid='true'] { border-color: var(--ruim); }
    seção de um painel: é a porta. Não há nada em volta para alinhar, e o que
    estava alinhado à esquerda parecia um cartão perdido num painel vazio.
 */
+/*
+   O gradiente cobre a JANELA, não o cartão.
+
+   Por isso a classe vai no `<body>` e não num `<div>`: `.app` tem 1180px de
+   largura máxima e margem automática, então pintar o gradiente nela deixava
+   duas tarjas cinzas nas laterais em tela larga — o desenho dela é a tela
+   inteira azul, com o cartão branco boiando por cima.
+
+   `fixed` prende o gradiente à janela: sem isso, numa tela baixa em que o
+   cartão faz a página rolar, a diagonal recomeça e aparece uma emenda.
+*/
+body.entrada {
+  background: linear-gradient(160deg, var(--entrada-topo) 0%, var(--entrada-meio) 45%, var(--entrada-pe) 100%);
+  background-attachment: fixed;
+  min-height: 100vh;
+}
+
 .acesso { max-width: 420px; margin: 4vh auto 0; }
+
+/* O botão primário do login herda o gradiente — é o que amarra o cartão ao
+   fundo. Escopo no `.acesso` de propósito: no painel, um botão em gradiente no
+   meio de vinte outros vira enfeite, e a tela do time é de trabalho. */
+.acesso .btn:not(.btn-ghost) {
+  background: linear-gradient(135deg, var(--botao-a), var(--botao-b));
+  color: #fff;
+}
+
 .acesso-topo { text-align: center; border-bottom: 1px solid var(--borda); padding-bottom: 14px; margin-bottom: 18px; }
 .acesso-topo h2 { font-size: 22px; margin-bottom: 2px; }
 .acesso-topo .ajuda { margin: 0; font-size: 13px; }
@@ -550,8 +608,29 @@ input[aria-invalid='true'] { border-color: var(--ruim); }
 .acesso-google .btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; background: var(--cartao); }
 .logo-google { width: 18px; height: 18px; flex: 0 0 18px; }
 
+/*
+   Fora do cartão a linha de suporte cai sobre o azul, e aí `--suave` (um
+   cinza de texto sobre fundo claro) fica em 1,6:1 — ilegível. Sobre o
+   gradiente a tinta é branca, e o link é branco sublinhado em vez de azul:
+   azul sobre azul é o mesmo problema com outro nome.
+*/
 .acesso-suporte { text-align: center; margin: 16px 0 0; font-size: 12.5px; color: var(--suave); }
 .acesso-suporte a { color: var(--acento); }
+body.entrada .acesso-suporte { color: rgba(255, 255, 255, 0.88); }
+body.entrada .acesso-suporte a { color: #fff; text-decoration: underline; }
+
+/*
+   O botão de tema no alto continua sendo o único controle fora do cartão, e
+   `.btn-ghost` o desenha com tinta escura e borda clara — as duas erradas
+   sobre azul. O véu escuro por baixo é o que garante o contraste sem depender
+   de onde a diagonal está naquele ponto da tela: medido, dá 5,4:1 no trecho
+   mais claro do gradiente.
+*/
+body.entrada .topo .btn-ghost {
+  background: rgba(0, 0, 0, 0.22);
+  border-color: rgba(255, 255, 255, 0.4);
+  color: #fff;
+}
 
 .escolha-modo { display: grid; gap: 8px; margin-bottom: 16px; }
 .escolha-modo label {
