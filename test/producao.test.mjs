@@ -29,7 +29,11 @@ test('traduz o vocabulário do app para o daqui', () => {
   assert.equal(c.feira, 'Conferencia Luxo - ECBR')
   assert.equal(c.expositor, 'After Click', 'nome no app é o expositor aqui')
   assert.equal(c.stand, 'A12', '"local" no app é o stand aqui — não o nome da empresa')
-  assert.equal(c.localizacao, 'Pavilhão Azul · A12')
+  // SÓ o pavilhão. Este teste esperava "Pavilhão Azul · A12" e, ao fazer isso,
+  // guardava um defeito: `local` já virou `stand` na linha acima, e gravá-lo
+  // também aqui fazia "A12" aparecer duas vezes na mesma linha da lista — uma
+  // como título e outra no fim do endereço.
+  assert.equal(c.localizacao, 'Pavilhão Azul')
   assert.equal(c.area, '36')
   assert.equal(c.linkDrive, 'https://drive.google.com/x')
 })

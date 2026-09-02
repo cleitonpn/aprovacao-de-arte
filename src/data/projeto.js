@@ -178,6 +178,57 @@ export function listaDeEmails(valor) {
   return [...new Set(limpos)].slice(0, 8)
 }
 
+/**
+ * O endereço do stand sem repetir o código que já aparece ao lado.
+ *
+ * A importação da produção gravava `localizacao` como "pavilhão · local", e
+ * `local` é justamente o que a ferramenta chama de `stand`. Na lista isso dava
+ * "A25" duas vezes na mesma linha: uma como título e outra no fim do endereço.
+ * A origem já foi corrigida em `producao.js`, mas os projetos importados ANTES
+ * continuam com o valor antigo gravado — e ninguém vai reimportar uma feira
+ * inteira por causa de um "A25" repetido.
+ *
+ * Vale também para quem digita à mão: o campo pede "rua, número, pavilhão", e
+ * escrever o código do stand junto é o erro mais natural do mundo.
+ *
+ * Compara trecho a trecho, nunca por `includes`: o pavilhão "A" de uma feira e
+ * um stand "A" não podem se anular, e um stand "A2" não pode comer metade de
+ * um pavilhão "A25".
+ */
+export function localSemRepetirStand(localizacao, stand) {
+  const local = String(localizacao || '').trim()
+  const codigo = String(stand || '').trim().toLowerCase()
+  if (!local || !codigo) return local
+  return local
+    .split('·')
+    .map((p) => p.trim())
+    .filter((p) => p && p.toLowerCase() !== codigo)
+    .join(' · ')
+}
+
+/**
+ * Quem a linha é — e onde fica.
+ *
+ * A ferramenta lida com duas identidades do mesmo stand, e elas viviam
+ * trocadas: o CÓDIGO ("A25") vinha em negrito e a EMPRESA ("LW") em cinza
+ * pequeno ao lado. Numa lista de duzentos stands, quem procura procura pelo
+ * nome da empresa — o código é o endereço dela, não o nome dela.
+ *
+ * O código vira reserva para quando não há nome: projeto importado de um
+ * documento sem `nome`, ou cadastrado às pressas só com o stand. Nesse caso
+ * ele volta a ser o título, porque um título vazio é pior que um código.
+ */
+export function tituloDoProjeto(projeto = {}) {
+  const nome = String(projeto.expositor || '').trim()
+  const codigo = String(projeto.stand || '').trim()
+  return {
+    titulo: nome || codigo || 'Sem nome',
+    // Vazio quando o código JÁ é o título: repetir "A25 · A25" é o defeito que
+    // esta função existe para não cometer do outro lado.
+    apoio: nome ? codigo : '',
+  }
+}
+
 export function projetoNovo(parcial = {}) {
   const emails = listaDeEmails(parcial.emails?.length ? parcial.emails : parcial.email)
   return {

@@ -45,7 +45,12 @@ export function normalizarDaProducao(doc = {}) {
     // No app, "local" é o identificador do stand na planta — é o que a nossa
     // ferramenta chama de stand. `nome` é a empresa.
     stand: t(doc.local) || expositor,
-    localizacao: [t(doc.pavilhao), t(doc.local)].filter(Boolean).join(' · '),
+    // SÓ o pavilhão. `local` já virou `stand` na linha acima, e gravar os dois
+    // aqui fazia o código do stand aparecer duas vezes na mesma linha da lista:
+    // uma como título e outra no fim do endereço. Projetos importados antes
+    // desta correção continuam com o valor antigo gravado — de quem cuida na
+    // hora de mostrar é `localSemRepetirStand`, em `data/projeto.js`.
+    localizacao: t(doc.pavilhao),
     area: t(doc.total_area) || t(doc.area),
     produtor: t(doc.produtor),
     atendimento: t(doc.atendimento),

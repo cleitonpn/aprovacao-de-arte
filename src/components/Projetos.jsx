@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { PERFIS_PADRAO, ESCALAS } from '../data/perfis.js'
 import {
   projetoNovo, pecaNova, validarProjeto, perfilPorTexto, listaDeEmails, MAXIMO_PECAS,
+  tituloDoProjeto, localSemRepetirStand,
 } from '../data/projeto.js'
 import { importarProjetos, MODELO_CSV } from '../core/importacao.js'
 import { situacaoDoProjeto } from '../core/painel.js'
@@ -663,16 +664,24 @@ function LinhaProjeto({ projeto, sit, temMensagemNova, podeCadastrar, podeCobrar
   // mesmo que não mandar — alguém responde "não sou eu que vejo isso".
   const destinatarios = (projeto.emails?.length ? projeto.emails : [projeto.email]).filter(Boolean)
   const mailto = `mailto:${encodeURIComponent(destinatarios.join(','))}?subject=${encodeURIComponent(assunto)}&body=${encodeURIComponent(textoDeCobranca(projeto, sit))}`
+  const { titulo, apoio } = tituloDoProjeto(projeto)
+  const local = localSemRepetirStand(projeto.localizacao, projeto.stand)
 
   return (
     <div className={`projeto ${sit.completo ? 'completo' : ''}`}>
       <div className="projeto-topo">
         <div>
-          <strong>{projeto.stand}</strong>
-          <span className="dica-campo"> · {projeto.expositor}</span>
+          {/*
+            A EMPRESA em negrito, o código do stand ao lado em cinza — e não o
+            contrário, como estava. Numa lista de duzentos stands ninguém
+            procura por "A25": procura pela LW, pela Dealer Net. O código é o
+            endereço da empresa, não o nome dela.
+          */}
+          <strong>{titulo}</strong>
+          {apoio && <span className="dica-campo"> · {apoio}</span>}
           <br />
           <a href={`mailto:${destinatarios.join(',')}`}>{destinatarios.join(', ')}</a>
-          {projeto.localizacao && <em className="dica-campo"> · {projeto.localizacao}</em>}
+          {local && <em className="dica-campo"> · {local}</em>}
         </div>
         <div className="projeto-progresso">
           <span className={`tag ${sit.completo ? 'aprovado' : sit.recebidas ? 'ressalva' : ''}`}>

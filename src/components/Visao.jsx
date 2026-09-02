@@ -7,7 +7,24 @@ import { temMensagemNova, chaveDaConversa } from '../core/conversa.js'
 import { formatarData } from '../core/datas.js'
 import { LIMITE_REPROVACOES } from '../core/reprovacoes.js'
 import { usarFeiras } from '../store/feiras.js'
+// A EMPRESA é o título de um stand em toda a ferramenta; o código na planta
+// ("A25") é o endereço dela. Aqui as duas viviam trocadas, como na lista de
+// projetos — e as telas ficariam se contradizendo se só uma mudasse.
+import { tituloDoProjeto } from '../data/projeto.js'
 import CaixaDeAlerta from './CaixaDeAlerta.jsx'
+
+/**
+ * O código do stand como texto de apoio, já com o separador.
+ *
+ * Devolve string vazia quando não há código a mostrar — projeto sem empresa
+ * cadastrada, em que o próprio código virou o título. Sem esta guarda a linha
+ * saía com dois pontinhos colados ("·  · 3"), que é o tipo de sujeira que
+ * ninguém reporta e todo mundo vê.
+ */
+const apoioDoStand = (projeto) => {
+  const { apoio } = tituloDoProjeto(projeto)
+  return apoio ? ` · ${apoio}` : ''
+}
 
 // A feira inteira numa tela.
 //
@@ -325,9 +342,9 @@ function Panorama({ cenario, feiraId }) {
               <li key={projeto.token} className="pendente">
                 <div>
                   <strong>
-                    <a href={linkDaFicha(feiraId, projeto.token)}>{projeto.stand}</a>
+                    <a href={linkDaFicha(feiraId, projeto.token)}>{tituloDoProjeto(projeto).titulo}</a>
                   </strong>
-                  <em className="dica-campo"> · {projeto.expositor} · {pecas.length}</em>
+                  <em className="dica-campo">{apoioDoStand(projeto)} · {pecas.length}</em>
                   <p className="dica-campo">{pecas.join(' · ')}</p>
                 </div>
               </li>
@@ -386,7 +403,7 @@ function Pendencia({ titulo, linhas, feiraId, vazio, detalhe }) {
           <ul className="lista-simples">
             {linhas.slice(0, 6).map(({ projeto, sit }) => (
               <li key={projeto.token}>
-                <a href={linkDaFicha(feiraId, projeto.token)}>{projeto.stand}</a>
+                <a href={linkDaFicha(feiraId, projeto.token)}>{tituloDoProjeto(projeto).titulo}</a>
                 <em className="dica-campo"> · {detalhe(sit)}</em>
               </li>
             ))}
@@ -421,9 +438,9 @@ function Dificuldade({ linhas, feiraId }) {
             <span className="marca" aria-hidden>!</span>
             <div>
               <strong>
-                <a href={linkDaFicha(feiraId, projeto.token)}>{projeto.stand}</a>
+                <a href={linkDaFicha(feiraId, projeto.token)}>{tituloDoProjeto(projeto).titulo}</a>
               </strong>
-              <em className="dica-campo"> · {projeto.expositor} · {sit.recebidas} de {sit.total} artes</em>
+              <em className="dica-campo">{apoioDoStand(projeto)} · {sit.recebidas} de {sit.total} artes</em>
               <p className="dica-campo">
                 <strong className="destaque-pendencia">{sit.dificuldade.total} tentativas reprovadas</strong>
                 {sit.dificuldade.ultimaPeca && ` · última em ${sit.dificuldade.ultimaPeca}`}
@@ -478,9 +495,9 @@ function Intervencao({ linhas, feiraId }) {
             <span className="marca" aria-hidden>!</span>
             <div>
               <strong>
-                <a href={linkDaFicha(feiraId, projeto.token)}>{projeto.stand}</a>
+                <a href={linkDaFicha(feiraId, projeto.token)}>{tituloDoProjeto(projeto).titulo}</a>
               </strong>
-              <em className="dica-campo"> · {projeto.expositor} · {sit.recebidas} de {sit.total} artes</em>
+              <em className="dica-campo">{apoioDoStand(projeto)} · {sit.recebidas} de {sit.total} artes</em>
               <p className="dica-campo">
                 {sit.correio.estado === 'voltou' || sit.correio.estado === 'reclamou'
                   ? (
@@ -528,9 +545,9 @@ function QuemFalta({ cenario, feiraId }) {
             <span className="marca" aria-hidden>{sit.recebidas ? '·' : '×'}</span>
             <div>
               <strong>
-                <a href={linkDaFicha(feiraId, projeto.token)}>{projeto.stand}</a>
+                <a href={linkDaFicha(feiraId, projeto.token)}>{tituloDoProjeto(projeto).titulo}</a>
               </strong>
-              <em className="dica-campo"> · {projeto.expositor}</em>
+              <em className="dica-campo">{apoioDoStand(projeto)}</em>
               <p className="dica-campo">
                 {sit.recebidas} de {sit.total} artes · faltam{' '}
                 {sit.pendentes.map(({ peca }) => peca.rotulo).slice(0, 3).join(', ')}

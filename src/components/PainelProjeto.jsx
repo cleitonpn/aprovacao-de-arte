@@ -7,6 +7,7 @@ import {
 } from '../services/projetos.js'
 import { enviarProva, EXTENSOES_PROVA } from '../services/envio.js'
 import { traduzirErroAuth } from '../services/sessao.js'
+import { tituloDoProjeto, localSemRepetirStand } from '../data/projeto.js'
 import Modal from './Modal.jsx'
 import CaixaDeAlerta from './CaixaDeAlerta.jsx'
 import { formatarDataHora as fmtDataHora, paraInputData, fimDoDia } from '../core/datas.js'
@@ -27,6 +28,12 @@ import { marcarVisto } from '../store/visto.js'
 export default function PainelProjeto({ sessao, projeto, resumo, envios, podeAprovar = true, onFechar, onMudou }) {
   const [erro, setErro] = useState(null)
   const [ocupado, setOcupado] = useState(false)
+
+  // Quem é este stand: empresa no título, código e endereço embaixo.
+  const ficha = {
+    ...tituloDoProjeto(projeto),
+    local: localSemRepetirStand(projeto.localizacao, projeto.stand),
+  }
 
   const rodar = async (acao) => {
     setOcupado(true)
@@ -65,10 +72,14 @@ export default function PainelProjeto({ sessao, projeto, resumo, envios, podeApr
 
         <div className="admin-topo">
           <div>
-            <h2 className="ficha-nome">{projeto.stand}</h2>
+            {/* A empresa no título e o código do stand na linha de baixo — a
+                mesma ordem da lista. Com o código no `<h2>`, abrir a ficha de
+                "A25" não dizia de quem ela era até a segunda linha. */}
+            <h2 className="ficha-nome">{ficha.titulo}</h2>
             <p className="ajuda">
-              {projeto.expositor} · <a href={`mailto:${projeto.email}`}>{projeto.email}</a>
-              {projeto.localizacao && ` · ${projeto.localizacao}`}
+              {ficha.apoio && `${ficha.apoio} · `}
+              <a href={`mailto:${projeto.email}`}>{projeto.email}</a>
+              {ficha.local && ` · ${ficha.local}`}
             </p>
           </div>
           <div className="ficha-marcas">

@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { carregarPerfis, carregarPolitica, carregarDetectorNitidez } from '../data/perfis.js'
 import { POLITICA_PADRAO, especificacao } from '../core/regras.js'
-import { cadastroDoProjeto, pecaNova, perfilPorTexto } from '../data/projeto.js'
+import {
+  cadastroDoProjeto, pecaNova, perfilPorTexto, tituloDoProjeto, localSemRepetirStand,
+} from '../data/projeto.js'
 import { resumoDoProjeto, situacaoDaPeca, AVISO_PRAZO, AVISO_EXTRA } from '../core/fluxo.js'
 import { formatarData as fmtData, formatarDataHora as fmtDataHora } from '../core/datas.js'
 import {
@@ -290,6 +292,14 @@ export default function Projeto({ token }) {
  * e entra a peça que está sendo enviada, com a saída para a lista.
  */
 function Capa({ projeto, resumo, compacta = false, legenda = null, onVoltar = null, onTutorial = null }) {
+  const { titulo, apoio } = tituloDoProjeto(projeto)
+  // Código do stand e pavilhão numa linha só — "A25 · Pavilhão Azul". Eram dois
+  // campos com o mesmo assunto, e o de baixo mostrava o código de novo quando o
+  // projeto vinha da produção antiga.
+  const enderecoDoStand = [apoio, localSemRepetirStand(projeto.localizacao, projeto.stand)]
+    .filter(Boolean)
+    .join(' · ')
+
   return (
     <section className={`capa ${compacta ? 'compacta' : ''}`}>
       <div className="capa-texto">
@@ -298,12 +308,22 @@ function Capa({ projeto, resumo, compacta = false, legenda = null, onVoltar = nu
             dois elementos disputando o mesmo lugar é o que faz uma tela
             "quase igual ao desenho" ficar pior que as duas versões. */}
         <span className="capa-etiqueta">{projeto.feira}</span>
-        <h2>{projeto.stand}</h2>
+        {/*
+          O NOME DA EMPRESA no título, e o código do stand na linha de baixo.
+
+          Estava invertido: o cliente abria o link e a primeira coisa em corpo
+          grande era "A25" — o endereço do stand na planta, um código que ele
+          muitas vezes nem sabe de cor. Quem recebe este link encaminhado pelo
+          marketing precisa reconhecer, na primeira linha, que é o stand DELE.
+          O código continua na tela, logo abaixo, junto do pavilhão, porque é
+          o que serve para achar o lugar.
+        */}
+        <h2>{titulo}</h2>
         {compacta
           ? legenda && <p className="capa-local">{legenda}</p>
           : (
             <>
-              {projeto.localizacao && <p className="capa-local forte">{projeto.localizacao}</p>}
+              {enderecoDoStand && <p className="capa-local forte">{enderecoDoStand}</p>}
               <p className="capa-frase">
                 As medidas de cada peça já vêm do projeto do seu stand — você
                 não precisa informar tamanho nenhum. A conferência acontece no
