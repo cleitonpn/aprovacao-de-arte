@@ -72,8 +72,33 @@ export function usarAvisos(sessao) {
   // lugar do sistema com essa visão — e a conversa do time precisa exatamente
   // dela: listar quem falou sem depender da feira escolhida numa tela. Abrir
   // uma segunda escuta idêntica custaria as mesmas leituras duas vezes.
+  /**
+   * Quantas artes novas em CADA feira.
+   *
+   * A marca de "visto" é por feira, mas a bolinha da aba soma todas — então,
+   * sem esta quebra, arte que chega numa feira que ninguém abriu deixa a
+   * bolinha acesa para sempre e o analista não tem como descobrir de onde vem o
+   * número. Ele fica olhando uma lista com zero artes recebidas e um "2" no
+   * alto da tela.
+   *
+   * Sai daqui, e não de uma segunda escuta na tela de projetos, porque esta é a
+   * única escuta do sistema que enxerga todas as feiras que a pessoa alcança —
+   * abrir outra igual custaria as mesmas leituras duas vezes.
+   */
+  const novosPorFeira = useMemo(() => {
+    const conta = {}
+    for (const e of envios) {
+      if (dataEmMs(e.criadoEm) > vistoEm(usuario?.email, `envios:${e.feiraId}`)) {
+        conta[e.feiraId] = (conta[e.feiraId] || 0) + 1
+      }
+    }
+    return conta
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [envios, usuario?.email, versaoDoVisto])
+
   return useMemo(() => ({
     projetos,
+    novosPorFeira,
     abas: {
     // "Chegou arte nova" e "o cliente respondeu" passam a somar na mesma
     // bolinha, a de Projetos.
@@ -82,7 +107,7 @@ export function usarAvisos(sessao) {
     // é aceitável porque as duas levam ao MESMO lugar e à mesma ação — abrir a
     // ficha do stand. Uma bolinha que apontasse para uma aba inexistente seria
     // pior que nenhuma.
-    projetos: envios.filter((e) => dataEmMs(e.criadoEm) > vistoEm(usuario?.email, `envios:${e.feiraId}`)).length
+    projetos: Object.values(novosPorFeira).reduce((s, n) => s + n, 0)
       // Bolinha só quando a última palavra é do CLIENTE: marcar por autor evita
       // o painel acender por causa da própria resposta do time.
       + projetos.filter((p) => p.conversa?.ultimoAutor === 'cliente'
@@ -96,5 +121,5 @@ export function usarAvisos(sessao) {
       && dataEmMs(p.dificuldade?.ultimaEm) > vistoEm(usuario?.email, `dificuldade:${p.token}`)).length,
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [envios, projetos, usuario?.email, versaoDoVisto])
+  }), [novosPorFeira, projetos, usuario?.email, versaoDoVisto])
 }

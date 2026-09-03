@@ -157,8 +157,16 @@ function PainelInterno({ rota }) {
       <div className="coluna">
         <Acesso sessao={sessao}>
           {permitida && tela === 'visao' && pode(sessao.acesso, 'verPainel') && <Visao sessao={sessao} />}
+          {/* `novosPorFeira` vem de `usarAvisos` porque ela é a única escuta
+              que enxerga todas as feiras. Sem essa quebra, a tela não tem como
+              dizer de ONDE vêm as artes que a bolinha está contando. */}
           {permitida && tela === 'projetos' && (
-            <Projetos sessao={sessao} feiraInicial={rota.feiraId} tokenInicial={rota.token} />
+            <Projetos
+              sessao={sessao}
+              feiraInicial={rota.feiraId}
+              tokenInicial={rota.token}
+              novosPorFeira={avisos.novosPorFeira}
+            />
           )}
           {permitida && tela === 'analistas' && pode(sessao.acesso, 'gerenciarAnalistas') && <Usuarios sessao={sessao} />}
         </Acesso>

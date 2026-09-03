@@ -11,7 +11,7 @@ import {
   salvarProjeto, salvarProjetos, apagarProjeto, salvarFeira, apagarFeira,
   ouvirProjetos, ouvirEnvios,
 } from '../services/projetos.js'
-import { vistoEm, dataEmMs, assinarVisto } from '../store/visto.js'
+import { vistoEm, marcarVisto, dataEmMs, assinarVisto } from '../store/visto.js'
 import { enviarGabarito, EXTENSOES_GABARITO } from '../services/envio.js'
 import { idDeFeira } from '../data/cadastro.js'
 import { traduzirErroAuth } from '../services/sessao.js'
@@ -42,6 +42,40 @@ export function linkDoProjeto(token) {
 const situacao = (projeto, enviosPorProjeto) =>
   situacaoDoProjeto(projeto, enviosPorProjeto.get(projeto.token) || [])
 
+/**
+ * De onde vem o resto da bolinha.
+ *
+ * A marca de "visto" é por feira; a bolinha da aba soma todas. Sem esta linha,
+ * arte que chega numa feira que o analista não abre naquele dia deixa o número
+ * aceso para sempre, e ele fica olhando uma lista sem nenhuma arte nova
+ * tentando entender de onde saiu o "2". Foi o que aconteceu aqui.
+ *
+ * Não tem botão de "marcar todas como vistas", e é de propósito: apagar em lote
+ * um aviso sem olhar o que ele apontava é a forma mais rápida de a bolinha
+ * perder a confiança do time. O caminho é ir na feira — um clique, e a marca
+ * acontece por ter visto de verdade.
+ */
+function ArteEmOutrasFeiras({ novosPorFeira, feiras, feiraId, onIr }) {
+  const outras = feiras
+    .filter((f) => f.id !== feiraId && novosPorFeira[f.id] > 0)
+    .map((f) => ({ ...f, novas: novosPorFeira[f.id] }))
+  if (!outras.length) return null
+
+  return (
+    <p className="ajuda">
+      Arte nova em outra feira:{' '}
+      {outras.map((f, i) => (
+        <span key={f.id}>
+          {i > 0 && ' · '}
+          <button className="link" type="button" onClick={() => onIr(f.id)}>
+            {f.nome} ({f.novas})
+          </button>
+        </span>
+      ))}
+    </p>
+  )
+}
+
 function textoDeCobranca(projeto, sit) {
   const prazo = fmtData(sit.prazo.limite, null)
   const linhas = [
@@ -68,7 +102,7 @@ function textoDeCobranca(projeto, sit) {
   return linhas.join('\n')
 }
 
-export default function Projetos({ sessao, feiraInicial = '', tokenInicial = '' }) {
+export default function Projetos({ sessao, feiraInicial = '', tokenInicial = '', novosPorFeira = {} }) {
   const { fb, usuario } = sessao
   const { feiras, feira, feiraId, setFeiraId, recarregar: recarregarFeiras, erro: erroFeiras } = usarFeiras(fb, sessao.acesso, feiraInicial)
   const podeCadastrar = pode(sessao.acesso, 'cadastrarProjetos')
@@ -119,6 +153,36 @@ export default function Projetos({ sessao, feiraInicial = '', tokenInicial = '' 
   // e ler uma mensagem não muda documento nenhum.
   const [versaoDoVisto, setVersaoDoVisto] = useState(0)
   useEffect(() => assinarVisto(() => setVersaoDoVisto((v) => v + 1)), [])
+
+  /**
+   * Estar com a lista da feira na tela É ter visto a arte que chegou nela.
+   *
+   * Esta marcação existia na aba "Artes recebidas" e foi apagada junto com ela.
+   * O CONTADOR sobreviveu — passou a somar na bolinha de Projetos —, mas quem o
+   * zerava não: nenhuma tela gravava mais `envios:{feira}`. O resultado é uma
+   * bolinha que acende e nunca mais apaga, nem recarregando, porque a marca que
+   * ela compara nunca avança. Foi assim que o painel passou a mostrar "2" com o
+   * analista olhando as duas artes na tela.
+   *
+   * A marca é POR FEIRA, e é de propósito: abrir a SUMMIT não pode apagar o
+   * aviso de arte que chegou na ECBR. Por isso a bolinha da aba continua
+   * somando todas as feiras que a pessoa alcança, e vai baixando conforme ela
+   * passa por cada uma.
+   *
+   * Só grava com a lista já carregada e não vazia: marcar durante o
+   * carregamento apagaria o aviso de uma arte que ainda nem apareceu na tela.
+   * A espera de 1,2 s é o que separa "abriu a tela" de "passou por ela" — sem
+   * ela, trocar de feira no seletor apagaria os avisos de todas as feiras que
+   * o cursor atravessou.
+   */
+  useEffect(() => {
+    if (carregando || !feiraId || !envios.length) return undefined
+    const relogio = setTimeout(() => {
+      const maisNovo = envios.reduce((m, e) => Math.max(m, dataEmMs(e.criadoEm)), 0)
+      marcarVisto(usuario?.email, `envios:${feiraId}`, maisNovo || Date.now())
+    }, 1200)
+    return () => clearTimeout(relogio)
+  }, [carregando, envios, feiraId, usuario?.email])
 
   const marcaConversa = (token) => vistoEm(usuario?.email, `conversa:${token}`)
 
@@ -312,6 +376,12 @@ export default function Projetos({ sessao, feiraInicial = '', tokenInicial = '' 
               {resumo.mensagens > 0 && <> · <strong className="destaque-pendencia">{resumo.mensagens} conversa(s) com mensagem nova</strong></>}
               {resumo.provas > 0 && <> · {resumo.provas} prova(s) com o cliente</>}
             </p>
+            <ArteEmOutrasFeiras
+              novosPorFeira={novosPorFeira}
+              feiras={feiras}
+              feiraId={feiraId}
+              onIr={setFeiraId}
+            />
             {/*
               "Exportar links (CSV)" e "Copiar e-mails com pendência" saíram.
               
