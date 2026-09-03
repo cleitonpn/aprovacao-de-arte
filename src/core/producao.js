@@ -23,6 +23,7 @@
 // posicional, e a sincronização migra sozinha quando encontra a chave nova.
 
 import { clientKeyFor } from './chaveCliente.js'
+import { listaDeEmails } from './emails.js'
 
 /** Campos do app que valem alguma coisa aqui. O resto fica de fora. */
 export function normalizarDaProducao(doc = {}) {
@@ -324,12 +325,18 @@ export function feirasDaProducao(clientes = []) {
  */
 export function pendenciasDe(cliente, email) {
   const faltas = []
-  if (!EMAIL_SIMPLES.test(String(email || '').trim())) faltas.push('e-mail')
+  // UM endereço válido basta, e o campo aceita vários.
+  //
+  // Esta linha testava a string inteira contra o padrão de um endereço só, com
+  // uma cópia própria da expressão. Quem colava os dois contatos do expositor
+  // — que é o normal: marketing e agência — via "Falta: e-mail" em vermelho com
+  // os dois endereços certos na frente, e o stand ficava sem poder ser
+  // importado. O resto da ferramenta já aceitava lista desde sempre; era só
+  // esta tela que não.
+  if (!listaDeEmails(email).length) faltas.push('e-mail')
   if (!cliente.stand) faltas.push('stand')
   return faltas
 }
-
-const EMAIL_SIMPLES = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
 
 // ------------------------------------------- o que o app de produção vê
 //

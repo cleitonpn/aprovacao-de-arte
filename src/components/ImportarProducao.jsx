@@ -364,12 +364,29 @@ function LinhaDaProducao({ cliente, marcado, email, onMarcar, onEmail, onVincula
 
         {marcado && (
           <>
+            {/*
+              `type="text"`, e não `type="email"`.
+
+              O campo aceita VÁRIOS endereços, e o `type="email"` do navegador
+              só considera válido um. Com ele, dois contatos separados por
+              vírgula acendiam a marca de campo inválido — com os dois endereços
+              certos escritos ali. É a mesma escolha que o cadastro de projeto
+              já fazia; era esta tela que destoava.
+            */}
             <label className="campo campo-email-producao">
-              <span>E-mail do expositor <em className="opcional">(o app de produção não tem este dado)</em></span>
+              <span>
+                E-mails do expositor{' '}
+                <em className="opcional">(o app de produção não tem este dado)</em>
+              </span>
               <input
-                type="email" value={email} onChange={(e) => onEmail(e.target.value)}
-                placeholder="contato@cliente.com.br" autoComplete="off"
+                type="text" value={email} onChange={(e) => onEmail(e.target.value)}
+                placeholder="marketing@cliente.com.br; agencia@parceira.com.br"
+                autoComplete="off"
               />
+              <em className="dica-campo">
+                Pode colar mais de um — separe por vírgula, ponto e vírgula ou
+                espaço. Todos recebem a cobrança das artes.
+              </em>
             </label>
             {faltas.length > 0 && (
               <em className="dica-campo destaque-pendencia">Falta: {faltas.join(', ')}</em>

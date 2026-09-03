@@ -21,9 +21,10 @@ export const CAMPOS = [
 
 export const CADASTRO_VAZIO = { nome: '', email: '', feira: '', stand: '', localizacao: '' }
 
-// Deliberadamente permissivo: o objetivo é evitar erro de digitação óbvio, não
-// bloquear o cliente por causa de um domínio incomum.
-const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
+// A terceira cópia desta expressão, agora vinda do lugar único. Deliberadamente
+// permissiva: o objetivo é evitar erro de digitação óbvio, não bloquear o
+// cliente por causa de um domínio incomum.
+import { EMAIL } from '../core/emails.js'
 
 export function validar(cadastro) {
   const erros = {}

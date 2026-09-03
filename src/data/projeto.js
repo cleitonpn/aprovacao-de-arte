@@ -124,7 +124,14 @@ export function interpretarEscala(texto) {
 
 // ---------------------------------------------------------------- validação
 
-export const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
+// A regra de e-mail mora em `core/emails.js` — ela é compartilhada com a tela
+// de importação da produção, e havia três cópias dela pela ferramenta. Fica
+// reexportada aqui porque meia dúzia de arquivos já a importa deste caminho, e
+// trocar todos eles não tornaria nada mais claro.
+export { EMAIL, listaDeEmails } from '../core/emails.js'
+// Reexportar NÃO traz os nomes para o escopo deste arquivo, e ele usa os dois
+// aqui dentro — daí a segunda linha.
+import { EMAIL, listaDeEmails } from '../core/emails.js'
 
 // Um limite alto o bastante para qualquer stand real e baixo o bastante para
 // que um erro de digitação (ou uma planilha maluca) não vire um documento
@@ -158,24 +165,6 @@ export function normalizarGabarito(g) {
     url: url.slice(0, 800),
     nome: String(g.nome || '').trim().slice(0, 160) || 'Gabarito do projeto',
   }
-}
-
-/**
- * Lista de e-mails do cliente.
- *
- * Decisão de arte cai raramente numa pessoa só: tem o marketing, tem a
- * agência, tem quem assina. Mandar a cobrança para um endereço só é como não
- * mandar — alguém responde "não sou eu que vejo isso".
- *
- * O primeiro da lista continua sendo `email`, no singular, porque é o que as
- * regras do Firestore validam e o que os envios já gravados carregam.
- */
-export function listaDeEmails(valor) {
-  const bruto = Array.isArray(valor) ? valor : String(valor || '').split(/[;,\s]+/)
-  const limpos = bruto
-    .map((e) => String(e || '').trim().toLowerCase())
-    .filter((e) => EMAIL.test(e))
-  return [...new Set(limpos)].slice(0, 8)
 }
 
 /**
