@@ -1,7 +1,8 @@
 name: Publicar as funções de aviso
 
-# Publica as Cloud Functions que mandam os e-mails do cliente: prova pronta,
-# arte devolvida e prazo chegando.
+# Publica as Cloud Functions: os e-mails do cliente (prova pronta, arte
+# devolvida, prazo chegando) e o gatilho que leva o status da arte para o app
+# de montagem no instante em que ele muda.
 #
 # Roda sozinho quando algo que as funções usam muda, e à mão pelo botão "Run
 # workflow" — porque haverá o dia em que você quer republicar sem ter mudado
@@ -14,6 +15,10 @@ name: Publicar as funções de aviso
 #                      Functions Admin, Service Account User, Cloud Build
 #                      Editor, Artifact Registry Admin, Cloud Scheduler Admin).
 #   RESEND_API_KEY     a chave criada no painel do Resend.
+#   FIREBASE_SA_PRODUCAO  service account do projeto do app de montagem — o
+#                      MESMO que a sincronização agendada já usa. O gatilho que
+#                      publica o status da arte lá precisa dela em tempo de
+#                      execução.
 #   RESEND_WEBHOOK_SECRET  o segredo do webhook (Resend → Webhooks). Só existe
 #                      DEPOIS do primeiro deploy, porque o webhook aponta para
 #                      o endereço da função. Enquanto não estiver preenchido,
@@ -109,6 +114,30 @@ jobs:
                 --project "$FIREBASE_PROJETO" --data-file -
         env:
           RESEND_WEBHOOK_SECRET: ${{ secrets.RESEND_WEBHOOK_SECRET }}
+
+      # A conta de serviço do app de montagem, para o gatilho que publica lá o
+      # status da arte no instante em que ele muda.
+      #
+      # É o MESMO secret que a sincronização agendada já usa — nada novo para
+      # criar. Ele passa por aqui porque uma Cloud Function não tem como ler um
+      # secret do GitHub: ela só enxerga o Secret Manager do Google, e quem
+      # copia um no outro é este passo.
+      #
+      # Sem valor de reserva, de propósito. Diferente do segredo do Resend, este
+      # já existe desde que a sincronização foi montada; se sumir, é melhor o
+      # deploy falhar aqui do que publicar um gatilho que vai errar em silêncio
+      # a cada arte aprovada.
+      - name: Guardar a credencial da produção no Secret Manager
+        run: |
+          if [ -z "$FIREBASE_SA_PRODUCAO" ]; then
+            echo "Falta o secret FIREBASE_SA_PRODUCAO — é o mesmo que a sincronização usa." >&2
+            exit 1
+          fi
+          printf '%s' "$FIREBASE_SA_PRODUCAO" \
+            | npx --yes firebase-tools@13 functions:secrets:set FIREBASE_SA_PRODUCAO \
+                --project "$FIREBASE_PROJETO" --data-file -
+        env:
+          FIREBASE_SA_PRODUCAO: ${{ secrets.FIREBASE_SA_PRODUCAO }}
 
       - name: Publicar
         run: |

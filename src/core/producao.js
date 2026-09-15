@@ -416,3 +416,15 @@ export function statusParaProducao(projeto, resumo, provas, identidade = {}) {
     provaEm: prova?.em || '',
   }
 }
+
+/**
+ * A assinatura do conteúdo publicado — para regravar só o que mudou.
+ *
+ * Mora aqui, e não em quem publica, porque agora há DOIS publicadores: o
+ * gatilho, que reage à mudança em segundos, e a varredura agendada, que passa
+ * de tempos em tempos como rede de segurança. Com uma cópia da assinatura em
+ * cada um, bastaria uma delas mudar a ordem de um campo para os dois passarem a
+ * discordar sobre o que já está gravado — e aí cada execução regravaria o que a
+ * outra acabou de escrever, para sempre, sem nada mudar de fato.
+ */
+export const assinaturaDoStatus = (documento) => JSON.stringify(documento)

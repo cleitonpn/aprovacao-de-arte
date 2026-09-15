@@ -31,7 +31,7 @@ import { getFirestore, FieldValue } from 'firebase-admin/firestore'
 // que o analista não reconhece.
 import { resumoDoProjeto, provasDoProjeto } from '../src/core/fluxo.js'
 import {
-  statusParaProducao, eloConfere, normalizarDaProducao, eloParaGravar,
+  statusParaProducao, eloConfere, normalizarDaProducao, eloParaGravar, assinaturaDoStatus,
 } from '../src/core/producao.js'
 
 const COLECAO_ORIGEM = 'fair_clients'
@@ -81,8 +81,10 @@ function paraEspelho(id, d) {
   }
 }
 
-/** Assinatura do conteúdo, para regravar só o que mudou. */
-const assinatura = (o) => JSON.stringify(o)
+// A assinatura vem do núcleo porque o gatilho das funções usa a mesma: duas
+// cópias que discordem fazem os dois publicadores regravarem, em looping, o que
+// o outro acabou de escrever.
+const assinatura = assinaturaDoStatus
 
 /** produção → ferramenta: os expositores, para a tela de importação. */
 async function espelharExpositores(producao, arte, saProducao) {

@@ -28,6 +28,7 @@ import { getStorage } from 'firebase-admin/storage'
 import { avisosPendentes } from './nucleo/avisos.js'
 import { enviarEmail } from './src/correio.js'
 import { assinaturaConfere, lerEvento } from './src/retorno.js'
+import { publicarStatus } from './src/producao.js'
 
 // A chave do Resend é o único valor secreto aqui, e o único que merece o
 // Secret Manager: ela dá poder de mandar e-mail em nome do domínio.
@@ -37,6 +38,18 @@ const CHAVE_RESEND = defineSecret('RESEND_API_KEY')
 // do retorno seria uma porta aberta na internet para qualquer um marcar o
 // e-mail de qualquer cliente como "voltou".
 const SEGREDO_RETORNO = defineSecret('RESEND_WEBHOOK_SECRET')
+
+// A conta de serviço do app de montagem — o OUTRO projeto Firebase.
+//
+// É a mesma que a varredura agendada já usa, com leitura em `fair_clients` e
+// escrita em `cv_status`. Aqui ela precisa estar no Secret Manager porque uma
+// Cloud Function não tem como ler um secret do GitHub: quem faz a ponte é o
+// workflow de deploy, que copia um no outro.
+//
+// A alternativa seria dar à conta padrão desta função permissão no outro
+// projeto, pelo IAM. É mais limpo em teoria e inviável aqui na prática: exige
+// console e terminal, e a regra desta operação é que tudo passe pelo GitHub.
+const SA_PRODUCAO = defineSecret('FIREBASE_SA_PRODUCAO')
 
 // Constantes, não parâmetros configuráveis.
 //
@@ -181,6 +194,57 @@ export const avisarAoMudarProjeto = onDocumentWritten(
     // quem já imprimiu.
     const novo = evento.data?.before?.exists === false
     await despachar(evento.params.token, depois.data(), { novo })
+  },
+)
+
+// ------------------------------------- o status da arte no app de montagem
+//
+// A ponte com o app já existia como varredura agendada no GitHub. O problema
+// nunca foi o que ela faz, e sim QUANDO: o cron do GitHub é "melhor esforço" e
+// entra numa fila compartilhada. Medido num dia real, com `*/15` configurado,
+// ela rodou às 01:36, 06:39 e 12:04 — cinco horas de intervalo. O analista
+// aprova a arte aqui e o produtor, no meio da montagem, continua vendo o
+// status de antes do café da manhã.
+//
+// Aqui o mesmo trabalho sai por evento, em segundos. A varredura CONTINUA
+// existindo como rede: ela pega o que o gatilho perdeu — função que falhou,
+// documento mexido por fora, deploy no meio de uma escrita — e é ela quem
+// apaga do app o stand apagado aqui.
+//
+// Gatilho só em `projetos/{token}` porque o estado publicado sai INTEIRO desse
+// documento: `resumoDoProjeto` e `provasDoProjeto` leem `pecas`, `entregas`,
+// `pedidos`, `controle` e `respostasProva`, todos campos dele. Não há nada em
+// `envios` que mude o que o app vê, e escutar aquela coleção só acrescentaria
+// invocações que terminam em "nada mudou".
+export const publicarStatusNaProducao = onDocumentWritten(
+  {
+    document: 'projetos/{token}',
+    region: REGIAO,
+    secrets: [SA_PRODUCAO],
+    // Sem repetição automática. Uma falha aqui não perde o dado — a varredura
+    // republica na passagem seguinte —, e repetir sem parar um documento que
+    // falha por elo trocado encheria o log de um erro que só uma pessoa
+    // resolve.
+    retry: false,
+  },
+  async (evento) => {
+    const antes = evento.data?.before?.exists ? evento.data.before.data() : null
+    const depois = evento.data?.after?.exists ? evento.data.after.data() : null
+    const { token } = evento.params
+
+    // Projeto que nunca teve elo e continua sem: não há o que publicar nem o
+    // que remover. Sair aqui evita abrir conexão com o outro projeto à toa.
+    if (!depois?.producaoId && !antes?.producaoId) return
+
+    try {
+      const resultado = await publicarStatus(bd, SA_PRODUCAO.value(), token, depois, antes)
+      if (resultado === 'publicado') logger.info(`status publicado no app: ${token}`)
+    } catch (erro) {
+      // Sem relançar. A varredura agendada é a segunda chance, e uma invocação
+      // marcada como falha não traz nada além de ruído no painel. O log é o que
+      // precisa existir.
+      logger.error(`falha ao publicar o status de ${token} no app de montagem`, erro)
+    }
   },
 )
 

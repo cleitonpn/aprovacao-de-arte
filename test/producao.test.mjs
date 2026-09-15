@@ -128,7 +128,10 @@ test('projeto sem elo com a produção continua válido', () => {
 
 // ------------------------------- o que o app de produção vê de cada stand
 
-import { estadoDaArte, provaVigente, statusParaProducao, ESTADOS_ARTE } from '../src/core/producao.js'
+import { readFile } from 'node:fs/promises'
+import {
+  estadoDaArte, provaVigente, statusParaProducao, ESTADOS_ARTE, assinaturaDoStatus,
+} from '../src/core/producao.js'
 import { resumoDoProjeto } from '../src/core/fluxo.js'
 
 const lona = { id: 'p1', rotulo: 'Lona', larguraCm: 275, alturaCm: 275 }
@@ -536,4 +539,39 @@ test('o cruzamento reconhece projeto ligado pela chave nova e pela antiga', () =
   const pelaAntiga = cruzarComExistentes([cliente], [{ token: 'b', feira: 'ABAV', expositor: 'JadLog', stand: '', producaoId: 'abav_13' }])
   assert.equal(pelaNova[0].existente.token, 'a')
   assert.equal(pelaAntiga[0].existente.token, 'b')
+})
+
+// ------------------------------------- a assinatura, compartilhada
+
+test('os dois publicadores usam a MESMA assinatura', async () => {
+  /*
+    Agora há dois: o gatilho da Cloud Function, que publica em segundos, e a
+    varredura agendada, que passa depois como rede de segurança. Os dois
+    decidem "já está gravado?" comparando a assinatura do documento.
+
+    Se cada um tivesse a sua — bastaria uma delas mudar a ordem de um campo —,
+    cada execução acharia que a outra gravou errado e regravaria. Dois
+    processos reescrevendo para sempre o mesmo documento, sem nada mudar de
+    fato, e a conta do Firestore subindo sem explicação.
+  */
+  const doc = { producaoId: 'x', estado: 'aprovada', recebidas: 2, total: 3 }
+  assert.equal(assinaturaDoStatus(doc), JSON.stringify(doc))
+
+  // A do script é a do núcleo, não uma cópia: se alguém redefinir lá, isto cai.
+  const script = await readFile(new URL('../tools/sincronizar-producao.mjs', import.meta.url), 'utf8')
+  assert.match(
+    script, /const assinatura = assinaturaDoStatus/,
+    'a varredura voltou a ter assinatura própria — ela e o gatilho vão brigar',
+  )
+  assert.match(
+    (await readFile(new URL('../functions/src/producao.js', import.meta.url), 'utf8')),
+    /assinaturaDoStatus/,
+    'o gatilho precisa usar a assinatura do núcleo',
+  )
+})
+
+test('assinatura muda quando o que o app vê muda — e só então', () => {
+  const base = { producaoId: 'x', estado: 'aguardando', recebidas: 0, total: 3 }
+  assert.equal(assinaturaDoStatus(base), assinaturaDoStatus({ ...base }))
+  assert.notEqual(assinaturaDoStatus(base), assinaturaDoStatus({ ...base, recebidas: 1 }))
 })
