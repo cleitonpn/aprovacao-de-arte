@@ -49,7 +49,13 @@ const SEGREDO_RETORNO = defineSecret('RESEND_WEBHOOK_SECRET')
 // A alternativa seria dar à conta padrão desta função permissão no outro
 // projeto, pelo IAM. É mais limpo em teoria e inviável aqui na prática: exige
 // console e terminal, e a regra desta operação é que tudo passe pelo GitHub.
-const SA_PRODUCAO = defineSecret('FIREBASE_SA_PRODUCAO')
+//
+// O NOME é diferente do secret do GitHub (lá é `FIREBASE_SA_PRODUCAO`), e não
+// por descuido: o Secret Manager do Firebase recusa chaves que comecem com
+// `FIREBASE_`, `X_GOOGLE_` ou `EXT_` — são prefixos reservados. O deploy falha
+// com "Invalid secret key" antes de publicar qualquer coisa. O workflow copia
+// um no outro.
+const SA_PRODUCAO = defineSecret('SA_PRODUCAO')
 
 // Constantes, não parâmetros configuráveis.
 //

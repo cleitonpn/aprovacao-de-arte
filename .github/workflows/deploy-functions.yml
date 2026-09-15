@@ -18,7 +18,9 @@ name: Publicar as funções de aviso
 #   FIREBASE_SA_PRODUCAO  service account do projeto do app de montagem — o
 #                      MESMO que a sincronização agendada já usa. O gatilho que
 #                      publica o status da arte lá precisa dela em tempo de
-#                      execução.
+#                      execução; o workflow a copia para o Secret Manager sob o
+#                      nome SA_PRODUCAO, porque o Firebase não aceita chave
+#                      começando com FIREBASE_.
 #   RESEND_WEBHOOK_SECRET  o segredo do webhook (Resend → Webhooks). Só existe
 #                      DEPOIS do primeiro deploy, porque o webhook aponta para
 #                      o endereço da função. Enquanto não estiver preenchido,
@@ -127,6 +129,11 @@ jobs:
       # já existe desde que a sincronização foi montada; se sumir, é melhor o
       # deploy falhar aqui do que publicar um gatilho que vai errar em silêncio
       # a cada arte aprovada.
+      #
+      # O nome MUDA de um lado para o outro — `FIREBASE_SA_PRODUCAO` no GitHub,
+      # `SA_PRODUCAO` no Secret Manager — porque o Firebase recusa chaves com os
+      # prefixos reservados `FIREBASE_`, `X_GOOGLE_` e `EXT_`. Custou um deploy
+      # falhado para descobrir; o secret do GitHub fica como está.
       - name: Guardar a credencial da produção no Secret Manager
         run: |
           if [ -z "$FIREBASE_SA_PRODUCAO" ]; then
@@ -134,7 +141,7 @@ jobs:
             exit 1
           fi
           printf '%s' "$FIREBASE_SA_PRODUCAO" \
-            | npx --yes firebase-tools@13 functions:secrets:set FIREBASE_SA_PRODUCAO \
+            | npx --yes firebase-tools@13 functions:secrets:set SA_PRODUCAO \
                 --project "$FIREBASE_PROJETO" --data-file -
         env:
           FIREBASE_SA_PRODUCAO: ${{ secrets.FIREBASE_SA_PRODUCAO }}
