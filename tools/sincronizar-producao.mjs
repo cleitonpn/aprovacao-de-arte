@@ -160,6 +160,29 @@ async function publicarStatusDaArte(producao, arte) {
   const snap = await arte.collection('projetos').where('producaoId', '!=', '').get()
   console.log(`  ${snap.size} projetos ligados à produção.`)
 
+  /*
+    Quantos ficaram DE FORA por não terem elo.
+
+    O laço abaixo pula esses projetos em silêncio, e o silêncio é o problema: de
+    quem olha o app de montagem, um stand sem elo é indistinguível de um stand
+    cujo status ainda não chegou. A pergunta "já não deveria estar aparecendo a
+    CV no app?" não tinha como ser respondida sem abrir o Firestore à mão.
+
+    É uma agregação `count()`, que custa praticamente uma leitura: ler a coleção
+    inteira só para contar sairia caro a cada quinze minutos, e o número sozinho
+    já responde — se são 9 ligados e 200 no total, o stand que falta quase
+    certamente é um dos 191.
+  */
+  const total = (await arte.collection('projetos').count().get()).data().count
+  const semElo = total - snap.size
+  if (semElo > 0) {
+    console.log(
+      `  ${semElo} de ${total} projetos NÃO têm elo com a produção — nada é publicado `
+      + 'para eles no app. São os cadastrados à mão ou vindos de planilha; para '
+      + 'aparecerem lá, use "Importar da produção" e vincule ao stand correspondente.',
+    )
+  }
+
   const destino = producao.collection(COLECAO_STATUS)
   const jaLa = await destino.get()
   const assinaturas = new Map(jaLa.docs.map((d) => [d.id, d.data().assinatura || '']))
