@@ -228,6 +228,20 @@ export function projetoNovo(parcial = {}) {
     emails,
     stand: parcial.stand || '',
     localizacao: parcial.localizacao || '',
+    /*
+      O recado do time para ESTE cliente, em destaque na tela dele.
+
+      Existe porque a ferramenta é a mesma para todo mundo e os stands não são.
+      O caso que a motivou: um stand em que só o balcão leva arte impressa e
+      todas as demais peças são logo em acrílico com LED — ali o cliente não
+      deve mandar arte, e sim o logo em vetor. Sem um lugar para dizer isso, ou
+      ele manda arte que ninguém vai usar, ou trava e liga.
+
+      Texto livre e por projeto, não uma lista de opções: o que precisa ser dito
+      muda de stand para stand, e qualquer lista que eu inventasse aqui estaria
+      errada no terceiro caso.
+    */
+    aviso: parcial.aviso || '',
     // Pasta do projeto no Drive: o cliente consulta planta, memorial e
     // referências sem precisar pedir por e-mail.
     linkDrive: parcial.linkDrive || '',
@@ -278,6 +292,10 @@ export function normalizarProjeto(p) {
     emails,
     stand: texto(p.stand, 160),
     localizacao: texto(p.localizacao, 160),
+    // 600 caracteres: cabe um parágrafo de verdade — o caso que motivou o campo
+    // precisa explicar quais peças levam arte e quais levam só o logo — e não
+    // cabe um manual, que ninguém leria num quadro de destaque.
+    aviso: texto(p.aviso, 600),
     linkDrive: texto(p.linkDrive, 800),
     // Esta lista é branca: campo que não está aqui é DESCARTADO na gravação,
     // em silêncio. O elo com a produção precisa constar, senão a importação

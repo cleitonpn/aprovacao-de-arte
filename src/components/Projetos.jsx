@@ -1185,6 +1185,32 @@ function FormularioProjeto({ sessao, inicial, onSalvar, onCancelar }) {
         <input type="text" value={dados.localizacao} onChange={(e) => alterar('localizacao', e.target.value)} placeholder="rua, número, pavilhão" />
       </label>
 
+      {/*
+        O recado do time para ESTE cliente.
+
+        Um `textarea`, não um `input`: o que se escreve aqui é um parágrafo — o
+        caso que motivou o campo precisa dizer quais peças levam arte e quais
+        levam só o logo em vetor —, e num campo de uma linha o analista escreve
+        menos do que precisava por não caber na largura.
+      */}
+      <label className="campo">
+        <span>Informações importantes para o cliente <em className="opcional">(opcional)</em></span>
+        <textarea
+          rows={3}
+          maxLength={600}
+          value={dados.aviso}
+          onChange={(e) => alterar('aviso', e.target.value)}
+          placeholder={'Ex.: Neste stand só o balcão leva arte impressa. As demais peças são logo em acrílico '
+            + 'com LED — mande apenas o logo em vetor (.ai, .eps ou .pdf), não arte fechada.'}
+        />
+        <em className="dica-campo">
+          Aparece em destaque no alto da tela do cliente, antes da lista de
+          peças. Use para o que foge do padrão deste stand — o que não precisa
+          de arte, o que já está resolvido, o que ele deve mandar em vez de
+          arte. {dados.aviso.length}/600
+        </em>
+      </label>
+
       <label className="campo">
         <span>Link da pasta do projeto no Drive <em className="opcional">(opcional)</em></span>
         <input

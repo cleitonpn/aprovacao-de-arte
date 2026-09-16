@@ -239,6 +239,16 @@ export default function Projeto({ token }) {
 
       <Capa projeto={projeto} resumo={resumo} onTutorial={() => setTutorial(true)} />
 
+      {/*
+        O recado do time vem ANTES do prazo e das provas, e é deliberado.
+
+        Ele é o que muda o que o cliente deve FAZER — "estas peças não levam
+        arte, mande o logo em vetor" —, e ler isso depois de já ter descido até
+        a lista de peças é ler tarde demais: a essa altura ele já abriu o
+        gabarito da peça errada. Prazo e prova são urgentes; este é anterior.
+      */}
+      <AvisoDoTime texto={projeto.aviso} />
+
       <AvisoPrazo prazo={resumo.prazo} />
 
       {[...provasAbertas.values()].map((prova) => (
@@ -425,6 +435,31 @@ function Anel({ feito, total }) {
  * ferramenta ajudar o cliente a chegar no prazo e apenas registrar que ele não
  * chegou.
  */
+/**
+ * O recado que o time escreveu para ESTE stand.
+ *
+ * Existe porque a ferramenta é a mesma para todos e os stands não são. O caso
+ * que a motivou: um stand em que só o balcão leva arte impressa e o resto é
+ * logo em acrílico com LED — ali o cliente não deve mandar arte, e sim o logo
+ * em vetor. Sem um lugar para dizer isso, ou ele manda arte que ninguém vai
+ * usar, ou trava e liga.
+ *
+ * Quebra de linha preservada com `white-space: pre-line`, e não um editor de
+ * formatação: quem escreve isso está com o cliente no telefone e vai digitar
+ * uma lista com um item por linha. Perder as quebras transformaria a lista num
+ * parágrafo corrido, que é exatamente o que ninguém lê.
+ */
+function AvisoDoTime({ texto }) {
+  const conteudo = String(texto || '').trim()
+  if (!conteudo) return null
+  return (
+    <section className="cartao aviso-do-time" aria-label="Informações importantes">
+      <strong>Importante para o seu stand</strong>
+      <p>{conteudo}</p>
+    </section>
+  )
+}
+
 function AvisoPrazo({ prazo }) {
   if (!prazo.temPrazo) return null
 

@@ -94,6 +94,21 @@ export default function PainelProjeto({ sessao, projeto, resumo, envios, podeApr
 
         {erro && <p className="erro-envio">{erro}</p>}
 
+        {/*
+          O que o CLIENTE está vendo em destaque na tela dele.
+
+          Aparece aqui porque o analista precisa saber que o recado existe antes
+          de abrir a conversa: sem isto, ele responderia uma dúvida contradizendo
+          o que a própria tela do cliente já diz — e o cliente ficaria com duas
+          versões, sem saber qual vale. Só leitura; editar é em "Editar".
+        */}
+        {String(projeto.aviso || '').trim() && (
+          <section className="cartao aviso-do-time" aria-label="Informações importantes">
+            <strong>O cliente está vendo este recado</strong>
+            <p>{projeto.aviso.trim()}</p>
+          </section>
+        )}
+
         <Contato
           sinal={resumo.sinal}
           correio={resumo.correio}

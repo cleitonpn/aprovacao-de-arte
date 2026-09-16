@@ -832,6 +832,34 @@ textarea { width: 100%; font: inherit; font-size: 13px; padding: 9px 11px; borde
 .aviso-prazo.vencido { border-left-color: var(--ruim); background: var(--ruim-fundo); }
 .aviso-prazo.perto strong, .aviso-prazo.vencido strong { color: inherit; }
 
+/*
+   O recado do time para um stand específico.
+
+   Mesma família do aviso de prazo — filete grosso à esquerda —, mas na cor do
+   ACENTO, e isso separa dois significados que não podem se confundir: âmbar e
+   vermelho ali do lado querem dizer "o tempo está acabando", e este quer dizer
+   "leia antes de começar". Se os dois fossem âmbar, a tela teria duas tarjas
+   iguais dizendo coisas diferentes.
+
+   O texto do corpo NÃO é `--suave`, ao contrário do aviso de prazo. Lá o
+   parágrafo é o detalhe de um título que já diz tudo; aqui o parágrafo É a
+   mensagem, e cinza claro num recado que existe para ser lido seria trabalhar
+   contra o próprio motivo do campo.
+
+   `pre-line` porque quem escreve isso digita uma lista com um item por linha.
+   Sem ele a lista vira parágrafo corrido — que é o que ninguém lê.
+*/
+.aviso-do-time {
+  border-left: 4px solid var(--acento);
+  background: color-mix(in srgb, var(--acento) 8%, var(--cartao));
+}
+.aviso-do-time strong {
+  display: block; margin-bottom: 6px; font-size: 14.5px; color: var(--acento);
+}
+.aviso-do-time p {
+  margin: 0; font-size: 14.5px; line-height: 1.6; white-space: pre-line;
+}
+
 .bloco-prazo { border: 1px solid var(--borda); border-radius: var(--raio); padding: 12px 14px; margin: 14px 0; }
 .bloco-prazo .linha { align-items: flex-end; margin-bottom: 6px; }
 .bloco-prazo .acoes { margin: 0 0 4px; }
