@@ -366,3 +366,82 @@ export function enviarGabarito(arquivo, { feiraId, stand, peca }, aoProgredir) {
     limiteMb: ENVIO.tamanhoMaximoProvaMb,
   }, aoProgredir)
 }
+
+// ------------------------------------------------ foto na conversa
+//
+// A única pasta em que os DOIS lados gravam. `publicarArquivoDoTime` não serve
+// aqui porque ele recusa sessão anônima de propósito — prova e gabarito são
+// privilégio do time —, e a foto da conversa é justamente o contrário: o
+// cliente manda tanto quanto o analista.
+//
+// SÓ IMAGEM. A conversa não pode virar um caminho paralelo de entrega de arte:
+// aceitando PDF, o cliente mandaria a arte por aqui, daria por entregue, e ela
+// teria escapado da análise, do gabarito, da prova e do registro de envio. Foto
+// de arte é obviamente uma foto; PDF de arte parece uma entrega. A mesma regra
+// está no `storage.rules` — esta aqui existe para o erro aparecer ANTES do
+// upload, com uma frase que diz o que fazer, em vez de virar "unauthorized"
+// depois de subir 12 MB.
+
+const TIPO_FOTO_POR_EXTENSAO = {
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  webp: 'image/webp',
+}
+
+export const EXTENSOES_FOTO = Object.keys(TIPO_FOTO_POR_EXTENSAO)
+
+/**
+ * Sobe uma foto da conversa e devolve o que vai gravado na mensagem.
+ *
+ * @param {File} arquivo
+ * @param {string} token o projeto — é ele que dá o caminho no armazenamento
+ * @returns {Promise<{nome:string, tipo:string, tamanho:number, caminho:string, link:string}>}
+ */
+export async function enviarFotoDaConversa(arquivo, token, aoProgredir) {
+  if (!envioConfigurado()) throw new Error('O envio não está configurado nesta instalação.')
+
+  const ext = (arquivo.name.match(/\.([a-z0-9]+)$/i)?.[1] || '').toLowerCase()
+  // O tipo sai da EXTENSÃO e não de `arquivo.type`: o gerenciador de arquivos
+  // do celular costuma mandar string vazia, e as regras do Storage recusariam
+  // sem que nada na tela explicasse o motivo.
+  const tipo = TIPO_FOTO_POR_EXTENSAO[ext] || null
+  if (!tipo) {
+    throw new Error(
+      `Na conversa só entram fotos (${EXTENSOES_FOTO.map((e) => `.${e}`).join(', ')}). `
+      + 'Para mandar a arte, use o botão de enviar da peça — é por lá que ela é conferida.',
+    )
+  }
+
+  const limiteMb = ENVIO.tamanhoMaximoFotoMb
+  if (arquivo.size > limiteMb * 1024 * 1024) {
+    throw new Error(`A foto tem ${(arquivo.size / 1048576).toFixed(0)} MB e o limite é ${limiteMb} MB.`)
+  }
+
+  // Sessão anônima quando é o cliente; a do analista já está aberta quando é o
+  // time. `sessaoAnonima` devolve a que existir — não troca de usuário.
+  const fb = await sessaoAnonima()
+  const id = `ft_${protocoloNovo().slice(3).replace(/-/g, '').toLowerCase()}`
+  const caminho = `conversa/${token}/${id}.${ext}`
+
+  aoProgredir?.(0)
+  try {
+    const alvo = fb.storage.ref(fb.storage.getStorage(fb.app), caminho)
+    const tarefa = fb.storage.uploadBytesResumable(alvo, arquivo, { contentType: tipo })
+    await new Promise((resolve, reject) => {
+      tarefa.on('state_changed', (st) => aoProgredir?.(st.totalBytes ? st.bytesTransferred / st.totalBytes : 0), reject, resolve)
+    })
+    const link = await fb.storage.getDownloadURL(alvo)
+    aoProgredir?.(1)
+    return {
+      nome: String(arquivo.name || 'foto').slice(0, 160),
+      tipo,
+      tamanho: arquivo.size,
+      caminho,
+      link,
+    }
+  } catch (e) {
+    console.error('falha ao enviar a foto da conversa', e)
+    throw new Error(traduzirErro(e, 'arquivo'))
+  }
+}

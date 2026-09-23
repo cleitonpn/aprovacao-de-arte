@@ -498,7 +498,25 @@ export { carregarFirebase }
 
 const MENSAGENS = 'mensagens'
 
-export async function enviarMensagemDoCliente(token, { texto, nome, email }) {
+/**
+ * A foto, do jeito que ela vai gravada na mensagem.
+ *
+ * Só os campos que a tela usa. O `caminho` entra porque é o que permite achar o
+ * arquivo no armazenamento depois — o link expira de forma opaca e um dia
+ * alguém vai precisar do original.
+ *
+ * `null` quando não há foto: a mensagem continua sendo só texto, e
+ * `semIndefinidos` tira o campo antes de gravar.
+ */
+const paraMensagem = (imagem) => (imagem?.link ? {
+  link: String(imagem.link),
+  caminho: String(imagem.caminho || ''),
+  nome: String(imagem.nome || 'foto').slice(0, 160),
+  tipo: String(imagem.tipo || ''),
+  tamanho: Number(imagem.tamanho) || null,
+} : undefined)
+
+export async function enviarMensagemDoCliente(token, { texto, nome, email, imagem = null }) {
   const { app, firestore } = await sessaoAnonima()
   const bd = firestore.getFirestore(app)
   const em = new Date().toISOString()
@@ -507,6 +525,7 @@ export async function enviarMensagemDoCliente(token, { texto, nome, email }) {
     nome: String(nome || '').trim().slice(0, 120),
     email: String(email || '').trim().toLowerCase().slice(0, 160) || null,
     texto: String(texto || '').trim().slice(0, 2000),
+    imagem: paraMensagem(imagem),
     em,
   }))
   await resumirConversa(bd, firestore, token, 'cliente', em)
@@ -532,7 +551,7 @@ function resumirConversa(bd, firestore, token, autor, em) {
   })
 }
 
-export async function enviarMensagemDoTime(fb, token, { texto, autorEmail, autorNome }) {
+export async function enviarMensagemDoTime(fb, token, { texto, autorEmail, autorNome, imagem = null }) {
   const bd = fb.firestore.getFirestore(fb.app)
   const em = new Date().toISOString()
   await fb.firestore.addDoc(fb.firestore.collection(bd, COLECAO, token, MENSAGENS), semIndefinidos({
@@ -540,6 +559,7 @@ export async function enviarMensagemDoTime(fb, token, { texto, autorEmail, autor
     nome: String(autorNome || autorEmail || 'Comunicação visual').trim().slice(0, 120),
     email: autorEmail || null,
     texto: String(texto || '').trim().slice(0, 2000),
+    imagem: paraMensagem(imagem),
     em,
   }))
   await resumirConversa(bd, fb.firestore, token, 'time', em)

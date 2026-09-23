@@ -27,6 +27,10 @@ export const ENVIO = {
   // Não precisa de resolução de impressão, então o limite é pequeno de
   // propósito — prova pesada demora a abrir no celular do cliente.
   tamanhoMaximoProvaMb: Number(env.VITE_TAMANHO_MAXIMO_PROVA_MB || 30),
+  // Foto na conversa é "olha como ficou", "olha o que está errado aqui" —
+  // tirada no celular e olhada na tela. 15 MB cobre com folga a foto de um
+  // celular atual e mantém a conversa leve para quem abre no 4G da feira.
+  tamanhoMaximoFotoMb: Number(env.VITE_TAMANHO_MAXIMO_FOTO_MB || 15),
 }
 
 export const firebaseConfigurado = () => Boolean(FIREBASE.apiKey && FIREBASE.projectId)

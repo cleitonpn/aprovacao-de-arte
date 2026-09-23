@@ -217,8 +217,25 @@ service cloud.firestore {
 
       allow create: if request.auth != null
         && request.resource.data.texto is string
-        && request.resource.data.texto.size() > 0
         && request.resource.data.texto.size() <= 2000
+        // Texto OU foto. Antes bastava exigir texto não vazio; com foto, a
+        // mensagem que é só a imagem passa a ser legítima — e é o caso comum,
+        // porque a foto costuma dizer sozinha o que três linhas não diziam.
+        // O que continua proibido é a mensagem vazia dos dois lados.
+        && (request.resource.data.texto.size() > 0
+            || ('imagem' in request.resource.data
+                && request.resource.data.imagem.link is string))
+        // A foto tem que estar NO NOSSO armazenamento.
+        //
+        // Sem esta linha, `imagem.link` é um endereço livre que a tela do
+        // analista carregaria numa tag <img>: quem tivesse o link do stand
+        // poderia apontar para um servidor próprio e colher o IP e o navegador
+        // de quem abrisse a ficha — ou trocar a imagem depois de enviada, num
+        // registro que existe justamente por não poder ser alterado. As regras
+        // do Storage limitam o que sobe; esta é o que garante que o link aponte
+        // para o que subiu por lá.
+        && (!('imagem' in request.resource.data)
+            || request.resource.data.imagem.link.matches('https://firebasestorage\\.googleapis\\.com/.*'))
         // Ninguém assina como o outro lado: só quem é do time escreve como
         // time. Sem isto, quem tivesse o link poderia forjar uma autorização
         // "do analista" dentro do próprio histórico.

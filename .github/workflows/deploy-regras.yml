@@ -1,0 +1,86 @@
+name: Publicar as regras do Firestore e do Storage
+
+# As regras são a única proteção real desta ferramenta.
+#
+# O expositor entra sem login, com uma sessão anônima criada sem nenhuma tela.
+# O que impede esse acesso aberto de virar um depósito de qualquer coisa — e o
+# que impede alguém com o link de assinar a decisão do analista — são estes dois
+# arquivos, que rodam no servidor do Google. O código do navegador não protege
+# nada: ele é o que o atacante controla.
+#
+# Até aqui não havia caminho de publicação: os arquivos viviam no repositório e
+# a publicação acontecia fora dele. Isso tem um modo de falha caro e silencioso
+# — a regra no repositório dizer uma coisa e a regra em produção dizer outra,
+# sem que nada denuncie a diferença. Quem lê o repositório para entender o que
+# está protegido passa a ler ficção.
+#
+# Roda sozinho quando uma regra muda, e à mão pelo botão "Run workflow".
+#
+# Usa o MESMO secret do deploy das funções:
+#
+#   FIREBASE_SA_ARTE   service account deste projeto, com permissão de deploy.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'firestore.rules'
+      - 'storage.rules'
+      - 'firebase.json'
+      - '.github/workflows/deploy-regras.yml'
+  workflow_dispatch:
+
+# Duas publicações ao mesmo tempo deixariam em produção a que terminasse por
+# último, que não é necessariamente a mais nova.
+concurrency:
+  group: deploy-regras
+  cancel-in-progress: false
+
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      # Os testes leem os arquivos de regra e cobrem o que é fácil afrouxar sem
+      # perceber: a conversa não aceitar PDF, a mensagem não poder ser editada,
+      # ninguém assinar como o outro lado. Não substituem o emulador —
+      # substituem o esquecimento, e publicar uma regra frouxa é o erro que não
+      # aparece em tela nenhuma.
+      - run: npm ci
+      - run: npm test
+
+      # O id do projeto sai do próprio arquivo da credencial: escrevê-lo aqui
+      # criaria um segundo lugar para ele ficar errado, e no dia em que os dois
+      # discordassem a publicação iria para o projeto errado sem avisar.
+      - name: Gravar a credencial
+        run: |
+          printf '%s' "$FIREBASE_SA_ARTE" > "$RUNNER_TEMP/sa.json"
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/sa.json" >> "$GITHUB_ENV"
+          PROJETO=$(node -p "require('$RUNNER_TEMP/sa.json').project_id")
+          if [ -z "$PROJETO" ] || [ "$PROJETO" = "undefined" ]; then
+            echo "A credencial FIREBASE_SA_ARTE não tem project_id." >&2
+            exit 1
+          fi
+          echo "FIREBASE_PROJETO=$PROJETO" >> "$GITHUB_ENV"
+          echo "Publicando as regras no projeto: $PROJETO"
+        env:
+          FIREBASE_SA_ARTE: ${{ secrets.FIREBASE_SA_ARTE }}
+          RUNNER_TEMP: ${{ runner.temp }}
+
+      - name: Publicar
+        run: |
+          npx --yes firebase-tools@13 deploy \
+            --only firestore:rules,storage \
+            --project "$FIREBASE_PROJETO" --non-interactive --force
+
+      - name: Apagar a credencial
+        if: always()
+        run: rm -f "$RUNNER_TEMP/sa.json"
+        env:
+          RUNNER_TEMP: ${{ runner.temp }}

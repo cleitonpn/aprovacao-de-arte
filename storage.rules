@@ -93,6 +93,34 @@ service firebase.storage {
         && request.resource.contentType.matches('image/jpeg|image/png|application/pdf');
     }
 
+    // Foto na conversa. Os DOIS lados gravam aqui.
+    //
+    // É a única pasta em que cliente e time escrevem no mesmo lugar, e isso é o
+    // que a conversa é: os dois mandam foto um para o outro — "olha como ficou
+    // montado", "olha o risco que apareceu nesta peça". Separar em duas pastas
+    // exigiria duas regras para o mesmo ato e não protegeria nada a mais: quem
+    // escreveu está declarado na mensagem do Firestore, que ninguém edita.
+    //
+    // SÓ IMAGEM, nunca PDF, e esta é a decisão que importa aqui. A conversa não
+    // pode virar um caminho paralelo de entrega de arte: aceitando PDF, o
+    // cliente mandaria a arte por aqui, daria por entregue, e ela teria escapado
+    // da análise, do gabarito, da prova e do registro de envio — que é a
+    // ferramenta inteira. Foto de arte é obviamente uma foto; PDF de arte
+    // parece uma entrega.
+    //
+    // O limite é pequeno pelo mesmo motivo do resto: a conversa é aberta no
+    // celular, no meio do corredor da feira.
+    match /conversa/{token}/{arquivo} {
+      allow read: if request.auth != null;
+
+      allow write: if request.auth != null
+        && resource == null
+        && request.resource != null
+        && request.resource.size > 0
+        && request.resource.size < 15 * 1024 * 1024             // 15 MB
+        && request.resource.contentType.matches('image/jpeg|image/png|image/webp');
+    }
+
     // Nada mais é acessível — inclusive listar o conteúdo das pastas.
     match /{allPaths=**} {
       allow read, write: if false;
