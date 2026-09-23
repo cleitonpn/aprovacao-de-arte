@@ -684,6 +684,53 @@ function ArquivosDeApoio({ apoio }) {
  * para a lista de projetos e para o painel; aqui, com o stand já aberto, dá
  * para ler os fatos.
  */
+/**
+ * O tamanho do que o cliente tentou mandar, ao lado do que a peça pedia.
+ *
+ * Existe por uma conversa que se repetia sem ter como ser ganha: o cliente liga
+ * dizendo "a arte está em alta, tem qualidade, por que reprovou?" — e tem
+ * razão sobre o dpi, que era a única coisa que esta lista mostrava. O motivo
+ * real aparecia como frase ("o tamanho do arquivo não bate com o da peça"), sem
+ * os números que a sustentam, e o analista ficava sem o que colocar na mesa.
+ *
+ * Duas medidas lado a lado resolvem a discussão em uma linha: 1.140 × 550 cm
+ * enviados contra 570 × 275 pedidos é um argumento; "não bate" não é.
+ *
+ * Só aparece nas tentativas gravadas depois desta mudança. As antigas não
+ * carregam estes campos, e inventar número para elas seria pior do que a linha
+ * não existir — é justamente em cima destes valores que alguém vai discutir
+ * com o cliente.
+ */
+function MedidaDaTentativa({ medida }) {
+  if (!medida) return null
+  const { arquivoCm, arquivoPx, pecaCm, sangriaMm, escala } = medida
+  if (!arquivoCm && !arquivoPx && !pecaCm) return null
+
+  // Vírgula decimal e sem casa quando é inteiro: "570 cm", não "570,0 cm". A
+  // medida vai ser lida em voz alta para o cliente numa ligação.
+  const n = (v) => Number(v).toLocaleString('pt-BR', { maximumFractionDigits: 1 })
+  const cm = (p) => `${n(p.largura)} × ${n(p.altura)} cm`
+  const sangriaCm = Number(sangriaMm) > 0 ? sangriaMm / 10 : 0
+  const comSangria = pecaCm && sangriaCm > 0
+    ? cm({ largura: pecaCm.largura + 2 * sangriaCm, altura: pecaCm.altura + 2 * sangriaCm })
+    : null
+
+  return (
+    <p className="dica-campo">
+      {arquivoCm && <>enviou <strong>{cm(arquivoCm)}</strong></>}
+      {arquivoPx && <>{arquivoCm ? ' · ' : 'enviou '}{n(arquivoPx.largura)} × {n(arquivoPx.altura)} px</>}
+      {Number(escala) > 1 && ` · lido em escala 1:${escala}`}
+      {pecaCm && (
+        <>
+          {' · a peça pede '}
+          <strong>{cm(pecaCm)}</strong>
+          {comSangria && ` (ou ${comSangria} com sangria)`}
+        </>
+      )}
+    </p>
+  )
+}
+
 function LogDeReprovacoes({ sessao, projeto }) {
   const [lista, setLista] = useState([])
   const [aberto, setAberto] = useState(false)
@@ -750,6 +797,7 @@ function LogDeReprovacoes({ sessao, projeto }) {
                 {r.dpi != null && <> · {r.dpi} dpi{r.dpiExigido ? ` (mínimo ${r.dpiExigido})` : ''}</>}
                 {r.versao > 1 && ` · tentando a versão ${r.versao}`}
               </p>
+              <MedidaDaTentativa medida={r.medida} />
               {(r.motivos || []).map((m, i) => (
                 <p className="dica-campo" key={`${r.id}-${i}`}>→ {m.titulo}</p>
               ))}

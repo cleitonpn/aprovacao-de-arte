@@ -45,6 +45,15 @@ export function motivosDeReprovacao(resultado, maximo = 4) {
     }))
 }
 
+/** Um par largura/altura, arredondado, ou `null` quando não há medida. */
+const par = (o, casas = 0) => {
+  const l = Number(o?.largura)
+  const a = Number(o?.altura)
+  if (!(l > 0) || !(a > 0)) return null
+  const f = 10 ** casas
+  return { largura: Math.round(l * f) / f, altura: Math.round(a * f) / f }
+}
+
 /**
  * O documento de uma tentativa reprovada.
  *
@@ -52,6 +61,19 @@ export function motivosDeReprovacao(resultado, maximo = 4) {
  * peça, que arquivo, quantos dpi tinha e quantos precisava, e o que travou.
  * Não guarda o arquivo — ele não subiu, e é justamente por não ter subido que
  * este registro existe.
+ *
+ * O BLOCO `medida` existe por uma conversa que se repetia e não tinha como ser
+ * ganha: o cliente liga dizendo "a arte está em alta, tem qualidade, por que
+ * reprovou?", e o registro só mostrava o dpi — que nesses casos costuma estar
+ * ótimo. O motivo real ("o tamanho do arquivo não bate com o da peça")
+ * aparecia como frase, sem os números que a sustentam. Sem eles o analista não
+ * tinha o que colocar na mesa, e a conversa virava palavra contra palavra.
+ *
+ * Os valores saem de onde as REGRAS os leram — `tamanhoDeclaradoCm` e o
+ * `resolucao` que `avaliar` devolveu —, e não de uma segunda conta feita aqui.
+ * Um número recalculado que discordasse do veredicto seria pior que nenhum: o
+ * analista levaria para a discussão uma medida que a própria ferramenta não
+ * reconhece.
  */
 export function eventoDeReprovacao({ peca, resultado, versao = 1, em = new Date().toISOString() }) {
   const medidas = resultado?.medidas || {}
@@ -68,6 +90,27 @@ export function eventoDeReprovacao({ peca, resultado, versao = 1, em = new Date(
     },
     dpi: Number.isFinite(resolucao.dpi) ? Math.round(resolucao.dpi) : null,
     dpiExigido: Number.isFinite(resolucao.minimo?.dpi) ? Math.round(resolucao.minimo.dpi) : null,
+    medida: {
+      // O tamanho que o ARQUIVO declara — o número que a regra de dimensão
+      // comparou. Em PDF ele já vem multiplicado pela escala de trabalho, então
+      // é o tamanho final, o mesmo que o cliente leu no laudo dele.
+      arquivoCm: par(medidas.tamanhoDeclaradoCm, 1),
+      // Pixels de VERDADE. Em PDF, `larguraPx` é uma projeção — quantos pixels
+      // o arquivo TERIA no tamanho da peça —, e mostrá-la como dimensão do
+      // arquivo daria ao analista um número que o cliente não encontra em lugar
+      // nenhum se for conferir. `pixelsDaImagem` é a maior imagem embutida,
+      // medida nela mesma; em JPG e PNG os dois coincidem.
+      arquivoPx: par(medidas.pixelsDaImagem)
+        || par({ largura: medidas.larguraPx, altura: medidas.alturaPx }),
+      pecaCm: par({ largura: peca?.larguraCm, altura: peca?.alturaCm }, 1),
+      // A sangria que a REGRA aplicou, não a do perfil: a política da casa pode
+      // sobrepor, e é o valor aplicado que explica qual alvo era aceito.
+      sangriaMm: Number.isFinite(resolucao.sangriaMm) ? resolucao.sangriaMm : null,
+      // 1 quando a arte veio em tamanho real. Acima disso a ferramenta
+      // reconheceu (ou o cliente informou) arte montada reduzida — e isso muda
+      // a leitura de todos os números acima.
+      escala: Number(resultado?.escalaFator) > 1 ? Number(resultado.escalaFator) : 1,
+    },
     motivos: motivosDeReprovacao(resultado),
     em,
   }
