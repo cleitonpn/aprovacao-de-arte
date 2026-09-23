@@ -5,6 +5,8 @@ import { mensagemParaDesigner, laudoJson } from '../core/mensagem.js'
 import { especificacaoEmPdf, nomeDoArquivo } from '../core/especificacaoPdf.js'
 import Simulador from './Simulador.jsx'
 import Envio from './Envio.jsx'
+import Contestar from './Contestar.jsx'
+import { podeContestar } from '../core/contestacao.js'
 
 const ICONE = { ok: '✓', info: 'i', ressalva: '!', bloqueante: '×' }
 const fmt = (n) => new Intl.NumberFormat('pt-BR').format(Math.round(n))
@@ -33,6 +35,13 @@ export default function Resultado({
   onEnviado, onFalarComTime,
 }) {
   const [copiado, setCopiado] = useState(false)
+  /*
+    A contestação, montada na caixa "E agora?" e consumida pelo `<Envio>` lá
+    embaixo. Mora aqui, entre as duas, porque é o ancestral comum — e não
+    dentro do `<Envio>`, onde estava: de lá o formulário não tinha como aparecer
+    na caixa azul, que é onde o cliente procura as opções dele.
+  */
+  const [contestacao, setContestacao] = useState(null)
   // O laudo em papel não pode depender de alguém ter clicado no triângulo.
   // Vale para o botão "Imprimir / PDF" e para o Ctrl+P do navegador — os dois
   // disparam `beforeprint`.
@@ -111,6 +120,12 @@ export default function Resultado({
           copiado={copiado}
           onFalarComTime={onFalarComTime}
           temEnvio={Boolean(arquivo && cadastro)}
+          /* A contestação só é oferecida quando há arquivo para mandar — e
+             quando ela leva a algum lugar. Ver `podeContestar`: fonte não
+             incorporada não se resolve com segunda opinião. */
+          cabimento={arquivo && cadastro ? podeContestar(resultado) : null}
+          contestando={Boolean(contestacao)}
+          onContestar={setContestacao}
         />
       )}
 
@@ -237,6 +252,9 @@ export default function Resultado({
           cadastro={cadastro}
           riscoAceito={riscoAceito}
           projeto={projeto}
+          /* Montada lá em cima, na caixa "E agora?", e consumida aqui: é ela
+             que libera o envio de uma arte reprovada. */
+          contestacao={contestacao}
           onEnviado={onEnviado}
         />
       )}
@@ -307,7 +325,7 @@ function ItemAchado({ achado }) {
  * cliente e vai mexer no arquivo; ele não sabe o que nada disso quer dizer. O
  * terceiro é o caso que virava telefonema, e por isso tem botão também.
  */
-function ProximoPasso({ onCopiar, onBaixarPdf, copiado, onFalarComTime, temEnvio }) {
+function ProximoPasso({ onCopiar, onBaixarPdf, copiado, onFalarComTime, temEnvio, cabimento, contestando, onContestar }) {
   return (
     <section className="proximo-passo">
       <h3>E agora, o que eu faço?</h3>
@@ -358,6 +376,29 @@ function ProximoPasso({ onCopiar, onBaixarPdf, copiado, onFalarComTime, temEnvio
             <button className="btn btn-ghost" onClick={onFalarComTime}>
               Falar com a equipe
             </button>
+          </li>
+        )}
+
+        {/*
+          A quarta saída, e a última da lista de propósito. As três de cima
+          resolvem o problema de verdade — um arquivo corrigido; esta pede o
+          tempo de uma pessoa do time. Oferecida antes das outras, viraria o
+          primeiro clique de quem só quer se livrar da tela, e a fila encheria
+          de caso que um arquivo novo resolveria em dois minutos.
+        */}
+        {cabimento?.pode && (
+          <Contestar onEnviar={onContestar} enviando={contestando} />
+        )}
+
+        {/*
+          Há reprovação que uma segunda opinião não muda. Em vez de abrir um
+          caminho que não leva a lugar nenhum, a caixa diz o que de fato
+          resolve — e continua sendo uma das opções, não um aviso solto.
+        */}
+        {cabimento?.motivo === 'insuperavel' && (
+          <li>
+            <strong>Por que não dá para contestar esta reprovação</strong>
+            <p>{cabimento.explicacao}</p>
           </li>
         )}
       </ol>

@@ -1,11 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { enviarArte } from '../services/envio.js'
 import { envioConfigurado } from '../config.js'
 import { laudoJson } from '../core/mensagem.js'
 import { TENTAR_DE_NOVO_E_LIVRE } from '../core/laudo.js'
-import {
-  podeContestar, validarContestacao, contestacaoParaEnvio, MINIMO_MOTIVO,
-} from '../core/contestacao.js'
 
 // A trava: só sobe arte que passou. Reprovada nunca sobe, e "com ressalva" só
 // sobe depois de o cliente assumir o risco de forma explícita e registrada.
@@ -34,25 +31,79 @@ const MOTIVO = {
   ressalva: 'Para liberar o envio, aceite o risco na caixa amarela acima — ou troque o arquivo, se preferir corrigir.',
 }
 
-export default function Envio({ resultado, arquivo, cadastro, riscoAceito, projeto, onEnviado }) {
+export default function Envio({ resultado, arquivo, cadastro, riscoAceito, projeto, contestacao = null, onEnviado }) {
   const [estado, setEstado] = useState('parado') // parado | enviando | enviado | erro
   const [progresso, setProgresso] = useState(0)
   const [erro, setErro] = useState(null)
   const [recibo, setRecibo] = useState(null)
+  const caixa = useRef(null)
 
-  // A contestação em preparo. `null` enquanto o cliente não abriu o caminho —
-  // e ele fica fechado de propósito: é uma saída, não o caminho normal.
-  const [contestando, setContestando] = useState(false)
-  const [alegacao, setAlegacao] = useState('')
-  const [quem, setQuem] = useState(cadastro?.nome || '')
-  const [contato, setContato] = useState(cadastro?.email || '')
-  const [errosDaContestacao, setErrosDaContestacao] = useState({})
+  /*
+    A confirmação da contestação aparece AQUI, e o cliente clicou lá em cima,
+    na caixa "E agora?". Sem rolar, ele fica olhando um botão escrito
+    "Enviando…" com a resposta fora da tela — e a reação natural é clicar de
+    novo.
+  */
+  useEffect(() => {
+    if (estado === 'enviado' && recibo?.contestada) {
+      caixa.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+  }, [estado, recibo])
 
-  const cabimento = podeContestar(resultado)
-  const contestacao = contestando && validarContestacao({ motivo: alegacao, nome: quem, email: contato }).valido
-    ? contestacaoParaEnvio({ motivo: alegacao, nome: quem, email: contato })
-    : null
+
   const liberado = podeEnviar(resultado.veredicto, riscoAceito, contestacao)
+
+  const enviar = async () => {
+    setEstado('enviando')
+    setErro(null)
+    setProgresso(0)
+    try {
+      const r = await enviarArte(arquivo, {
+        cadastro,
+        peca: resultado.peca,
+        perfil: resultado.perfil,
+        veredicto: resultado.veredicto,
+        riscoAceito,
+        contestacao,
+        laudo: laudoJson(resultado),
+        projeto,
+      }, setProgresso)
+      setRecibo({ ...r, contestada: Boolean(contestacao) })
+      setEstado('enviado')
+      // O aviso ao projeto é o que marca a peça como entregue na tela do
+      // cliente. Se falhar, o envio continua válido — quem manda é o registro
+      // em `envios`, que o time lê no painel.
+      try {
+        await onEnviado?.({ ...r, veredicto: resultado.veredicto, riscoAceito, contestacao })
+      } catch (falha) {
+        console.warn('arte enviada, mas não foi possível atualizar o painel do cliente', falha)
+      }
+    } catch (e) {
+      setErro(e?.message || 'Não foi possível enviar a arte.')
+      setEstado('erro')
+    }
+  }
+
+  // Declarado ANTES dos `return` antecipados de propósito: o efeito abaixo o
+  // chama, e num render que sai cedo ele nunca chegaria a ser atribuído —
+  // `const` em zona morta temporal, que quebraria com um ReferenceError sem
+  // relação aparente com o que a pessoa clicou.
+
+  /*
+    A contestação chega PRONTA, de dentro da caixa "E agora?".
+
+    O formulário morava aqui embaixo, como um link solto sob o botão desligado,
+    e ficava invisível para quem mais precisava dele. Agora ele é a quarta
+    saída da caixa azul, junto das outras três — e quando o cliente conclui, a
+    contestação desce como prop e este efeito dispara o envio.
+
+    A guarda de `estado` é o que impede envio duplo: sem ela, qualquer
+    re-render com a mesma contestação mandaria o arquivo de novo.
+  */
+  useEffect(() => {
+    if (contestacao && estado === 'parado') enviar()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contestacao])
 
   if (!envioConfigurado()) {
     return (
@@ -73,7 +124,7 @@ export default function Envio({ resultado, arquivo, cadastro, riscoAceito, proje
   // precisa de acompanhamento.
   if (estado === 'enviado' && recibo?.contestada) {
     return (
-      <div className="envio enviado contestado">
+      <div className="envio enviado contestado" ref={caixa}>
         <h3>Contestação enviada ao time</h3>
         <p>
           O arquivo e o seu argumento chegaram ao time de comunicação visual.
@@ -119,37 +170,6 @@ export default function Envio({ resultado, arquivo, cadastro, riscoAceito, proje
     )
   }
 
-  const enviar = async () => {
-    setEstado('enviando')
-    setErro(null)
-    setProgresso(0)
-    try {
-      const r = await enviarArte(arquivo, {
-        cadastro,
-        peca: resultado.peca,
-        perfil: resultado.perfil,
-        veredicto: resultado.veredicto,
-        riscoAceito,
-        contestacao,
-        laudo: laudoJson(resultado),
-        projeto,
-      }, setProgresso)
-      setRecibo({ ...r, contestada: Boolean(contestacao) })
-      setEstado('enviado')
-      // O aviso ao projeto é o que marca a peça como entregue na tela do
-      // cliente. Se falhar, o envio continua válido — quem manda é o registro
-      // em `envios`, que o time lê no painel.
-      try {
-        await onEnviado?.({ ...r, veredicto: resultado.veredicto, riscoAceito, contestacao })
-      } catch (falha) {
-        console.warn('arte enviada, mas não foi possível atualizar o painel do cliente', falha)
-      }
-    } catch (e) {
-      setErro(e?.message || 'Não foi possível enviar a arte.')
-      setEstado('erro')
-    }
-  }
-
   return (
     <div className="envio">
       <button
@@ -171,94 +191,6 @@ export default function Envio({ resultado, arquivo, cadastro, riscoAceito, proje
       {!liberado && <p className="nota">{MOTIVO[resultado.veredicto]}</p>}
       {erro && <p className="erro-envio">{erro}</p>}
 
-      {/*
-        A saída para quem tem certeza de que a arte está certa.
-
-        Fechada por padrão e abaixo do botão desligado, de propósito: é uma
-        SAÍDA, não o caminho normal. Oferecida com o mesmo destaque do envio,
-        ela viraria o botão que se aperta quando a análise incomoda — e aí a
-        ferramenta teria um desligador, não uma conferência.
-      */}
-      {resultado.veredicto === 'reprovado' && estado !== 'enviando' && (
-        cabimento.pode ? (
-          <div className="contestar">
-            {!contestando ? (
-              <button className="link" type="button" onClick={() => setContestando(true)}>
-                Acho que esta arte está correta — quero que o time avalie
-              </button>
-            ) : (
-              <div className="contestar-forma">
-                <strong>Contestar a reprovação</strong>
-                <p className="ajuda">
-                  O arquivo vai para o time junto com o que você escrever aqui, e
-                  uma pessoa decide. <strong>A peça não conta como entregue</strong>{' '}
-                  enquanto a resposta não sair — e a resposta vem por escrito,
-                  com o motivo, aceitando ou não.
-                </p>
-
-                <label className="campo">
-                  <span>Por que você considera esta arte correta?</span>
-                  <textarea
-                    rows={4}
-                    value={alegacao}
-                    maxLength={1000}
-                    onChange={(e) => setAlegacao(e.target.value)}
-                    placeholder="Ex.: a arte foi montada em 1:10 e a ferramenta leu como tamanho real; o arquivo tem 3.000 dpi na escala de trabalho."
-                  />
-                  {errosDaContestacao.motivo && <em className="erro-campo">{errosDaContestacao.motivo}</em>}
-                  <em className="dica-campo">
-                    {alegacao.trim().length}/{MINIMO_MOTIVO} mínimo — quanto mais
-                    concreto, mais rápido alguém consegue decidir.
-                  </em>
-                </label>
-
-                <div className="linha">
-                  <label className="campo">
-                    <span>Seu nome</span>
-                    <input type="text" value={quem} onChange={(e) => setQuem(e.target.value)} autoComplete="name" />
-                    {errosDaContestacao.nome && <em className="erro-campo">{errosDaContestacao.nome}</em>}
-                  </label>
-                  <label className="campo">
-                    <span>Seu e-mail <em className="opcional">(para avisarmos da resposta)</em></span>
-                    <input type="email" value={contato} onChange={(e) => setContato(e.target.value)} autoComplete="email" />
-                    {errosDaContestacao.email && <em className="erro-campo">{errosDaContestacao.email}</em>}
-                  </label>
-                </div>
-
-                <div className="acoes">
-                  <button
-                    className="btn btn-risco"
-                    type="button"
-                    onClick={() => {
-                      const { valido, erros } = validarContestacao({ motivo: alegacao, nome: quem, email: contato })
-                      setErrosDaContestacao(erros)
-                      if (valido) enviar()
-                    }}
-                  >
-                    Enviar para o time avaliar
-                  </button>
-                  <button className="link" type="button" onClick={() => setContestando(false)}>
-                    Cancelar
-                  </button>
-                </div>
-                <p className="nota">
-                  Fica registrado com o seu nome e não pode ser apagado — nem por
-                  você, nem pelo time. É o que faz dele um argumento no dia em
-                  que a peça for discutida.
-                </p>
-              </div>
-            )}
-          </div>
-        ) : cabimento.motivo === 'insuperavel' && (
-          /*
-            Há reprovação que uma segunda opinião não muda. Oferecer contestação
-            aqui seria vender uma esperança falsa e adiar a descoberta para o dia
-            da impressão, que é quando custa caro — então a tela diz o que fazer
-            em vez de abrir um caminho que não leva a lugar nenhum.
-          */
-          <p className="nota">{cabimento.explicacao}</p>
-        )
-      )}
     </div>
   )
 }

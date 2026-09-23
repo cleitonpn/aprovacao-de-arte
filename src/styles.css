@@ -1846,16 +1846,6 @@ textarea { width: 100%; font: inherit; font-size: 13px; padding: 9px 11px; borde
 .bloqueio.contestada { border-left: 4px solid var(--alerta); background: var(--alerta-fundo); }
 .bloqueio.aceita { border-left: 4px solid var(--ok); background: var(--ok-fundo); }
 
-/* O caminho de contestar na tela de envio. Discreto e abaixo do botão
-   desligado: é uma SAÍDA, não o caminho normal — com o mesmo destaque do
-   envio, viraria o botão que se aperta quando a análise incomoda. */
-.contestar { margin-top: 10px; }
-.contestar-forma {
-  border: 1px solid var(--alerta); border-radius: var(--raio-p);
-  background: var(--alerta-fundo); padding: 14px; margin-top: 8px;
-}
-.contestar-forma > strong { display: block; margin-bottom: 4px; }
-
 /* A ficha de um caso, na tela do admin. */
 .caso-contestacao { border-left: 4px solid var(--borda); }
 .caso-contestacao.aguardando { border-left-color: var(--alerta); }
