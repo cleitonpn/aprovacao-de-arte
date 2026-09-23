@@ -12,6 +12,7 @@ import { idDeFeira } from '../data/cadastro.js'
 import { normalizarProjeto } from '../data/projeto.js'
 import { semIndefinidos } from '../core/mensagem.js'
 import { visitaAGravar } from '../core/contato.js'
+import { decisaoParaEnvio } from '../core/contestacao.js'
 
 const COLECAO = 'projetos'
 
@@ -152,6 +153,14 @@ export async function marcarEntrega(token, pecaId, dados) {
       arquivo: dados.arquivo ?? null,
       versao: Number(dados.versao) || 1,
       riscoAceito: dados.riscoAceito ? true : false,
+      // A contestação viaja junto com a entrega, e não só no documento do
+      // envio. É ela que faz a peça aparecer como "contestada" em vez de
+      // "recebida" — e a tela do cliente só lê o projeto, nunca `envios`, que
+      // é coleção do time. Sem isto a peça fecharia o stand sem nada ter sido
+      // aceito, que é o oposto do combinado.
+      contestacao: dados.contestacao
+        ? { motivo: dados.contestacao.motivo, nome: dados.contestacao.nome, em: dados.contestacao.em }
+        : null,
       em: new Date().toISOString(),
     }),
   })
@@ -667,6 +676,46 @@ export function marcarConferido(fb, protocolo, por, conferido = true) {
       ? { em: new Date().toISOString(), por: por ?? null }
       : null,
   })
+}
+
+/**
+ * A decisão do time sobre uma arte contestada.
+ *
+ * Grava DENTRO de `contestacao`, junto da alegação do cliente, e não num campo
+ * solto: os três textos — o que a ferramenta reprovou, o que o cliente alegou e
+ * o que a pessoa decidiu — só servem para calibrar a ferramenta se forem lidos
+ * juntos. Separados, ninguém cruza.
+ *
+ * O `veredicto` do envio NÃO é reescrito, nem quando a contestação é aceita.
+ * Regravá-lo como aprovado apagaria o fato de que a análise reprovou — e é esse
+ * fato acumulado que o log existe para ler depois.
+ *
+ * As regras recusam alterar uma decisão já tomada: aceitar ou recusar é
+ * definitivo, porque um histórico que uma das partes reescreve não resolve a
+ * discussão que originou a contestação.
+ */
+export function decidirContestacao(fb, protocolo, { aceita, motivo, por }) {
+  const { getFirestore, doc, updateDoc } = fb.firestore
+  return updateDoc(doc(getFirestore(fb.app), 'envios', protocolo), {
+    'contestacao.decisao': decisaoParaEnvio({ aceita, motivo, por }),
+  })
+}
+
+/**
+ * Todos os envios contestados que este analista alcança.
+ *
+ * Sem filtro de feira, ao contrário do resto do painel: a tela de log existe
+ * para ler o conjunto e achar limiar mal calibrado, e um limiar errado não é
+ * um problema de uma feira só. O recorte por feira é feito na tela, por quem
+ * está olhando.
+ */
+export function ouvirContestacoes(fb, aoMudar, aoFalhar) {
+  const { getFirestore, collection, query, where, onSnapshot } = fb.firestore
+  return onSnapshot(
+    query(collection(getFirestore(fb.app), 'envios'), where('veredicto', '==', 'reprovado')),
+    (snap) => aoMudar(snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((e) => e.contestacao)),
+    aoFalhar || (() => {}),
+  )
 }
 
 export function arquivarEnvio(fb, protocolo, por, arquivado = true) {

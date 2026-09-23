@@ -68,7 +68,39 @@ service cloud.firestore {
     // cliente tenha assumido o risco de forma explícita.
     function veredictoPermiteEnvio(d) {
       return d.veredicto == 'aprovado'
-        || (d.veredicto == 'ressalva' && d.riscoAceito != null);
+        || (d.veredicto == 'ressalva' && d.riscoAceito != null)
+        || (d.veredicto == 'reprovado' && contestacaoValida(d));
+    }
+
+    // A CONTESTAÇÃO: a única porta por onde arte reprovada sobe.
+    //
+    // Ela existe porque a trava produzia um impasse sem saída — o cliente
+    // dizendo "minha arte está certa e a ferramenta reprova", e o time sem
+    // como conferir, porque o arquivo nunca chegava. Aqui ele chega, mas
+    // MARCADO: o veredicto continua sendo 'reprovado' e o registro carrega
+    // quem contestou, por escrito e assinado.
+    //
+    // As três exigências abaixo são o que separa uma contestação de um desvio:
+    //
+    // 1. TEXTO com substância. Sem mínimo, o campo vira um "ok" despachado no
+    //    automático e o log — que existe justamente para calibrar a ferramenta
+    //    depois — não ensina nada a quem for lê-lo.
+    // 2. NOME. O link do stand circula entre marketing, agência e diretoria;
+    //    "alguém contestou" não é assinatura de ninguém e não serve de
+    //    argumento no dia em que a peça der problema.
+    // 3. SEM DECISÃO. Esta é a linha que impede o desvio virar bypass: se o
+    //    cliente pudesse mandar a decisão junto, ele se aprovaria sozinho e a
+    //    contestação seria um jeito educado de desligar a análise. Quem decide
+    //    é o time, por `update`, e só ele alcança aquele campo.
+    function contestacaoValida(d) {
+      return d.contestacao is map
+        && d.contestacao.motivo is string
+        && d.contestacao.motivo.size() >= 20
+        && d.contestacao.motivo.size() <= 1000
+        && d.contestacao.nome is string
+        && d.contestacao.nome.size() >= 3
+        && d.contestacao.em is string
+        && !('decisao' in d.contestacao);
     }
 
     // Arquivo de apoio (logo, fonte, manual de marca) não tem veredicto: não é
@@ -109,9 +141,25 @@ service cloud.firestore {
       // navegador de quem clicou, porque marca local some para o resto do time
       // no dia seguinte — e aí o item volta para todo mundo menos para quem
       // resolveu.
+      // `contestacao` entra na lista pelo mesmo motivo de `conferencia`: é onde
+      // o time grava a DECISÃO sobre a arte contestada. O cliente não alcança
+      // este `update` — ele é de admin —, então a decisão nunca pode ser
+      // escrita por quem contestou.
+      //
+      // O que continua proibido é o que faz do envio um registro confiável:
+      // veredicto, laudo, cadastro e data seguem intocáveis. Reescrever o
+      // veredicto para 'aprovado' depois de aceitar a contestação seria apagar
+      // o fato de que a ferramenta reprovou — e é justamente esse fato que o
+      // log existe para acumular.
       allow update: if ehAdmin()
         && request.resource.data.diff(resource.data).affectedKeys()
-             .hasOnly(['arquivado', 'arquivadoEm', 'arquivadoPor', 'conferencia']);
+             .hasOnly(['arquivado', 'arquivadoEm', 'arquivadoPor', 'conferencia', 'contestacao'])
+        // Aceitar ou recusar é definitivo. Sem esta linha, uma decisão poderia
+        // ser reescrita depois — e um histórico que uma das partes reescreve
+        // não resolve discussão nenhuma, que é o problema de origem.
+        && (!('contestacao' in resource.data)
+            || !('decisao' in resource.data.contestacao)
+            || request.resource.data.contestacao.decisao == resource.data.contestacao.decisao);
 
       allow delete: if false;
     }

@@ -20,7 +20,7 @@ export const PAPEIS = {
   admin: {
     rotulo: 'Administrador',
     descricao: 'Acesso máximo. Faz tudo, em todas as feiras, e é o único que cadastra analistas e exclui feiras.',
-    permissoes: ['verPainel', 'verArtes', 'cadastrarProjetos', 'cobrar', 'aprovar', 'gerenciarAnalistas', 'excluirFeiras'],
+    permissoes: ['verPainel', 'verArtes', 'cadastrarProjetos', 'cobrar', 'aprovar', 'gerenciarAnalistas', 'excluirFeiras', 'verContestacoes'],
     sempreTodasAsFeiras: true,
   },
   completo: {
@@ -51,6 +51,7 @@ export const ROTULO_PERMISSAO = {
   aprovar: 'Prova de aprovação, liberar reenvio e status de impressão',
   gerenciarAnalistas: 'Cadastrar e remover analistas',
   excluirFeiras: 'Excluir uma feira inteira, com stands e arquivos',
+  verContestacoes: 'Decidir contestações e ler o log para calibrar a ferramenta',
 }
 
 /**
@@ -114,6 +115,17 @@ export function abasDe(acesso) {
   if (pode(acesso, 'cadastrarProjetos') || pode(acesso, 'cobrar') || pode(acesso, 'aprovar')) {
     abas.push({ id: 'projetos', rotulo: 'Projetos' })
   }
+  /*
+    Contestações fica com o administrador, e só com ele.
+
+    Não é hierarquia por hierarquia: decidir uma contestação é dizer que a
+    análise errou (ou que não errou) e o registro disso é o que vai calibrar a
+    ferramenta depois. Espalhar essa decisão por todos os papéis produziria um
+    log em que cada pessoa aplicou um critério, e um log assim não serve para
+    achar limiar mal calibrado — serve só para acumular exceções, que é
+    exatamente o que este caminho existe para NÃO fazer.
+  */
+  if (pode(acesso, 'verContestacoes')) abas.push({ id: 'contestacoes', rotulo: 'Contestações' })
   if (pode(acesso, 'gerenciarAnalistas')) abas.push({ id: 'analistas', rotulo: 'Analistas' })
   return abas
 }

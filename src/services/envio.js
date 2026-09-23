@@ -86,7 +86,7 @@ export async function enviarArte(arquivo, dados, aoProgredir) {
   if (arquivo.size > limite) {
     throw new Error(`O arquivo tem ${(arquivo.size / 1048576).toFixed(0)} MB e o limite é ${ENVIO.tamanhoMaximoMb} MB.`)
   }
-  const { cadastro, peca, perfil, veredicto, riscoAceito, laudo, projeto } = dados
+  const { cadastro, peca, perfil, veredicto, riscoAceito, laudo, projeto, contestacao } = dados
   const tipo = TIPO_POR_FORMATO[laudo?.arquivo?.formato]
   if (!tipo) {
     throw new Error(`Este formato (${laudo?.arquivo?.formato || 'desconhecido'}) não pode ser enviado. Exporte em PDF, JPG ou PNG.`)
@@ -124,6 +124,7 @@ export async function enviarArte(arquivo, dados, aoProgredir) {
         stand: cadastro.stand,
         feira: cadastro.feira,
         veredicto,
+        contestada: contestacao ? 'sim' : 'nao',
       },
     })
 
@@ -167,8 +168,16 @@ export async function enviarArte(arquivo, dados, aoProgredir) {
       cadastro,
       peca,
       perfil: { id: perfil.id, nome: perfil.nome },
+      // O veredicto vai como a ANÁLISE o produziu, inclusive 'reprovado'.
+      // Regravá-lo como aprovado quando o time aceita a contestação apagaria o
+      // fato de que a ferramenta reprovou — e é esse fato acumulado que o log
+      // de contestações existe para ler depois, atrás de limiar mal calibrado.
       veredicto,
       riscoAceito: riscoAceito || null,
+      // Quando existe, é ela que autoriza o envio de uma arte reprovada. Sobe
+      // sem `decisao`: quem decide é o time, por outro caminho, e as regras
+      // recusam a criação se o campo vier preenchido.
+      contestacao: contestacao || null,
       laudo: laudo || null,
       arquivo: {
         nome: arquivo.name,

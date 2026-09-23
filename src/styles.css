@@ -1834,3 +1834,56 @@ textarea { width: 100%; font: inherit; font-size: 13px; padding: 9px 11px; borde
 /* Envio arquivado: o registro continua lá, só saiu da frente. */
 .linha-arquivada td { opacity: .55; }
 .faixa-novidade.outras { background: var(--alerta-fundo); color: var(--alerta); }
+
+/* --------------------------------------------------- contestação */
+/*
+   A arte que a análise reprovou e o cliente afirmou estar correta.
+
+   Cor de ALERTA, não de erro: nada deu errado ainda: há uma decisão pendente.
+   Vermelho aqui diria ao cliente que ele fez algo errado ao contestar, quando
+   contestar é exatamente o caminho que a ferramenta passou a oferecer.
+*/
+.bloqueio.contestada { border-left: 4px solid var(--alerta); background: var(--alerta-fundo); }
+.bloqueio.aceita { border-left: 4px solid var(--ok); background: var(--ok-fundo); }
+
+/* O caminho de contestar na tela de envio. Discreto e abaixo do botão
+   desligado: é uma SAÍDA, não o caminho normal — com o mesmo destaque do
+   envio, viraria o botão que se aperta quando a análise incomoda. */
+.contestar { margin-top: 10px; }
+.contestar-forma {
+  border: 1px solid var(--alerta); border-radius: var(--raio-p);
+  background: var(--alerta-fundo); padding: 14px; margin-top: 8px;
+}
+.contestar-forma > strong { display: block; margin-bottom: 4px; }
+
+/* A ficha de um caso, na tela do admin. */
+.caso-contestacao { border-left: 4px solid var(--borda); }
+.caso-contestacao.aguardando { border-left-color: var(--alerta); }
+.caso-contestacao.aceita { border-left-color: var(--ok); }
+.caso-contestacao.recusada { border-left-color: var(--ruim); }
+
+/*
+   Os dois lados do caso, lado a lado: o que a ferramenta disse e o que o
+   cliente respondeu. Em coluna única o olho lê um, rola, lê o outro e já
+   esqueceu o primeiro — e a decisão depende exatamente de compará-los.
+*/
+.tres-lados {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px; margin: 12px 0;
+}
+.tres-lados .achados { margin: 0; padding-left: 18px; font-size: 13.5px; }
+.alegacao {
+  margin: 0; font-size: 13.5px; line-height: 1.6; white-space: pre-line;
+  font-style: italic;
+}
+
+.decidir { border-top: 1px solid var(--borda); padding-top: 14px; margin-top: 6px; }
+.decisao {
+  border-left: 4px solid var(--borda); border-radius: var(--raio-p);
+  padding: 10px 14px; margin-top: 12px; background: var(--fundo);
+}
+.decisao.aceita { border-left-color: var(--ok); background: var(--ok-fundo); }
+.decisao.recusada { border-left-color: var(--ruim); background: var(--ruim-fundo); }
+.decisao p { margin: 4px 0; font-size: 13.5px; line-height: 1.55; white-space: pre-line; }
+
+.placar-contestacao { margin-top: 14px; border-top: 1px solid var(--borda); padding-top: 12px; }

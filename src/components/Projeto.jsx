@@ -217,6 +217,7 @@ export default function Projeto({ token }) {
                 protocolo: recibo.protocolo,
                 veredicto: recibo.veredicto,
                 riscoAceito: recibo.riscoAceito,
+                contestacao: recibo.contestacao,
                 arquivo: recibo.nomeNoStorage,
                 versao: ativa.proximaVersao,
               })
@@ -667,6 +668,41 @@ function CartaoPeca({ situacao, perfis, politica, projeto, onEscolher, onAtualiz
               botão ao lado para enviar a versão {situacao.proximaVersao} — não
               precisa pedir liberação, e esta correção não consome o prazo do
               seu stand.
+            </p>
+          </div>
+        )}
+
+        {/*
+          A contestação, nos dois desfechos. Bloco próprio pelo mesmo motivo da
+          devolução: o que importa é o TEXTO que a pessoa escreveu, e uma
+          etiqueta de estado sozinha ("Contestada") devolveria ao cliente
+          exatamente a resposta vaga que o fez contestar.
+        */}
+        {entrega?.contestacao && !entrega.contestacao.decisao && (
+          <div className="bloqueio contestada">
+            <strong>Sua contestação está com o time</strong>
+            <p>“{entrega.contestacao.motivo}”</p>
+            <p className="dica-campo">
+              Enviada em {fmtDataHora(entrega.contestacao.em)} por{' '}
+              {entrega.contestacao.nome}. Uma pessoa vai abrir o arquivo e
+              responder por escrito — <strong>esta peça ainda não conta como
+              entregue</strong> até lá. Você não precisa fazer nada agora.
+            </p>
+          </div>
+        )}
+
+        {entrega?.contestacao?.decisao && (
+          <div className={`bloqueio ${entrega.contestacao.decisao.aceita ? 'aceita' : 'devolvida'}`}>
+            <strong>
+              {entrega.contestacao.decisao.aceita
+                ? 'O time avaliou e aceitou a sua arte'
+                : 'O time avaliou e manteve a reprovação'}
+            </strong>
+            <p>“{entrega.contestacao.decisao.motivo}”</p>
+            <p className="dica-campo">
+              {entrega.contestacao.decisao.aceita
+                ? `Avaliada em ${fmtDataHora(entrega.contestacao.decisao.em)}. A peça passa a contar como entregue — você não precisa reenviar nada.`
+                : `Avaliada em ${fmtDataHora(entrega.contestacao.decisao.em)}. Corrija o que está descrito acima e envie a versão ${situacao.proximaVersao} pelo botão ao lado.`}
             </p>
           </div>
         )}

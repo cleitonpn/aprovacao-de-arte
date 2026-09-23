@@ -371,8 +371,13 @@ export function estadoDaArte(resumo) {
   // A ordem É a regra: o primeiro que casar vence, e eles estão do mais
   // atrasado para o mais adiantado.
   if (resumo.aguardandoCliente > 0) return 'aguardando'
+  // Contestada está com a CV, não com o cliente — e precisa vir ANTES do resto
+  // da cadeia. Sem esta linha ela não casava com nenhuma condição e caía no
+  // 'aprovada' do fim da função: o produtor veria arte aprovada onde ninguém
+  // decidiu nada, que é o pior erro que esta ponte pode cometer.
+  const contestadas = resumo.pecas.filter((p) => p.status === 'contestada').length
   const recebidasSemProva = resumo.pecas.filter((p) => p.status === 'recebida').length
-  if (recebidasSemProva > 0) return 'em_analise'
+  if (contestadas > 0 || recebidasSemProva > 0) return 'em_analise'
   if (resumo.impressas === resumo.total) return 'impressa'
   const aprovadasParadas = resumo.pecas.filter((p) => p.status === 'aprovada').length
   if (aprovadasParadas > 0) return 'aprovada'

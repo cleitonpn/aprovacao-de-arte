@@ -24,7 +24,12 @@ test('papel desconhecido não vira acesso vazio nem acesso total por acidente', 
 
 test('cada papel pode exatamente o que promete', () => {
   const esperado = {
-    admin: ['verPainel', 'verArtes', 'cadastrarProjetos', 'cobrar', 'aprovar', 'gerenciarAnalistas', 'excluirFeiras'],
+    // `verContestacoes` entrou só no admin, e de propósito: decidir uma
+    // contestação é declarar que a análise errou (ou que não errou), e é esse
+    // registro que vai calibrar a ferramenta depois. Espalhado por vários
+    // papéis, cada pessoa aplicaria um critério e o log deixaria de servir
+    // para achar limiar mal calibrado — viraria uma pilha de exceções.
+    admin: ['verPainel', 'verArtes', 'cadastrarProjetos', 'cobrar', 'aprovar', 'gerenciarAnalistas', 'excluirFeiras', 'verContestacoes'],
     completo: ['verPainel', 'verArtes', 'cadastrarProjetos', 'cobrar', 'aprovar'],
     cadastro: ['verArtes', 'cadastrarProjetos'],
     cobranca: ['verArtes', 'cobrar'],
@@ -93,7 +98,7 @@ test('as abas somem para quem não pode usá-las', () => {
   // A visão geral é de quem opera a feira inteira. Cadastro e cobrança seguem
   // sem ela: o painel mostra reprovações, pedidos e provas — decisões que
   // esses dois papéis não tomam, e ver o que não se pode resolver é ruído.
-  assert.deepEqual(abas('admin'), ['visao', 'projetos', 'analistas'])
+  assert.deepEqual(abas('admin'), ['visao', 'projetos', 'contestacoes', 'analistas'])
   assert.deepEqual(abas('completo'), ['visao', 'projetos'])
   assert.deepEqual(abas('cadastro'), ['projetos'])
   assert.deepEqual(abas('cobranca'), ['projetos'])
@@ -136,4 +141,18 @@ test('quem cadastra feira não necessariamente apaga', () => {
   const cadastro = acessoDe({ papel: 'cadastro' })
   assert.equal(pode(cadastro, 'cadastrarProjetos'), true)
   assert.equal(pode(cadastro, 'excluirFeiras'), false)
+})
+
+test('só o administrador decide contestação', () => {
+  // A mesma razão de `gerenciarAnalistas` ser exclusiva: o que está em jogo não
+  // é conveniência, é a consistência do critério. Um log de contestações
+  // decidido por cinco pessoas com cinco réguas diferentes não aponta limiar
+  // errado nenhum — e apontar limiar errado é a única razão de ele existir.
+  for (const papel of Object.keys(PAPEIS)) {
+    assert.equal(
+      pode(acessoDe({ papel }), 'verContestacoes'),
+      papel === 'admin',
+      `${papel} não deveria decidir contestação`,
+    )
+  }
 })

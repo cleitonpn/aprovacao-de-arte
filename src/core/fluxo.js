@@ -60,6 +60,22 @@ export const STATUS = {
     ordem: 4,
     cor: 'ruim',
   },
+  // Arte que a ANÁLISE reprovou e que o cliente contestou por escrito.
+  //
+  // Estado próprio, e não "recebida", porque não é recebida: o arquivo chegou,
+  // mas nada foi aceito ainda. Marcá-la como recebida faria o stand aparecer
+  // pronto enquanto ninguém olhou — e o dia de descobrir isso seria o da
+  // montagem. Também não é "aguardando": o cliente já fez a parte dele e
+  // cobrá-lo de novo seria cobrar por algo que está com a gente.
+  //
+  // Fica do lado do TIME, não do cliente: quem deve a resposta somos nós.
+  contestada: {
+    rotulo: 'Contestada — aguardando avaliação do time',
+    paraOTime: 'Contestada, aguardando sua decisão',
+    curto: 'Contestada',
+    ordem: 1,
+    cor: 'alerta',
+  },
   em_impressao: { rotulo: 'Em impressão', curto: 'Em impressão', ordem: 5, cor: 'ok' },
   impressa: { rotulo: 'Impressa', curto: 'Impressa', ordem: 6, cor: 'ok' },
 }
@@ -87,6 +103,9 @@ export const STATUS_DO_TIME = ['em_impressao', 'impressa']
 
 /** Estados em que a peça está com o cliente, esperando ação dele. */
 export const PRECISA_DO_CLIENTE = ['aguardando', 'em_prova', 'reprovada', 'devolvida']
+
+/** Estados em que a bola está com o TIME e o cliente não tem o que fazer. */
+export const PRECISA_DO_TIME = ['contestada']
 
 const mapa = (v) => (v && typeof v === 'object' ? v : {})
 
@@ -181,6 +200,12 @@ export function situacaoDaPeca(projeto, peca, agora = Date.now()) {
   else if (resposta && ehReprovada(resposta, peca.id)) status = 'reprovada'
   else if (resposta) status = 'aprovada' // reprovação parcial que não incluiu esta peça
   else if (provaAtual) status = 'em_prova'
+  // A contestação vem ANTES de "recebida" e é a razão de o estado existir: o
+  // arquivo chegou, mas a análise reprovou e ninguém do time decidiu ainda.
+  // Contada como recebida, a peça fecharia o stand sem nada ter sido aceito.
+  // Decidida a favor, a contestação some daqui e a entrega vale normalmente.
+  else if (entrega?.contestacao && !entrega.contestacao.decisao) status = 'contestada'
+  else if (entrega?.contestacao && entrega.contestacao.decisao?.aceita === false) status = 'aguardando'
   else if (entrega) status = 'recebida'
   else status = 'aguardando'
 
@@ -351,10 +376,19 @@ export function provasDoProjeto(projeto) {
 export function resumoDoProjeto(projeto, agora = Date.now()) {
   const pecas = (projeto?.pecas || []).map((p) => situacaoDaPeca(projeto, p, agora))
   const conta = (f) => pecas.filter(f).length
+  // Contestada NÃO conta como recebida: o arquivo chegou, mas nada foi aceito.
+  // Calculada aqui, fora do objeto, porque `completo` deriva dela — duas
+  // versões da mesma regra foi exatamente o que deixou o stand fechar com uma
+  // contestação em aberto.
+  const recebidas = conta((s) => s.status !== 'aguardando' && s.status !== 'contestada')
   return {
     pecas,
     total: pecas.length,
-    recebidas: conta((s) => s.status !== 'aguardando'),
+    recebidas,
+    // Quantas esperam uma decisão NOSSA. Fica separado de `pendentes` porque
+    // cobrar o cliente por uma peça contestada é cobrá-lo por algo que está
+    // com a gente — e é o jeito mais rápido de a contestação virar briga.
+    contestadas: conta((s) => s.status === 'contestada'),
     pendentes: pecas.filter((s) => s.status === 'aguardando'),
     aguardandoCliente: conta((s) => PRECISA_DO_CLIENTE.includes(s.status)),
     emProducao: conta((s) => STATUS_DO_TIME.includes(s.status)),
@@ -366,7 +400,13 @@ export function resumoDoProjeto(projeto, agora = Date.now()) {
     reprovacoes: Number(projeto?.dificuldade?.reprovacoes) || 0,
     pedidosEmAberto: pecas.filter((s) => s.pedidoEmAberto),
     prazo: situacaoDoPrazo(projeto, agora),
-    completo: pecas.length > 0 && conta((s) => s.status !== 'aguardando') === pecas.length,
+    // A MESMA conta de `recebidas`, e não uma cópia da condição.
+    //
+    // Ela era `status !== 'aguardando'` escrito à mão aqui, e foi assim que a
+    // peça contestada passou a fechar o stand: `recebidas` aprendeu a
+    // descontá-la e esta linha não, porque ninguém liga uma coisa à outra ao
+    // ler. Derivar de `recebidas` faz as duas andarem juntas por construção.
+    completo: pecas.length > 0 && recebidas === pecas.length,
   }
 }
 

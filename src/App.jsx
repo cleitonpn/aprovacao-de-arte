@@ -18,6 +18,7 @@ import FundoDeEntrada from './components/FundoDeEntrada.jsx'
 import Projetos from './components/Projetos.jsx'
 import Visao from './components/Visao.jsx'
 import Usuarios from './components/Usuarios.jsx'
+import Contestacoes from './components/Contestacoes.jsx'
 import Projeto from './components/Projeto.jsx'
 import { usarSessao } from './services/sessao.js'
 import { abasDe, telaInicial, pode } from './core/permissoes.js'
@@ -34,6 +35,7 @@ import * as cadastroStore from './data/cadastro.js'
 //   #/visao       a feira inteira numa tela  ⎫
 //   #/projetos    cadastro de projetos       ⎬ time interno, com login
 //   #/projetos/FEIRA/TOKEN  a ficha de um stand direto  ⎪
+//   #/contestacoes  o log de arte contestada ⎪
 //   #/analistas   quem tem acesso            ⎭
 function usarRota() {
   const ler = () => (typeof window === 'undefined' ? '' : window.location.hash.replace(/^#\/?/, ''))
@@ -57,7 +59,7 @@ function usarRota() {
   // favoritos cai numa aba que não existe mais, e cair em branco é pior que
   // cair na Visão geral. Ver `abasDe` — a aba "Artes recebidas" saiu.
   if (partes[0] === 'admin') return { tela: 'visao' }
-  if (['visao', 'projetos', 'analistas'].includes(partes[0])) return { tela: partes[0] }
+  if (['visao', 'projetos', 'contestacoes', 'analistas'].includes(partes[0])) return { tela: partes[0] }
   return { tela: 'ferramenta' }
 }
 
@@ -168,6 +170,7 @@ function PainelInterno({ rota }) {
               novosPorFeira={avisos.novosPorFeira}
             />
           )}
+          {permitida && tela === 'contestacoes' && pode(sessao.acesso, 'verContestacoes') && <Contestacoes sessao={sessao} />}
           {permitida && tela === 'analistas' && pode(sessao.acesso, 'gerenciarAnalistas') && <Usuarios sessao={sessao} />}
         </Acesso>
       </div>
