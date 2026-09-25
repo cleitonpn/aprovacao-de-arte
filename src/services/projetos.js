@@ -13,6 +13,7 @@ import { normalizarProjeto } from '../data/projeto.js'
 import { semIndefinidos } from '../core/mensagem.js'
 import { visitaAGravar } from '../core/contato.js'
 import { decisaoParaEnvio } from '../core/contestacao.js'
+import { corpoDaMensagem } from '../core/conversa.js'
 
 const COLECAO = 'projetos'
 
@@ -507,36 +508,18 @@ export { carregarFirebase }
 
 const MENSAGENS = 'mensagens'
 
-/**
- * A foto, do jeito que ela vai gravada na mensagem.
- *
- * Só os campos que a tela usa. O `caminho` entra porque é o que permite achar o
- * arquivo no armazenamento depois — o link expira de forma opaca e um dia
- * alguém vai precisar do original.
- *
- * `null` quando não há foto: a mensagem continua sendo só texto, e
- * `semIndefinidos` tira o campo antes de gravar.
- */
-const paraMensagem = (imagem) => (imagem?.link ? {
-  link: String(imagem.link),
-  caminho: String(imagem.caminho || ''),
-  nome: String(imagem.nome || 'foto').slice(0, 160),
-  tipo: String(imagem.tipo || ''),
-  tamanho: Number(imagem.tamanho) || null,
-} : undefined)
-
 export async function enviarMensagemDoCliente(token, { texto, nome, email, imagem = null }) {
   const { app, firestore } = await sessaoAnonima()
   const bd = firestore.getFirestore(app)
   const em = new Date().toISOString()
-  await firestore.addDoc(firestore.collection(bd, COLECAO, token, MENSAGENS), semIndefinidos({
-    autor: 'cliente',
-    nome: String(nome || '').trim().slice(0, 120),
-    email: String(email || '').trim().toLowerCase().slice(0, 160) || null,
-    texto: String(texto || '').trim().slice(0, 2000),
-    imagem: paraMensagem(imagem),
-    em,
-  }))
+  // `corpoDaMensagem` e não um objeto montado aqui: a chave `imagem` precisa
+  // ESTAR AUSENTE quando não há foto, e `semIndefinidos` — que continua
+  // envolvendo tudo como rede de segurança — trocaria `undefined` por `null`,
+  // que é o que quebrou a mensagem de texto em produção.
+  await firestore.addDoc(
+    firestore.collection(bd, COLECAO, token, MENSAGENS),
+    semIndefinidos(corpoDaMensagem({ autor: 'cliente', nome, email, texto, imagem, em })),
+  )
   await resumirConversa(bd, firestore, token, 'cliente', em)
 }
 
@@ -563,14 +546,17 @@ function resumirConversa(bd, firestore, token, autor, em) {
 export async function enviarMensagemDoTime(fb, token, { texto, autorEmail, autorNome, imagem = null }) {
   const bd = fb.firestore.getFirestore(fb.app)
   const em = new Date().toISOString()
-  await fb.firestore.addDoc(fb.firestore.collection(bd, COLECAO, token, MENSAGENS), semIndefinidos({
-    autor: 'time',
-    nome: String(autorNome || autorEmail || 'Comunicação visual').trim().slice(0, 120),
-    email: autorEmail || null,
-    texto: String(texto || '').trim().slice(0, 2000),
-    imagem: paraMensagem(imagem),
-    em,
-  }))
+  await fb.firestore.addDoc(
+    fb.firestore.collection(bd, COLECAO, token, MENSAGENS),
+    semIndefinidos(corpoDaMensagem({
+      autor: 'time',
+      nome: autorNome || autorEmail || 'Comunicação visual',
+      email: autorEmail,
+      texto,
+      imagem,
+      em,
+    })),
+  )
   await resumirConversa(bd, fb.firestore, token, 'time', em)
 }
 

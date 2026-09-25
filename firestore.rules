@@ -271,7 +271,7 @@ service cloud.firestore {
         // porque a foto costuma dizer sozinha o que três linhas não diziam.
         // O que continua proibido é a mensagem vazia dos dois lados.
         && (request.resource.data.texto.size() > 0
-            || ('imagem' in request.resource.data
+            || (request.resource.data.get('imagem', null) != null
                 && request.resource.data.imagem.link is string))
         // A foto tem que estar NO NOSSO armazenamento.
         //
@@ -282,7 +282,15 @@ service cloud.firestore {
         // registro que existe justamente por não poder ser alterado. As regras
         // do Storage limitam o que sobe; esta é o que garante que o link aponte
         // para o que subiu por lá.
-        && (!('imagem' in request.resource.data)
+        //
+        // `get('imagem', null) == null` e NÃO `!('imagem' in ...)`: a chave
+        // pode existir valendo null. Foi exatamente isso que quebrou a
+        // mensagem de texto em produção — `semIndefinidos` grava `null` onde o
+        // código tinha `undefined`, `'imagem' in data` dava verdadeiro, e ler
+        // `.link` de null é erro, que aqui significa negar. Mensagem com foto
+        // passava; sem foto, não. A tolerância a null fica mesmo depois de o
+        // código parar de gravá-lo: as mensagens já gravadas continuam assim.
+        && (request.resource.data.get('imagem', null) == null
             || request.resource.data.imagem.link.matches('https://firebasestorage\\.googleapis\\.com/.*'))
         // Ninguém assina como o outro lado: só quem é do time escreve como
         // time. Sem isto, quem tivesse o link poderia forjar uma autorização
