@@ -100,7 +100,7 @@ service cloud.firestore {
         && d.contestacao.nome is string
         && d.contestacao.nome.size() >= 3
         && d.contestacao.em is string
-        && !('decisao' in d.contestacao);
+        && d.contestacao.get('decisao', null) == null;
     }
 
     // Arquivo de apoio (logo, fonte, manual de marca) não tem veredicto: não é
@@ -157,8 +157,16 @@ service cloud.firestore {
         // Aceitar ou recusar é definitivo. Sem esta linha, uma decisão poderia
         // ser reescrita depois — e um histórico que uma das partes reescreve
         // não resolve discussão nenhuma, que é o problema de origem.
-        && (!('contestacao' in resource.data)
-            || !('decisao' in resource.data.contestacao)
+        //
+        // `get(...) == null` e NÃO `'x' in ...`: TODO envio grava
+        // `contestacao: null`, então `'contestacao' in resource.data` dá
+        // verdadeiro e o passo seguinte lê `'decisao' in null`, que é erro — e
+        // erro aqui significa negar. Foi o que derrubou "Conferi este arquivo"
+        // e "Arquivar" para todos os envios, sem nenhuma relação aparente com
+        // contestação. É o MESMO defeito que quebrou a mensagem de texto no
+        // chat: chave ausente e chave valendo null não são a mesma coisa.
+        && (resource.data.get('contestacao', null) == null
+            || resource.data.contestacao.get('decisao', null) == null
             || request.resource.data.contestacao.decisao == resource.data.contestacao.decisao);
 
       allow delete: if false;

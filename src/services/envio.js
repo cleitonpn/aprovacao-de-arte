@@ -177,7 +177,12 @@ export async function enviarArte(arquivo, dados, aoProgredir) {
       // Quando existe, é ela que autoriza o envio de uma arte reprovada. Sobe
       // sem `decisao`: quem decide é o time, por outro caminho, e as regras
       // recusam a criação se o campo vier preenchido.
-      contestacao: contestacao || null,
+      //
+      // A chave só entra QUANDO HÁ contestação. Gravá-la valendo `null` foi o
+      // que derrubou "Conferi este arquivo": a guarda da regra de `update`
+      // via a chave presente e tentava ler dentro dela. Chave ausente e chave
+      // valendo null não são a mesma coisa para o Firestore.
+      ...(contestacao ? { contestacao } : {}),
       laudo: laudo || null,
       arquivo: {
         nome: arquivo.name,

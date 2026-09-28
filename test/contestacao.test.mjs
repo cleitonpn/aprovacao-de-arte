@@ -222,8 +222,10 @@ test('as regras só deixam subir arte reprovada COM contestação assinada', () 
   assert.match(bloco, /veredicto == 'reprovado' && contestacaoValida\(d\)/)
   assert.match(bloco, /motivo\.size\(\) >= 20/, 'texto com substância é exigido no servidor')
   assert.match(bloco, /nome\.size\(\) >= 3/, 'a assinatura é exigida no servidor')
-  // A linha que impede o desvio virar bypass.
-  assert.match(bloco, /!\('decisao' in d\.contestacao\)/)
+  // A linha que impede o desvio virar bypass. Escrita com `get(..., null)` e
+  // não com `'decisao' in ...`: a chave pode chegar valendo null, e ler dentro
+  // dela é erro — ver `regras-null.test.mjs`.
+  assert.match(bloco, /d\.contestacao\.get\('decisao', null\) == null/)
 })
 
 test('a decisão não pode ser reescrita depois de tomada', () => {
