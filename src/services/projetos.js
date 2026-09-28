@@ -13,7 +13,7 @@ import { normalizarProjeto } from '../data/projeto.js'
 import { semIndefinidos } from '../core/mensagem.js'
 import { visitaAGravar } from '../core/contato.js'
 import { decisaoParaEnvio } from '../core/contestacao.js'
-import { corpoDaMensagem } from '../core/conversa.js'
+import { corpoDaMensagem, CAMPO_VISTO } from '../core/conversa.js'
 
 const COLECAO = 'projetos'
 
@@ -535,8 +535,16 @@ export async function enviarMensagemDoCliente(token, { texto, nome, email, image
  * provocar um aviso à toa. O conteúdo da conversa continua intocável.
  */
 function resumirConversa(bd, firestore, token, autor, em) {
+  // Caminhos pontuados, e NÃO `conversa: {…}`.
+  //
+  // Gravar o mapa inteiro substitui o que estava lá — e desde que o
+  // "visualizado" passou a morar dentro de `conversa`, isso apagaria a marca
+  // do outro lado a cada mensagem nova. O defeito seria sutil: o recibo some
+  // exatamente quando alguém responde, que é quando ninguém está olhando para
+  // ele.
   return firestore.updateDoc(firestore.doc(bd, COLECAO, token), {
-    conversa: { ultimaEm: em, ultimoAutor: autor },
+    'conversa.ultimaEm': em,
+    'conversa.ultimoAutor': autor,
   }).catch((e) => {
     // Falhar aqui não pode derrubar a mensagem, que já foi gravada.
     console.warn('mensagem enviada, mas o resumo da conversa não atualizou', e)
@@ -558,6 +566,26 @@ export async function enviarMensagemDoTime(fb, token, { texto, autorEmail, autor
     })),
   )
   await resumirConversa(bd, fb.firestore, token, 'time', em)
+}
+
+/**
+ * Carimba, no documento do projeto, até onde este lado já leu.
+ *
+ * É o que torna o "visualizado" possível: a marca do localStorage só serve
+ * para apagar a bolinha de quem olhou, e o outro lado não tem acesso a ela.
+ *
+ * Silenciosa quando falha. Um recibo de leitura que não gravou é um incômodo;
+ * uma tela que estoura um erro vermelho porque o recibo não gravou é um
+ * problema — e a conversa em si já aconteceu.
+ */
+export async function marcarConversaVista(token, { ehTime = false, ate, fb = null }) {
+  if (!ate) return
+  const { app, firestore } = fb ? { app: fb.app, firestore: fb.firestore } : await sessaoAnonima()
+  const bd = firestore.getFirestore(app)
+  const campo = ehTime ? CAMPO_VISTO.time : CAMPO_VISTO.cliente
+  await firestore.updateDoc(firestore.doc(bd, COLECAO, token), {
+    [`conversa.${campo}`]: ate,
+  }).catch((e) => console.warn('não foi possível marcar a conversa como vista', e))
 }
 
 /** Ordena aqui, e não na consulta, para não exigir índice: são poucas dezenas. */

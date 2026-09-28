@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import {
-  ouvirConversa, enviarMensagemDoCliente, enviarMensagemDoTime,
+  ouvirConversa, enviarMensagemDoCliente, enviarMensagemDoTime, marcarConversaVista,
 } from '../services/projetos.js'
 import { enviarFotoDaConversa, EXTENSOES_FOTO } from '../services/envio.js'
 import { marcarVisto } from '../store/visto.js'
-import { chaveDaConversa } from '../core/conversa.js'
+import { chaveDaConversa, ultimaMensagemVista, vistoAteQuando } from '../core/conversa.js'
 
 // A conversa entre o cliente e o time, dentro da ferramenta.
 //
@@ -31,7 +31,7 @@ const fmtQuando = (v) => {
   return new Date(ms).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
 }
 
-export default function Conversa({ token, ehTime = false, sessao = null, identidade = null, embutida = false }) {
+export default function Conversa({ token, ehTime = false, sessao = null, identidade = null, embutida = false, conversa = null }) {
   const [mensagens, setMensagens] = useState([])
   const [aberta, setAberta] = useState(false)
   const [texto, setTexto] = useState('')
@@ -90,6 +90,30 @@ export default function Conversa({ token, ehTime = false, sessao = null, identid
       mensagens[mensagens.length - 1].em,
     )
   }, [ehTime, mensagens, token, sessao?.usuario?.email])
+
+  /*
+    A mesma leitura, agora no SERVIDOR — é o que o outro lado enxerga.
+
+    A marca do localStorage acima serve para apagar a bolinha de quem olhou, e
+    só. Para o time saber que o cliente abriu a resposta (a pergunta que faz
+    alguém ligar perguntando "você viu o que eu mandei?"), a marca precisa sair
+    do navegador.
+
+    Carimba a hora da última mensagem DO OUTRO LADO, não a hora do olhar: com o
+    relógio, uma mensagem que chegasse meio segundo depois contaria como vista
+    sem ninguém ter lido. E não grava nada quando não há mensagem do outro lado
+    — evita uma escrita por abertura em toda conversa que começa com a primeira
+    pergunta do cliente.
+  */
+  useEffect(() => {
+    const ate = vistoAteQuando({ mensagens, ehTime })
+    if (!ate) return
+    marcarConversaVista(token, { ehTime, ate, fb: ehTime ? sessao?.fb : null })
+  }, [mensagens, ehTime, token, sessao?.fb])
+
+  // Qual das MINHAS mensagens o outro lado já viu. Só a última recebe o
+  // recibo: repetido embaixo de cada balão vira ruído.
+  const vistaAte = ultimaMensagemVista({ mensagens, ehTime, conversa })
 
   const enviar = async () => {
     const conteudo = texto.trim()
@@ -244,6 +268,11 @@ export default function Conversa({ token, ehTime = false, sessao = null, identid
               </a>
             )}
             {m.texto && <p>{m.texto}</p>}
+            {m.id === vistaAte && (
+              <span className="balao-visto">
+                ✓ Visualizado {ehTime ? 'pelo cliente' : 'pelo time'}
+              </span>
+            )}
           </div>
         ))}
         <div ref={fim} />

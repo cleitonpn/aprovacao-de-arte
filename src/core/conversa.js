@@ -72,3 +72,71 @@ export function corpoDaMensagem({ autor, nome, email, texto, imagem, em }) {
 /** Uma mensagem vazia dos dois lados não é mensagem. */
 export const mensagemTemConteudo = (corpo) =>
   Boolean(corpo?.texto?.trim?.() || corpo?.imagem?.link)
+
+/*
+   O "visualizado".
+
+   Até aqui, "já vi" era só do lado de quem olhava: uma marca no localStorage,
+   que serve para apagar a bolinha de aviso e nada mais. O time não tinha como
+   saber se o cliente abriu a resposta — e essa é a pergunta que faz alguém
+   ligar para perguntar "você viu o que eu mandei?".
+
+   Para o outro lado enxergar, a marca precisa sair do navegador e ir para o
+   documento do projeto. Duas marcas, uma por lado, dentro de `conversa`:
+   `vistoPeloCliente` e `vistoPeloTime`.
+
+   É a HORA DA ÚLTIMA MENSAGEM QUE A PESSOA VIU, não a hora em que ela olhou.
+   A diferença aparece quando chega mensagem nova enquanto a tela está aberta:
+   guardando o instante do olhar, a mensagem que chegou meio segundo depois
+   contaria como vista sem ninguém ter lido.
+*/
+
+/** Onde a marca de cada lado mora, dentro de `conversa`. */
+export const CAMPO_VISTO = { cliente: 'vistoPeloCliente', time: 'vistoPeloTime' }
+
+/**
+ * A última mensagem MINHA que o outro lado já viu.
+ *
+ * Devolve o id, para a tela marcar só essa — e não todas. "Visualizado"
+ * repetido embaixo de cada balão vira ruído; embaixo da última, é a informação
+ * que a pessoa procura: daqui para cima, ele leu.
+ *
+ * @param {object} p
+ * @param {Array} p.mensagens a conversa inteira, em ordem
+ * @param {boolean} p.ehTime quem está olhando a tela
+ * @param {object} p.conversa o resumo gravado no projeto
+ */
+export function ultimaMensagemVista({ mensagens = [], ehTime = false, conversa = null } = {}) {
+  const meuAutor = ehTime ? 'time' : 'cliente'
+  const campoDoOutro = ehTime ? CAMPO_VISTO.cliente : CAMPO_VISTO.time
+  const vistoAte = emMs(conversa?.[campoDoOutro])
+  if (!vistoAte) return null
+
+  let id = null
+  for (const m of mensagens) {
+    if (m?.autor !== meuAutor) continue
+    if (emMs(m.em) > vistoAte) break
+    id = m.id ?? null
+  }
+  return id
+}
+
+/**
+ * Até que instante devo marcar como visto.
+ *
+ * A última mensagem DO OUTRO LADO que está na tela. Marcar pela minha própria
+ * última mensagem não diz nada — eu sempre vi o que eu mesmo escrevi — e
+ * marcar pelo relógio contaria como lido o que ainda vai chegar.
+ *
+ * `null` quando não há nada do outro lado para ver: aí não há o que gravar, e
+ * gravar assim mesmo custaria uma escrita por abertura de tela, em toda
+ * conversa que o cliente abre para fazer a primeira pergunta.
+ */
+export function vistoAteQuando({ mensagens = [], ehTime = false } = {}) {
+  const doOutro = ehTime ? 'cliente' : 'time'
+  let ultima = null
+  for (const m of mensagens) {
+    if (m?.autor === doOutro && emMs(m.em) > emMs(ultima)) ultima = m.em
+  }
+  return ultima
+}

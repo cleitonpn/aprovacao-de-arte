@@ -70,7 +70,17 @@ export default function ConversaFlutuante({
             </button>
           </header>
           <div className="conversa-painel-corpo">
-            <Conversa token={token} ehTime={ehTime} sessao={sessao} identidade={identidade} embutida />
+            {/* `conversa` desce para o recibo de leitura: é dele que sai
+                "Visualizado". Vem do documento do projeto, que as duas telas
+                já escutam ao vivo, então o recibo acende sozinho. */}
+            <Conversa
+              token={token}
+              ehTime={ehTime}
+              sessao={sessao}
+              identidade={identidade}
+              conversa={conversa}
+              embutida
+            />
           </div>
         </section>
       )}

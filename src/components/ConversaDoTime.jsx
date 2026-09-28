@@ -91,7 +91,7 @@ export default function ConversaDoTime({ sessao, projetos = [], feiras = [] }) {
 
           <div className="conversa-painel-corpo">
             {ativo ? (
-              <Conversa token={ativo.token} ehTime sessao={sessao} embutida />
+              <Conversa token={ativo.token} ehTime sessao={sessao} conversa={ativo.conversa} embutida />
             ) : (
               <>
                 {/*

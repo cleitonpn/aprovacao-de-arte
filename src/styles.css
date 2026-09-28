@@ -1877,3 +1877,11 @@ textarea { width: 100%; font: inherit; font-size: 13px; padding: 9px 11px; borde
 .decisao p { margin: 4px 0; font-size: 13.5px; line-height: 1.55; white-space: pre-line; }
 
 .placar-contestacao { margin-top: 14px; border-top: 1px solid var(--borda); padding-top: 12px; }
+
+/* O recibo de leitura, embaixo do último balão que o outro lado viu.
+   Menor e mais apagado que a mensagem: é informação de canto de olho, não
+   parte da conversa — e só aparece uma vez, na última vista. */
+.balao-visto {
+  display: block; margin-top: 4px; font-size: 11.5px; color: var(--suave);
+  text-align: right;
+}
