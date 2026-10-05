@@ -22,6 +22,27 @@ export default function Modal({ titulo, ajuda, aberto, onFechar, children, rodap
   const caixa = useRef(null)
   const anterior = useRef(null)
 
+  /*
+    O `onFechar` vive numa referência, e o efeito de baixo NÃO depende dele.
+
+    Isto não é microotimização: é o conserto de um bug que fazia o campo de
+    texto perder o foco a cada letra digitada. Quem abre a caixa passa
+    `onFechar={() => setAberto(false)}` — uma função nova a cada render, como
+    toda função escrita dentro do JSX. Com ela nas dependências, digitar uma
+    letra virava: estado muda → render → `onFechar` tem identidade nova →
+    React desmonta o efeito e monta de novo. E a limpeza do efeito devolve o
+    foco para `anterior.current`, enquanto a montagem foca a caixa. Resultado:
+    uma letra, o cursor pula para fora, e a pessoa clica no campo outra vez.
+
+    O sintoma apontava para o `<textarea>`; a causa estava aqui, num efeito
+    que não fala de digitação nenhuma.
+
+    A referência quebra o ciclo: o efeito depende só de `aberto`, roda uma vez
+    por abertura, e o Esc continua chamando o `onFechar` mais recente.
+  */
+  const fechar = useRef(onFechar)
+  useEffect(() => { fechar.current = onFechar })
+
   useEffect(() => {
     if (!aberto) return undefined
     anterior.current = document.activeElement
@@ -32,7 +53,7 @@ export default function Modal({ titulo, ajuda, aberto, onFechar, children, rodap
     // tarefa, sem ler o título que explica qual tarefa é.
     const t = setTimeout(() => caixa.current?.focus(), 0)
 
-    const aoTeclar = (e) => { if (e.key === 'Escape') onFechar() }
+    const aoTeclar = (e) => { if (e.key === 'Escape') fechar.current?.() }
     window.addEventListener('keydown', aoTeclar)
     return () => {
       clearTimeout(t)
@@ -40,7 +61,7 @@ export default function Modal({ titulo, ajuda, aberto, onFechar, children, rodap
       document.body.style.overflow = rolagem
       anterior.current?.focus?.()
     }
-  }, [aberto, onFechar])
+  }, [aberto])
 
   if (!aberto) return null
 

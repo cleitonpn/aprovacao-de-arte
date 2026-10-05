@@ -20,6 +20,14 @@ export default function Tutorial({ aberto, onFechar, onVerApoio }) {
   const caixa = useRef(null)
   const focoAnterior = useRef(null)
 
+  // Pelo mesmo motivo do `Modal`: `onFechar` vem do JSX de quem abre e tem
+  // identidade nova a cada render. Na lista de dependências, ele remonta o
+  // efeito à toa — e a limpeza do efeito arranca o foco de onde a pessoa
+  // estava. Aqui não há campo de texto para perder letras, mas quem navega
+  // por teclado era devolvido ao começo da página no meio da leitura.
+  const fechar = useRef(onFechar)
+  useEffect(() => { fechar.current = onFechar })
+
   useEffect(() => {
     if (!aberto) return undefined
 
@@ -28,7 +36,7 @@ export default function Tutorial({ aberto, onFechar, onVerApoio }) {
     focoAnterior.current = document.activeElement
     caixa.current?.focus()
 
-    const aoTeclar = (e) => { if (e.key === 'Escape') onFechar() }
+    const aoTeclar = (e) => { if (e.key === 'Escape') fechar.current?.() }
     document.addEventListener('keydown', aoTeclar)
 
     // Trava a rolagem do fundo: sem isto, rolar dentro do tutorial no celular
@@ -41,7 +49,7 @@ export default function Tutorial({ aberto, onFechar, onVerApoio }) {
       document.body.style.overflow = overflowAnterior
       focoAnterior.current?.focus?.()
     }
-  }, [aberto, onFechar])
+  }, [aberto])
 
   if (!aberto) return null
 
