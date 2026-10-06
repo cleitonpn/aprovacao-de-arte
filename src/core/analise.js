@@ -9,7 +9,7 @@ import { carregarBitmap, amostraReduzida, recortesNativos, fracaoChapada, miniat
 import { paraCinza, blocagem, conteudoNaMargem, bordaUniforme, estatisticasCor, larguraDeBorda, bordaPorRegiao,
 } from './metricas.js'
 import { analisarEspectro, classificarDeficit } from './espectro.js'
-import { avaliar } from './regras.js'
+import { avaliar, exigencia } from './regras.js'
 import { fonteDeBitmap, fonteDePdf } from './recorte.js'
 
 const CM_POR_POL = 2.54
@@ -49,22 +49,75 @@ function analisarRecortes(recortes) {
 }
 
 /**
+ * As escalas que a ferramenta reconhece sozinha.
+ *
+ * É a MESMA lista do seletor da tela, e um teste garante que continue sendo:
+ * uma escala que o cliente pode escolher à mão e a ferramenta não sabe
+ * adivinhar é exatamente o buraco que esta função existe para tapar.
+ */
+export const ESCALAS = [2, 4, 10]
+
+/** Quanto o arquivo pode desviar do alvo e ainda ser aquela escala. */
+const TOLERANCIA_ESCALA = 0.06
+
+/**
  * A arte foi montada reduzida?
  *
  * Compara o tamanho que o ARQUIVO declara com o da peça cadastrada. Uma lona de
  * 275 cm entregue num arquivo de 27,5 cm não é um erro de medida: é o designer
  * trabalhando a 1:10, que é praxe no grande formato.
  *
- * Exportada para poder ser testada — ela decide veredicto, e um falso positivo
- * aqui aprova uma arte que está de fato pequena demais.
+ * Duas coisas que a primeira versão errava, e que custaram reprovação a quem
+ * tinha feito tudo certo:
+ *
+ * 1. Ela comparava só com o tamanho de CORTE. Mas o cartão da peça manda
+ *    montar COM SANGRIA — "Monte o arquivo neste tamanho: 130 × 295 cm" — e o
+ *    designer que obedece entrega um arquivo que, na escala certa, bate com
+ *    130 × 295 e não com 110 × 275. Num caso real de 110 × 275 com 10 cm de
+ *    sangria, o arquivo 1:4 dava 3,75× o corte: fora da tolerância por pouco,
+ *    escala não reconhecida, arte reprovada por tamanho. A ferramenta mandava
+ *    fazer de um jeito e reprovava quem fizesse. Esta mesma lição já tinha
+ *    sido aprendida DUAS vezes em `regras.js` (na proporção e na dimensão);
+ *    esta função foi a única que não recebeu o recado.
+ *
+ * 2. Ela olhava só a LARGURA. Exigir que os dois lados concordem com o mesmo
+ *    fator é teste bem mais forte — e aqui isso importa mais do que parece,
+ *    porque um falso positivo não dá erro: ele APROVA silenciosamente uma arte
+ *    que está de fato pequena demais, e o erro só aparece impresso.
+ *
+ * Exportada para poder ser testada: ela decide veredicto.
+ *
+ * @param {{largura:number, altura:number}|null} arquivoCm tamanho declarado
+ * @param {{larguraCm:number, alturaCm:number}} peca tamanho de corte
+ * @param {number} sangriaCm sangria por lado já exigida desta peça
  */
-export function escalaProvavel(declaradoCm, pecaCm) {
-  if (!declaradoCm || declaradoCm <= 0 || !pecaCm || pecaCm <= 0) return null
-  const razao = pecaCm / declaradoCm
-  for (const f of [10, 4, 2]) {
-    if (Math.abs(razao - f) / f < 0.06) return f
+export function escalaProvavel(arquivoCm, peca, sangriaCm = 0) {
+  const l = Number(arquivoCm?.largura)
+  const a = Number(arquivoCm?.altura)
+  if (!(l > 0) || !(a > 0)) return null
+  if (!(peca?.larguraCm > 0) || !(peca?.alturaCm > 0)) return null
+
+  const s = Number(sangriaCm) > 0 ? Number(sangriaCm) : 0
+  const alvos = [
+    { l: peca.larguraCm, a: peca.alturaCm },
+    { l: peca.larguraCm + 2 * s, a: peca.alturaCm + 2 * s },
+  ]
+
+  // O pior dos dois lados contra o melhor dos dois alvos: os dois lados
+  // precisam bater, mas tanto faz se o arquivo veio no corte ou com sangria.
+  const desvioDe = (f) => Math.min(...alvos.map((t) => Math.max(
+    Math.abs(l * f - t.l) / t.l,
+    Math.abs(a * f - t.a) / t.a,
+  )))
+
+  let melhor = null
+  for (const f of ESCALAS) {
+    const desvio = desvioDe(f)
+    if (desvio <= TOLERANCIA_ESCALA && (!melhor || desvio < melhor.desvio)) {
+      melhor = { f, desvio }
+    }
   }
-  return null
+  return melhor?.f ?? null
 }
 
 async function medirRaster(blob, formato, meta, peca, perfil) {
@@ -217,7 +270,8 @@ export async function analisar(arquivo, peca, perfil, opcoes = {}) {
       recortes: r.recortes,
       densidadeDeclarada: meta.densidade || null,
       tamanhoDeclaradoCm: declaradoCm ? { largura: declaradoCm, altura: (r.altura / meta.densidade) * CM_POR_POL } : null,
-      escalaSugerida: fator === 1 ? escalaProvavel(declaradoCm, peca.larguraCm) : null,
+      // A escala não é decidida aqui: ver `escalaDetectada` em `analisar`, que
+      // é onde a sangria exigida desta peça é conhecida.
       qualidadeJpeg: formato === 'jpeg' ? meta.qualidade : null,
       cmyk: formato === 'jpeg' ? meta.cmyk : false,
       temICC: meta.temICC,
@@ -234,10 +288,10 @@ export async function analisar(arquivo, peca, perfil, opcoes = {}) {
   //
   // Arte em escala é praxe no grande formato: o designer monta a 1:10 a 300
   // dpi, o que dá 30 dpi no tamanho final e está correto. A ferramenta já
-  // DETECTAVA isso — `escalaSugerida` é calculada desde sempre — e nunca disse
-  // a ninguém: nenhuma tela lia o campo. Um cliente real levou DEZ reprovações
-  // seguidas por causa de um seletor que ele não sabia que existia, enquanto a
-  // ferramenta sabia a resposta e calava.
+  // DETECTAVA isso desde sempre e nunca disse a ninguém: nenhuma tela lia o
+  // campo. Um cliente real levou DEZ reprovações seguidas por causa de um
+  // seletor que ele não sabia que existia, enquanto a ferramenta sabia a
+  // resposta e calava.
   //
   // Agora ela aplica sozinha. Custa uma segunda medição, e só no caso em que a
   // escala estava errada — o que hoje custa dez envios recusados.
@@ -247,7 +301,13 @@ export async function analisar(arquivo, peca, perfil, opcoes = {}) {
   // é exatamente quem não vai saber o que fazer com o aviso. A decisão continua
   // reversível — o seletor está na tela e o laudo diz, com todas as letras,
   // qual escala foi considerada.
-  const detectada = escalaFator === 1 ? medidas.escalaSugerida : null
+  //
+  // A sangria entra na conta porque o cartão da peça manda montar COM ela.
+  // Sem isso, o cliente que seguiu a instrução à risca era o que a detecção
+  // não reconhecia — e levava a reprovação.
+  const detectada = escalaFator === 1
+    ? escalaProvavel(medidas.tamanhoDeclaradoCm, peca, exigencia(perfil, politica).sangriaMm / 10)
+    : null
   if (detectada) {
     await andar('escala')
     medidas = await medir(detectada)
@@ -549,7 +609,7 @@ async function medirPdf(doc, base, peca, perfil, escalaFator, arquivo = null) {
     // enquanto NÃO decide veredicto — ver a nota em `regras.js`.
     nitidezRegioes: regioes,
     tamanhoDeclaradoCm: { largura: declaradoLarguraCm, altura: declaradoAlturaCm },
-    escalaSugerida: escalaFator === 1 ? escalaProvavel(info.larguraMm / 10, peca.larguraCm) : null,
+    // Idem: quem decide a escala é `analisar`.
     cmyk: false,
     temICC: null,
     temAlfa: false,

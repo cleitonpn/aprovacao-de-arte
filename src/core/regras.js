@@ -612,14 +612,24 @@ export function avaliar(ctx) {
     }
   }
 
-  // ------------------------------------------------- escala provável do arquivo
-  if (medidas.escalaSugerida && medidas.escalaSugerida !== 1) {
+  // ------------------------------------------------- escala de trabalho usada
+  //
+  // Aqui havia um aviso pedindo ao cliente que CONFIRMASSE a escala no seletor.
+  // Ele já não podia aparecer: desde que a ferramenta passou a aplicar a escala
+  // sozinha, o campo que alimentava este aviso era zerado na segunda medição.
+  // Aviso que nunca aparece é pior do que aviso nenhum, porque passa a
+  // impressão de que o assunto está coberto.
+  //
+  // No lugar dele, o laudo conta o que de fato aconteceu. Isso importa no
+  // papel: o laudo é o que vai para quem montou a arte, e "75 dpi" sem a
+  // escala ao lado parece uma reprovação sem explicação.
+  if (escala > 1) {
     add({
       id: 'escala',
       nivel: 'info',
-      titulo: `O arquivo parece estar em escala 1:${medidas.escalaSugerida}`,
-      detalhe: `O tamanho declarado no arquivo é cerca de ${medidas.escalaSugerida}× menor que a peça — prática normal em grande formato.`,
-      acao: `Confirme a escala no campo acima para a conta de resolução sair correta.`,
+      titulo: `Arquivo lido na escala 1:${escala}`,
+      detalhe: `A arte foi montada ${escala}× menor que a peça — praxe no grande formato. Os tamanhos e a resolução abaixo já estão convertidos para o tamanho impresso.`,
+      acao: null,
     })
   }
 
