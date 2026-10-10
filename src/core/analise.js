@@ -239,13 +239,39 @@ export async function analisar(arquivo, peca, perfil, opcoes = {}) {
   // Aberto uma vez e reaproveitado. Ver a nota em `medirPdf`: reabrir não é só
   // caro, é impossível — o buffer já foi transferido para o worker.
   let docPdf = null
+  const abrirDocPdf = async () => {
+    if (!docPdf) {
+      const { abrirPdf } = await import('./pdf.js')
+      docPdf = await abrirPdf(buffer)
+    }
+    return docPdf
+  }
+
+  /**
+   * O tamanho que o arquivo DECLARA, em cm, sem medir nada.
+   *
+   * No PDF sai do cabeçalho da página; no JPG/PNG, dos pixels e da densidade.
+   * Nos dois casos é leitura de metadado — nada é rasterizado, descomprimido
+   * nem percorrido. É isso que permite reconhecer a escala antes da medição,
+   * em vez de medir, descobrir a escala e medir tudo de novo.
+   */
+  const tamanhoDeclarado = async () => {
+    if (formato === 'pdf' || formato === 'ai') {
+      const { tamanhoDaPagina } = await import('./pdf.js')
+      const p = await tamanhoDaPagina(await abrirDocPdf(), 1)
+      return { largura: p.larguraMm / 10, altura: p.alturaMm / 10 }
+    }
+    const meta = formato === 'jpeg' ? lerJpeg(buffer) : lerPng(buffer)
+    if (!meta?.densidade || !meta.largura || !meta.altura) return null
+    return {
+      largura: (meta.largura / meta.densidade) * CM_POR_POL,
+      altura: (meta.altura / meta.densidade) * CM_POR_POL,
+    }
+  }
+
   const medir = async (fator) => {
     if (formato === 'pdf' || formato === 'ai') {
-      if (!docPdf) {
-        const { abrirPdf } = await import('./pdf.js')
-        docPdf = await abrirPdf(buffer)
-      }
-      return medirPdf(docPdf, base, peca, perfil, fator, arquivo)
+      return medirPdf(await abrirDocPdf(), base, peca, perfil, fator, arquivo)
     }
 
     const meta = formato === 'jpeg' ? lerJpeg(buffer) : lerPng(buffer)
@@ -281,9 +307,6 @@ export async function analisar(arquivo, peca, perfil, opcoes = {}) {
     }
   }
 
-  await andar('medindo')
-  let medidas = await medir(escalaFator)
-
   // A escala que o cliente esqueceu de trocar.
   //
   // Arte em escala é praxe no grande formato: o designer monta a 1:10 a 300
@@ -292,9 +315,6 @@ export async function analisar(arquivo, peca, perfil, opcoes = {}) {
   // campo. Um cliente real levou DEZ reprovações seguidas por causa de um
   // seletor que ele não sabia que existia, enquanto a ferramenta sabia a
   // resposta e calava.
-  //
-  // Agora ela aplica sozinha. Custa uma segunda medição, e só no caso em que a
-  // escala estava errada — o que hoje custa dez envios recusados.
   //
   // Aplicar em vez de sugerir é uma escolha: a alternativa é um aviso que o
   // cliente precisa entender e agir, e quem não sabia da existência da escala
@@ -305,14 +325,26 @@ export async function analisar(arquivo, peca, perfil, opcoes = {}) {
   // A sangria entra na conta porque o cartão da peça manda montar COM ela.
   // Sem isso, o cliente que seguiu a instrução à risca era o que a detecção
   // não reconhecia — e levava a reprovação.
+  //
+  // A DETECÇÃO VEM ANTES DA MEDIÇÃO, e isso é a diferença entre segundos e
+  // minutos. Antes a ferramenta media com a escala errada, descobria a certa
+  // no resultado e MEDIA TUDO DE NOVO. A segunda passagem é a cara: a escala
+  // multiplica o tamanho impresso, e com ele a resolução do render — num
+  // arquivo 1:4 o segundo render tem dezesseis vezes mais pixels que o
+  // primeiro. Pior no arquivo pesado, em que o render do navegador falha e a
+  // ferramenta cai na leitura direta da imagem embutida: aquele caminho relê o
+  // arquivo do disco e descomprime centenas de megabytes, e rodava DUAS vezes.
+  //
+  // O tamanho declarado não precisa de medição nenhuma para ser lido — está no
+  // cabeçalho. Lendo ele primeiro, mede-se uma vez só, já na escala certa.
   const detectada = escalaFator === 1
-    ? escalaProvavel(medidas.tamanhoDeclaradoCm, peca, exigencia(perfil, politica).sangriaMm / 10)
+    ? escalaProvavel(await tamanhoDeclarado(), peca, exigencia(perfil, politica).sangriaMm / 10)
     : null
-  if (detectada) {
-    await andar('escala')
-    medidas = await medir(detectada)
-  }
   const escalaUsada = detectada || escalaFator
+  if (detectada) await andar('escala')
+
+  await andar('medindo')
+  const medidas = await medir(escalaUsada)
 
   await andar('decidindo')
   const resultado = avaliar({ peca, perfil, medidas, escalaFator: escalaUsada, politica, detectorNitidez })

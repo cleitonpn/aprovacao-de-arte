@@ -78,8 +78,12 @@ export default function Upload({ onArquivo, analisando, etapa, nomeAtual, titulo
 const ETAPAS = [
   { id: 'lendo', texto: 'Lendo o arquivo' },
   { id: 'abrindo', texto: 'Abrindo a arte' },
+  // A escala vem ANTES de medir: é ela que define em que tamanho impresso a
+  // medição acontece. Enquanto a ferramenta media primeiro e corrigia depois,
+  // este passo dizia "Refazendo a conta" — e refazer era literal: a arte
+  // inteira era medida de novo, do render ao último pixel.
+  { id: 'escala', texto: 'Reconhecendo a escala em que a arte foi montada' },
   { id: 'medindo', texto: 'Medindo resolução, proporção e nitidez' },
-  { id: 'escala', texto: 'Refazendo a conta na escala que reconhecemos' },
   { id: 'decidindo', texto: 'Comparando com o que esta peça exige' },
   { id: 'pronto', texto: 'Pronto' },
 ]

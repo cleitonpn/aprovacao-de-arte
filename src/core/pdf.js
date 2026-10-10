@@ -79,6 +79,27 @@ export async function larguraEmPontos(doc, numero = 1) {
 }
 
 /**
+ * O tamanho que a página DECLARA, em milímetros. Nada é desenhado nem lido.
+ *
+ * Existe para a detecção de escala poder acontecer ANTES da medição. É a mesma
+ * conta que `inspecionarPagina` faz nas suas primeiras linhas, mas sem o resto:
+ * aquela função percorre a lista de operadores da página para achar as imagens,
+ * e aqui não há nada que precise disso. A diferença é entre ler o cabeçalho e
+ * abrir o arquivo inteiro — e é ela que evita medir a arte duas vezes.
+ */
+export async function tamanhoDaPagina(doc, numero = 1) {
+  const pagina = await doc.getPage(numero)
+  const [x0, y0, x1, y1] = pagina.view
+  const rotacionada = ((pagina.rotate % 360) + 360) % 360 % 180 === 90
+  const larguraPt = Math.abs(x1 - x0)
+  const alturaPt = Math.abs(y1 - y0)
+  return {
+    larguraMm: (rotacionada ? alturaPt : larguraPt) * MM_POR_PT,
+    alturaMm: (rotacionada ? larguraPt : alturaPt) * MM_POR_PT,
+  }
+}
+
+/**
  * Rasteriza só um PEDAÇO da página, na resolução que se pedir.
  *
  * Existe por causa do simulador de distância, e é a única forma de ele não
