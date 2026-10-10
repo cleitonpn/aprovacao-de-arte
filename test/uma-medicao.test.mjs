@@ -79,6 +79,60 @@ test('a detecção de escala não depende de nada que precise ser medido', () =>
   )
 })
 
+/** O corpo de `medirPdf`, sem comentários. */
+function corpoDeMedirPdf() {
+  const texto = fonte('../src/core/analise.js')
+  const inicio = texto.indexOf('async function medirPdf')
+  assert.notEqual(inicio, -1, 'não achei `medirPdf` — o teste precisa ser atualizado')
+  const fim = texto.indexOf('\n}\n', inicio)
+  return texto
+    .slice(inicio, fim)
+    .split('\n')
+    .filter((l) => {
+      const t = l.trim()
+      return !t.startsWith('//') && !t.startsWith('*') && !t.startsWith('/*')
+    })
+    .join('\n')
+}
+
+test('a página é rasterizada uma vez por medição', () => {
+  // Rasterizar um PDF não custa pelo tamanho do canvas: custa por decodificar
+  // a imagem embutida, que é a mesma para 400 px e para 2.559. Era o trabalho
+  // mais caro da análise, feito duas vezes — uma na inspeção, outra na medida.
+  const chamadas = [...corpoDeMedirPdf().matchAll(/renderizarPagina\(/g)]
+  assert.equal(chamadas.length, 1, 'mais de uma rasterização em `medirPdf`')
+})
+
+test('a inspeção não rasteriza por conta própria', () => {
+  const corpo = corpoDeMedirPdf()
+  const linha = corpo.split('\n').find((l) => l.includes('inspecionarPagina('))
+  assert.ok(linha, 'não achei a chamada de `inspecionarPagina`')
+  assert.match(
+    linha, /rasterizar:\s*false/,
+    'a inspeção voltou a rasterizar a página por conta própria — é a segunda '
+    + 'decodificação da imagem embutida, e ela não aparece em lugar nenhum',
+  )
+})
+
+test('a inspeção vem depois do render que ela aproveita', () => {
+  const corpo = corpoDeMedirPdf()
+  assert.ok(
+    corpo.indexOf('renderizarPagina(') < corpo.indexOf('inspecionarPagina('),
+    'a inspeção está antes do render: sem a rasterização feita, ela não tem '
+    + 'os XObjects resolvidos para ler',
+  )
+})
+
+test('a rasterização tem prazo para terminar', () => {
+  // `render().promise` não tem fim garantido. Sem prazo, uma arte que o pdf.js
+  // não dá conta de desenhar deixa a tela parada no mesmo passo para sempre —
+  // sem erro, sem veredicto e sem saída. Houve relato de cinco minutos.
+  const pdf = fonte('../src/core/pdf.js')
+  assert.match(pdf, /PRAZO_RENDER_MS/, 'o prazo de render sumiu')
+  assert.match(pdf, /Promise\.race\(\[tarefa\.promise, prazo\]\)/, 'o render voltou a esperar sem prazo')
+  assert.match(pdf, /tarefa\.cancel\(\)/, 'o render estourado não é mais cancelado')
+})
+
 test('a tela anuncia a escala antes de medir', () => {
   // A lista de etapas promete ser a ordem REAL. Se ela mentir, a etapa some da
   // tela no instante em que aparece, ou a lista anda para trás.

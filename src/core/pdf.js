@@ -57,7 +57,26 @@ export async function abrirPdf(arrayBuffer) {
  * Rasteriza a página num canvas. Serve tanto para a pré-visualização quanto
  * para rodar as métricas de imagem sobre PDFs que são só um JPG embrulhado.
  */
-export async function renderizarPagina(doc, numero = 1, larguraAlvo = 1400) {
+/**
+ * Quanto tempo a rasterização pode levar antes de ser abandonada.
+ *
+ * Existe porque `render().promise` não tem fim garantido: diante de uma arte
+ * que o pdf.js não dá conta de desenhar, ele não falha — fica. E "fica" na
+ * interface é a tela de análise parada no mesmo passo, sem erro, sem veredicto
+ * e sem saída, enquanto o cliente espera. Houve relato de cinco minutos.
+ *
+ * O caminho de desistência JÁ EXISTE e é bom: sem rasterização a ferramenta lê
+ * a imagem direto do PDF, ainda mede a nitidez, e a peça vai para conferência
+ * humana sem miniatura. O que faltava era chegar nele — o código supunha que
+ * a falha viria como exceção, e ela vem como espera infinita.
+ *
+ * 90 s é folgado de propósito. Uma parede grande e honesta leva dezenas de
+ * segundos num notebook modesto, e cortar cedo demais custaria a miniatura de
+ * quem não fez nada de errado.
+ */
+export const PRAZO_RENDER_MS = 90000
+
+export async function renderizarPagina(doc, numero = 1, larguraAlvo = 1400, prazoMs = PRAZO_RENDER_MS) {
   const pagina = await doc.getPage(numero)
   const base = pagina.getViewport({ scale: 1 })
   const escala = Math.min(4, Math.max(0.2, larguraAlvo / base.width))
@@ -68,7 +87,30 @@ export async function renderizarPagina(doc, numero = 1, larguraAlvo = 1400) {
   const ctx = canvas.getContext('2d', { willReadFrequently: true })
   ctx.fillStyle = '#fff'
   ctx.fillRect(0, 0, canvas.width, canvas.height)
-  await pagina.render({ canvasContext: ctx, viewport }).promise
+
+  const tarefa = pagina.render({ canvasContext: ctx, viewport })
+  // O `catch` solto evita que a rejeição que chega DEPOIS do prazo vire uma
+  // rejeição não tratada: a corrida abaixo já foi embora e ninguém mais escuta.
+  tarefa.promise.catch(() => {})
+
+  let relogio
+  const prazo = new Promise((_, rejeitar) => {
+    relogio = setTimeout(() => rejeitar(new Error('prazo-de-render')), prazoMs)
+  })
+
+  try {
+    await Promise.race([tarefa.promise, prazo])
+  } catch (erro) {
+    // Pedir o cancelamento importa: sem ele o pdf.js continua desenhando em
+    // segundo plano, numa thread que a interface precisa para responder.
+    try { tarefa.cancel() } catch { /* já terminou */ }
+    canvas.width = 0
+    canvas.height = 0
+    throw erro
+  } finally {
+    clearTimeout(relogio)
+  }
+
   return { canvas, pagina, escala }
 }
 
@@ -134,7 +176,7 @@ export async function renderizarRecorte(doc, numero, { escala, sx, sy, largura, 
  * Levanta a estrutura da página: tamanho, presença de vetor e texto, e a
  * resolução efetiva de cada imagem embutida no tamanho em que foi colocada.
  */
-export async function inspecionarPagina(doc, numero = 1) {
+export async function inspecionarPagina(doc, numero = 1, { rasterizar = true } = {}) {
   const pagina = await doc.getPage(numero)
   const [x0, y0, x1, y1] = pagina.view
   const larguraPt = Math.abs(x1 - x0)
@@ -154,10 +196,18 @@ export async function inspecionarPagina(doc, numero = 1) {
 
   // Renderizar antes de ler os objetos: é o render que resolve os XObjects
   // de imagem dentro do worker do pdf.js.
-  try {
-    await renderizarPagina(doc, numero, 400)
-  } catch {
-    /* uma página que não rasteriza ainda pode ter sua estrutura lida */
+  //
+  // `rasterizar: false` existe para quem JÁ rasterizou a página. É o caso da
+  // análise, e a diferença é enorme: rasterizar um PDF não custa pelo tamanho
+  // do canvas, custa por decodificar a imagem embutida — centenas de megabytes
+  // de pixel, independentemente de a saída ter 400 px ou 2.559. Fazer isso
+  // duas vezes na mesma medição era o que deixava a tela parada em "Medindo".
+  if (rasterizar) {
+    try {
+      await renderizarPagina(doc, numero, 400)
+    } catch {
+      /* uma página que não rasteriza ainda pode ter sua estrutura lida */
+    }
   }
 
   const { OPS } = pdfjsLib

@@ -474,39 +474,35 @@ async function medirPdf(doc, base, peca, perfil, escalaFator, arquivo = null) {
   // import dinâmico: o pdf.js é pesado e só entra em cena quando é PDF
   const {
     inspecionarPagina, renderizarPagina, fontesNaoIncorporadas, larguraEmPontos,
+    tamanhoDaPagina,
   } = await import('./pdf.js')
-  const info = await inspecionarPagina(doc, 1)
-  const fontesFaltando = await fontesNaoIncorporadas(doc, 1)
-
-  const declaradoLarguraCm = (info.larguraMm / 10) * escalaFator
-  const declaradoAlturaCm = (info.alturaMm / 10) * escalaFator
+  // O tamanho da página sai do cabeçalho, sem rasterizar nada. É ele que diz em
+  // que resolução a página precisa ser rasterizada — então vem primeiro.
+  const pagina = await tamanhoDaPagina(doc, 1)
+  const declaradoLarguraCm = (pagina.larguraMm / 10) * escalaFator
+  const declaradoAlturaCm = (pagina.alturaMm / 10) * escalaFator
 
   let larguraPx
   let alturaPx
   let dpiImagens = null
 
-  if (info.puroVetor) {
-    larguraPx = null
-    alturaPx = null
-  } else if (info.imagemPrincipal) {
-    // DPI da imagem embutida no tamanho FINAL: a escala de trabalho divide.
-    const dpiFinalH = info.imagemPrincipal.dpi / escalaFator
-    const dpiFinalV = info.imagemPrincipal.dpiV / escalaFator
-    larguraPx = Math.round((dpiFinalH * peca.larguraCm) / CM_POR_POL)
-    alturaPx = Math.round((dpiFinalV * peca.alturaCm) / CM_POR_POL)
-    dpiImagens = info.imagens.map((im) => ({
-      dpi: im.dpi / escalaFator,
-      px: im.px,
-      py: im.py,
-      larguraCm: (im.larguraMm / 10) * escalaFator,
-    }))
-  }
-
-  // UM render, usado para três coisas: detectar que ele falhou, medir a
-  // nitidez real e gerar a miniatura. Antes eram dois (400 px na inspeção,
-  // 900 px na prévia) e nenhum servia para medir — 900 px numa peça de 120 cm
-  // dão 19 dpi, resolução em que TODA arte parece nítida, inclusive a
-  // ampliada. Medido: a 19 dpi o arquivo ruim aparece mais nítido que o bom.
+  // UM render, e desta vez é verdade.
+  //
+  // Ele serve para quatro coisas: detectar que falhou, medir a nitidez real,
+  // gerar a miniatura e resolver os XObjects de imagem que a inspeção abaixo
+  // precisa ler. Essa última é a novidade, e era o furo: `inspecionarPagina`
+  // rasterizava a página por conta própria, a 400 px, e este comentário
+  // afirmava que havia só um render. Havia dois.
+  //
+  // O engano é fácil porque 400 px parece barato. Não é: rasterizar um PDF não
+  // custa pelo tamanho do canvas, custa por DECODIFICAR a imagem embutida —
+  // centenas de megabytes de pixel, iguais para 400 px e para 2.559. Era o
+  // trabalho mais caro da análise inteira, feito duas vezes, e foi disso que
+  // veio a tela parada em "Medindo".
+  //
+  // A ordem também mudou: antes a inspeção vinha primeiro porque dela saía o
+  // tamanho da página. Agora o tamanho vem do cabeçalho, de graça, e a
+  // inspeção pode vir depois — aproveitando o render que já aconteceu.
   const larguraAnalise = larguraParaAnalise(declaradoLarguraCm, declaradoAlturaCm)
   let miniaturaUrl = null
   let visualIndisponivel = false
@@ -536,7 +532,36 @@ async function medirPdf(doc, base, peca, perfil, escalaFator, arquivo = null) {
     canvas.width = 0
     canvas.height = 0
   } catch {
+    // Inclui o estouro de prazo: uma página que o pdf.js não termina de
+    // desenhar é, para todos os efeitos, uma página que não rasteriza.
     visualIndisponivel = true
+  }
+
+  // A estrutura da página, lida SEM rasterizar de novo.
+  //
+  // Se o render acima falhou, tanto faz: a lista de operadores continua
+  // legível, e as medidas da imagem vêm dos próprios argumentos do operador.
+  // Mandar `inspecionarPagina` tentar rasterizar aqui seria repetir, no
+  // arquivo que acabou de provar ser pesado demais, exatamente o trabalho que
+  // já demorou.
+  const info = await inspecionarPagina(doc, 1, { rasterizar: false })
+  const fontesFaltando = await fontesNaoIncorporadas(doc, 1)
+
+  if (info.puroVetor) {
+    larguraPx = null
+    alturaPx = null
+  } else if (info.imagemPrincipal) {
+    // DPI da imagem embutida no tamanho FINAL: a escala de trabalho divide.
+    const dpiFinalH = info.imagemPrincipal.dpi / escalaFator
+    const dpiFinalV = info.imagemPrincipal.dpiV / escalaFator
+    larguraPx = Math.round((dpiFinalH * peca.larguraCm) / CM_POR_POL)
+    alturaPx = Math.round((dpiFinalV * peca.alturaCm) / CM_POR_POL)
+    dpiImagens = info.imagens.map((im) => ({
+      dpi: im.dpi / escalaFator,
+      px: im.px,
+      py: im.py,
+      larguraCm: (im.larguraMm / 10) * escalaFator,
+    }))
   }
 
   // O NAVEGADOR DESISTIU; a ferramenta ainda não precisa desistir.
