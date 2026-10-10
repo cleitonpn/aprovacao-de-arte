@@ -8,6 +8,7 @@
 
 import * as pdfjsLib from 'pdfjs-dist'
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
+import { comPrazo } from './prazo.js'
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl
 
@@ -75,6 +76,18 @@ export async function abrirPdf(arrayBuffer) {
  * quem não fez nada de errado.
  */
 export const PRAZO_RENDER_MS = 90000
+
+/**
+ * O mesmo para ler a ESTRUTURA da página.
+ *
+ * Mais curto que o do render porque aqui não há nada bonito a perder: o render
+ * entrega a miniatura que o cliente vê, e esperar por ela vale a pena; a
+ * estrutura entrega o dpi das imagens, e sem ele a peça apenas vai para a
+ * conferência humana — que é para onde ela iria de qualquer jeito num arquivo
+ * que a ferramenta não consegue abrir.
+ */
+export const PRAZO_ESTRUTURA_MS = 45000
+
 
 export async function renderizarPagina(doc, numero = 1, larguraAlvo = 1400, prazoMs = PRAZO_RENDER_MS) {
   const pagina = await doc.getPage(numero)
@@ -192,6 +205,10 @@ export async function inspecionarPagina(doc, numero = 1, { rasterizar = true } =
     temTransparencia: false,
     temSombra: false,
     imagens: [],
+    // Verdadeiro quando a leitura da página não terminou no prazo. Quem usa o
+    // resultado precisa saber a diferença entre "não há imagem" e "não deu
+    // tempo de olhar".
+    estruturaIncompleta: false,
   }
 
   // Renderizar antes de ler os objetos: é o render que resolve os XObjects
@@ -211,7 +228,29 @@ export async function inspecionarPagina(doc, numero = 1, { rasterizar = true } =
   }
 
   const { OPS } = pdfjsLib
-  const lista = await pagina.getOperatorList()
+
+  // A lista de operadores também tem prazo.
+  //
+  // Pôr prazo só na rasterização tapava metade do buraco. `getOperatorList`
+  // não é leitura de índice: o pdf.js interpreta a página inteira para montá-la
+  // — e decodifica as imagens no caminho. Num arquivo de dezenas de megabytes
+  // com texto, vetor e foto grande junto, ela demora tanto quanto o desenho, e
+  // também não tem fim garantido.
+  //
+  // Sem estrutura a ferramenta não fica sem resposta: fica sem o dpi das
+  // imagens embutidas, o que já leva a peça para a conferência humana. É um
+  // resultado pior, e é muito melhor que uma tela parada.
+  const lista = await comPrazo(
+    pagina.getOperatorList(),
+    PRAZO_ESTRUTURA_MS,
+    'prazo-da-estrutura',
+  ).catch(() => null)
+
+  if (!lista) {
+    info.estruturaIncompleta = true
+    return finalizar(info)
+  }
+
   let ctm = [1, 0, 0, 1, 0, 0]
   const pilha = []
 
@@ -282,6 +321,18 @@ export async function inspecionarPagina(doc, numero = 1, { rasterizar = true } =
     }
   }
 
+  return finalizar(info)
+}
+
+/**
+ * Os números derivados da lista de imagens.
+ *
+ * Separado porque a inspeção pode terminar por dois caminhos — a leitura
+ * completa e o estouro de prazo — e os dois precisam devolver um objeto com
+ * a mesma forma. Quem lê o resultado não deveria ter que saber por onde ele
+ * veio; o que muda é `estruturaIncompleta`, e só.
+ */
+function finalizar(info) {
   // A imagem que cobre a maior área é a que manda na percepção de qualidade
   info.imagemPrincipal = info.imagens.reduce(
     (maior, img) => (!maior || img.larguraMm * img.alturaMm > maior.larguraMm * maior.alturaMm ? img : maior),
@@ -291,7 +342,12 @@ export async function inspecionarPagina(doc, numero = 1, { rasterizar = true } =
   const areaPagina = info.larguraMm * info.alturaMm
   const areaRaster = info.imagens.reduce((s, im) => s + im.larguraMm * im.alturaMm, 0)
   info.fracaoRaster = areaPagina > 0 ? Math.min(1, areaRaster / areaPagina) : 0
-  info.puroVetor = info.imagens.length === 0 && (info.temVetor || info.temTexto)
+  // Sem estrutura lida, "nenhuma imagem" não significa "só vetor": significa
+  // que não se olhou. Afirmar pureza vetorial aqui faria a ferramenta aprovar
+  // por resolução uma arte cujo raster ela nunca viu.
+  info.puroVetor = !info.estruturaIncompleta
+    && info.imagens.length === 0
+    && (info.temVetor || info.temTexto)
 
   return info
 }
@@ -302,7 +358,11 @@ export async function fontesNaoIncorporadas(doc, numero = 1) {
   // de afirmar o que não sabemos.
   try {
     const pagina = await doc.getPage(numero)
-    const lista = await pagina.getOperatorList()
+    // Mesmo prazo, pelo mesmo motivo — e por um a mais: o pdf.js guarda a
+    // lista de operadores por página, então esta chamada pega a MESMA promessa
+    // que a inspeção já esperou. Se aquela estourou, esta herdaria a espera
+    // inteira, e o prazo da outra não teria servido de nada.
+    const lista = await comPrazo(pagina.getOperatorList(), PRAZO_ESTRUTURA_MS, 'prazo-das-fontes')
     const { OPS } = pdfjsLib
     const faltando = new Set()
     for (let i = 0; i < lista.fnArray.length; i++) {
